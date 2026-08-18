@@ -9,6 +9,10 @@ spring:
       ddl-auto: validate
   flyway:
     enabled: true
+  servlet:
+    multipart:
+      max-file-size: ${TEMPLATE_MAX_FILE_SIZE:10MB}
+      max-request-size: ${TEMPLATE_MAX_FILE_SIZE:10MB}
 
 server:
   port: ${BACKEND_PORT:8080}
@@ -26,6 +30,11 @@ app:
       password: ${INITIAL_ADMIN_PASSWORD:}
       name: ${INITIAL_ADMIN_NAME:}
       lastname: ${INITIAL_ADMIN_LASTNAME:}
+  template:
+    max-file-size-bytes: ${TEMPLATE_MAX_FILE_SIZE_BYTES:10485760}
+    storage-path: ${TEMPLATE_STORAGE_PATH:storage/templates}
+    seed-file: ${TEMPLATE_SEED_FILE:../docs/pdf-templates/Permiso-Gremial-Bruna.pdf}
+    seed-enabled: ${TEMPLATE_SEED_ENABLED:true}
 
 frontend:
   url: ${FRONTEND_URL:http://localhost:5173}

@@ -40,4 +40,17 @@ public class Template extends AuditableEntity {
     public boolean isActive() {
         return active;
     }
+
+    public void update(String nombre, String descripcion) {
+        this.nombre = nombre;
+        this.descripcion = descripcion;
+    }
+
+    public void activate() {
+        this.active = true;
+    }
+
+    public void deactivate() {
+        this.active = false;
+    }
 }

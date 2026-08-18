@@ -28,7 +28,7 @@ function csrfToken() {
 export async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
   const method = options.method?.toUpperCase() ?? 'GET'
   const headers = new Headers(options.headers)
-  if (options.body && !headers.has('Content-Type')) {
+  if (options.body && !(options.body instanceof FormData) && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json')
   }
   if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {

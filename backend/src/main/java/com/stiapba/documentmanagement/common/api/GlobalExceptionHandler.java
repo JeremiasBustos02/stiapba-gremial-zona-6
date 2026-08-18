@@ -3,12 +3,15 @@ package com.stiapba.documentmanagement.common.api;
 import com.stiapba.documentmanagement.auth.AuthException;
 import com.stiapba.documentmanagement.agreement.AgreementException;
 import com.stiapba.documentmanagement.company.CompanyException;
+import com.stiapba.documentmanagement.template.TemplateException;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 
 import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
@@ -44,6 +47,21 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AgreementException.class)
     ResponseEntity<ApiError> handleAgreement(AgreementException exception) {
         return error(exception.getStatus(), exception.getCode(), exception.getMessage(), null);
+    }
+
+    @ExceptionHandler(TemplateException.class)
+    ResponseEntity<ApiError> handleTemplate(TemplateException exception) {
+        return error(exception.getStatus(), exception.getCode(), exception.getMessage(), exception.getErrors());
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    ResponseEntity<ApiError> handleMaxUpload(MaxUploadSizeExceededException exception) {
+        return error(413, "PDF_TOO_LARGE", "El archivo PDF supera el tamaño máximo permitido.", null);
+    }
+
+    @ExceptionHandler(MissingServletRequestPartException.class)
+    ResponseEntity<ApiError> handleMissingPart(MissingServletRequestPartException exception) {
+        return error(400, "VALIDATION_ERROR", "El archivo PDF es obligatorio.", Map.of("archivoPdf", "El archivo PDF es obligatorio."));
     }
 
     private ResponseEntity<ApiError> error(int status, String code, String message, Map<String, String> errors) {

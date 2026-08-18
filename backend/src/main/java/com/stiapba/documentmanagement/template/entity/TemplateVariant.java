@@ -53,4 +53,20 @@ public class TemplateVariant extends AuditableEntity {
     public boolean isActive() {
         return active;
     }
+
+    public void updateNombre(String nombre) {
+        this.nombre = nombre;
+    }
+
+    public void updateFileKey(String fileKey) {
+        this.fileKey = fileKey;
+    }
+
+    public void activate() {
+        this.active = true;
+    }
+
+    public void deactivate() {
+        this.active = false;
+    }
 }
