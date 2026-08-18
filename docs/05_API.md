@@ -258,13 +258,12 @@ Usuario autenticado.
 
 ```json
 {
-  "currentPassword": "contraseña-actual",
   "newPassword": "nueva-contraseña",
   "confirmPassword": "nueva-contraseña"
 }
 ```
 
-Este endpoint se utiliza exclusivamente durante el primer ingreso y no requiere historial de contraseñas.
+Este endpoint se utiliza exclusivamente durante el primer ingreso. La sesión ya fue autenticada con la contraseña temporal, por lo que no se solicita nuevamente `currentPassword`.
 
 ### Response
 

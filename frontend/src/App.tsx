@@ -1,16 +1,18 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClient, QueryClientProvider, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft, ChevronRight, Download, Eye, FileText, Home,
   Landmark, LoaderCircle, LockKeyhole, LogOut, Menu, Pencil, Plus, Printer,
   ShieldCheck, UserRound, Users,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { UserManagementPage } from '@/features/users/UserManagementPage'
 import { CatalogManagementPage } from '@/features/catalog/CatalogManagementPage'
 import { createAgreement, getAgreements, setAgreementActive, updateAgreement } from '@/features/catalog/agreementsApi'
 import { createCompany, getCompanies, setCompanyActive, updateCompany } from '@/features/catalog/companiesApi'
 import type { Agreement, AgreementForm, Company, CompanyForm } from '@/features/catalog/types'
 import { TemplateManagementPage } from '@/features/templates/TemplateManagementPage'
+import { ApiError, setUnauthorizedHandler } from '@/lib/api'
+import { changeFirstLoginPassword, changePassword, getCurrentUser, login, logout, type AuthUser } from '@/features/auth/authApi'
 
 const queryClient = new QueryClient()
 
@@ -21,54 +23,84 @@ const initialForm: FormData = { province: '', issueDate: '2026-08-18', company: 
 const delegates = [{ value: 'hernan', name: 'Hernan Echevarria', dni: '44.267.021' }, { value: 'mariana', name: 'Mariana Lopez', dni: '39.884.117' }]
 
 function App() {
-  const [screen, setScreen] = useState<Screen>('login')
-  const [role] = useState<'ADMIN' | 'DELEGADO'>('ADMIN')
+  const queryClient = useQueryClient()
+  const [screen, setScreen] = useState<Screen>('home')
   const [form, setForm] = useState<FormData>(initialForm)
-  const [loginError, setLoginError] = useState(false)
+  const [sessionExpired, setSessionExpired] = useState(false)
+  const sessionQuery = useQuery({ queryKey: ['auth', 'me'], queryFn: getCurrentUser, retry: false })
+  const loginMutation = useMutation({
+    mutationFn: ({ dni, password }: { dni: string; password: string }) => login(dni, password),
+    onSuccess: ({ user }) => {
+      queryClient.setQueryData(['auth', 'me'], user)
+      setSessionExpired(false)
+      setScreen('home')
+    },
+  })
+  const logoutMutation = useMutation({
+    mutationFn: logout,
+    onSuccess: () => {
+      queryClient.removeQueries({ queryKey: ['auth', 'me'] })
+      setForm(initialForm)
+      setSessionExpired(false)
+      setScreen('login')
+    },
+  })
+
+  useEffect(() => {
+    setUnauthorizedHandler(() => {
+      queryClient.removeQueries({ queryKey: ['auth', 'me'] })
+      setSessionExpired(true)
+      setScreen('login')
+    })
+    return () => setUnauthorizedHandler()
+  }, [queryClient])
 
   const go = (next: Screen) => setScreen(next)
-  const logIn = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    const dni = new FormData(event.currentTarget).get('dni')
-    if (dni === '0') {
-      setLoginError(true)
-      return
-    }
-    setLoginError(false)
-    go('home')
-  }
-  const logout = () => { setForm(initialForm); go('login') }
+  const currentUser = sessionQuery.data
 
-  if (screen === 'login') return <LoginPage onSubmit={logIn} error={loginError} />
-  if (screen === 'first-login') return <FirstLoginPage onSaved={() => go('home')} />
+  if (sessionQuery.isPending) return <SessionLoading />
+  if (!currentUser) return <LoginPage error={loginMutation.error} pending={loginMutation.isPending} sessionExpired={sessionExpired} onSubmit={(dni, password) => loginMutation.mutate({ dni, password })} />
+  if (currentUser.firstLogin) return <FirstLoginPage onSaved={() => { void queryClient.invalidateQueries({ queryKey: ['auth', 'me'] }); go('home') }} />
+  if (currentUser.role !== 'ADMIN' && ['admin', 'users', 'companies', 'agreements', 'templates', 'template-variants'].includes(screen)) {
+    return <AppLayout screen="home" role={currentUser.role} onNavigate={go} onLogout={() => logoutMutation.mutate()}><HomePage user={currentUser} onNavigate={go} /></AppLayout>
+  }
 
   const adminContent = screen === 'users' ? <UserManagementPage />
     : screen === 'companies' ? <CatalogManagementPage<Company, CompanyForm> kind="companies" title="Empresas" description="Administrá las empresas disponibles para completar documentos." emptyForm={{ nombre: '' }} getItems={getCompanies} createItem={createCompany} updateItem={updateCompany} setActive={setCompanyActive} />
       : screen === 'agreements' ? <CatalogManagementPage<Agreement, AgreementForm> kind="agreements" title="Convenios" description="Administrá los convenios disponibles para completar documentos." emptyForm={{ codigo: '', descripcion: '' }} getItems={getAgreements} createItem={createAgreement} updateItem={updateAgreement} setActive={setAgreementActive} />
         : <TemplateManagementPage />
 
-  return <AppLayout screen={screen} role={role} onNavigate={go} onLogout={logout}>
-    {screen === 'home' && <HomePage role={role} onNavigate={go} />}
+  return <AppLayout screen={screen} role={currentUser.role} onNavigate={go} onLogout={() => logoutMutation.mutate()}>
+    {screen === 'home' && <HomePage user={currentUser} onNavigate={go} />}
     {screen === 'new-document' && <TemplateSelection onBack={() => go('home')} onSelect={() => go('variants')} />}
     {screen === 'variants' && <VariantSelection onBack={() => go('new-document')} onSelect={(variant) => { setForm({ ...form, variant }); go('form') }} />}
     {screen === 'form' && <PermitForm form={form} onChange={setForm} onBack={() => go('variants')} onPreview={() => go('preview')} />}
     {screen === 'preview' && <PreviewPage onEdit={() => go('form')} onHome={() => go('home')} />}
-    {screen === 'profile' && <ProfilePage role={role} onFirstLogin={() => go('first-login')} onLogout={logout} />}
+    {screen === 'profile' && <ProfilePage user={currentUser} onLogout={() => logoutMutation.mutate()} />}
     {screen === 'admin' && <AdminPage onNavigate={go} />}
     {['users', 'companies', 'agreements', 'templates', 'template-variants'].includes(screen) && adminContent}
   </AppLayout>
 }
 
-function LoginPage({ onSubmit, error }: { onSubmit: (event: React.FormEvent<HTMLFormElement>) => void; error: boolean }) {
+function SessionLoading() { return <main className="flex min-h-screen items-center justify-center bg-slate-50"><div className="flex items-center gap-3 text-sm font-semibold text-slate-600"><LoaderCircle className="animate-spin text-blue-700" /> Verificando sesión...</div></main> }
+
+function LoginPage({ onSubmit, error, pending, sessionExpired }: { onSubmit: (dni: string, password: string) => void; error: Error | null; pending: boolean; sessionExpired: boolean }) {
   const [visible, setVisible] = useState(false)
+  const submit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const data = new FormData(event.currentTarget)
+    onSubmit(String(data.get('dni')), String(data.get('password')))
+  }
+  const message = error instanceof ApiError ? error.message : error ? 'No pudimos iniciar sesión. Intentá nuevamente.' : ''
   return <main className="flex min-h-screen flex-col bg-white px-5 py-10 sm:px-10">
     <section className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center">
       <div className="mb-12 text-center"><BrandMark /><h1 className="mt-5 text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">StiaPba Gremial Zona 6</h1><p className="mt-4 text-lg leading-relaxed text-slate-600">Accedé a tus documentos de forma segura.</p></div>
-      <form onSubmit={onSubmit} className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm sm:p-8">
-        {error && <p role="alert" className="mb-5 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-800">No pudimos iniciar sesión. Verificá tus datos e intentá nuevamente.</p>}
+      <form onSubmit={submit} className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm sm:p-8">
+        {sessionExpired && <p role="status" className="mb-5 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">Tu sesión expiró. Volvé a iniciar sesión.</p>}
+        {message && <p role="alert" className="mb-5 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-800">{message}</p>}
         <label className="block text-sm font-semibold text-slate-900">DNI<input required name="dni" inputMode="numeric" placeholder="Ingresá tu DNI" className="mt-2 h-12 w-full rounded-xl border border-slate-300 bg-white px-4 outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100" /></label>
-        <label className="mt-5 block text-sm font-semibold text-slate-900">Contraseña<div className="relative mt-2"><input required type={visible ? 'text' : 'password'} placeholder="Ingresá tu contraseña" className="h-12 w-full rounded-xl border border-slate-300 bg-white px-4 pr-12 outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100" /><button type="button" onClick={() => setVisible(!visible)} className="absolute inset-y-0 right-0 px-4 text-slate-500" aria-label={visible ? 'Ocultar contraseña' : 'Mostrar contraseña'}><Eye size={20} /></button></div></label>
-        <button className="mt-8 flex h-13 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-3 font-semibold text-white hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-blue-600">Iniciar sesión <ChevronRight size={20} /></button>
+        <label className="mt-5 block text-sm font-semibold text-slate-900">Contraseña<div className="relative mt-2"><input required name="password" type={visible ? 'text' : 'password'} placeholder="Ingresá tu contraseña" className="h-12 w-full rounded-xl border border-slate-300 bg-white px-4 pr-12 outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100" /><button type="button" onClick={() => setVisible(!visible)} className="absolute inset-y-0 right-0 px-4 text-slate-500" aria-label={visible ? 'Ocultar contraseña' : 'Mostrar contraseña'}><Eye size={20} /></button></div></label>
+        <button disabled={pending} className="mt-8 flex h-13 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-3 font-semibold text-white hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-blue-600 disabled:cursor-wait disabled:opacity-60">{pending ? <><LoaderCircle className="animate-spin" size={20} /> Iniciando sesión...</> : <>Iniciar sesión <ChevronRight size={20} /></>}</button>
       </form>
     </section><footer className="pt-8 text-center text-xs font-medium text-slate-500">StiaPba Gremial Zona 6</footer>
   </main>
@@ -76,7 +108,9 @@ function LoginPage({ onSubmit, error }: { onSubmit: (event: React.FormEvent<HTML
 
 function FirstLoginPage({ onSaved }: { onSaved: () => void }) {
   const [error, setError] = useState('')
-  return <main className="flex min-h-screen items-center bg-slate-50 px-5"><form onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget); const password = data.get('password'); setError(password !== data.get('confirm') ? 'Las contraseñas no coinciden.' : password && String(password).length < 10 ? 'La contraseña debe tener entre 10 y 72 caracteres.' : ''); if (password === data.get('confirm') && String(password).length >= 10) onSaved() }} className="mx-auto w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8"><BrandMark /><p className="mt-6 text-sm font-semibold uppercase tracking-[.16em] text-blue-700">Primer ingreso</p><h1 className="mt-2 text-3xl font-bold tracking-tight">Creá una nueva contraseña</h1><p className="mt-3 text-slate-600">Por seguridad, antes de continuar necesitás crear una nueva contraseña.</p>{error && <p role="alert" className="mt-5 rounded-xl bg-rose-50 p-3 text-sm text-rose-800">{error}</p>}<PasswordFields /><button className="mt-7 w-full rounded-xl bg-blue-700 py-3 font-semibold text-white hover:bg-blue-800">Guardar contraseña</button></form></main>
+  const mutation = useMutation({ mutationFn: changeFirstLoginPassword, onSuccess: onSaved, onError: (requestError) => setError(requestError instanceof ApiError ? requestError.message : 'No pudimos actualizar la contraseña. Intentá nuevamente.') })
+  const submit = (event: React.FormEvent<HTMLFormElement>) => { event.preventDefault(); const data = new FormData(event.currentTarget); const newPassword = String(data.get('password')); const confirmPassword = String(data.get('confirm')); if (newPassword !== confirmPassword) { setError('Las contraseñas no coinciden.'); return } mutation.mutate({ newPassword, confirmPassword }) }
+  return <main className="flex min-h-screen items-center bg-slate-50 px-5"><form onSubmit={submit} className="mx-auto w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8"><BrandMark /><p className="mt-6 text-sm font-semibold uppercase tracking-[.16em] text-blue-700">Primer ingreso</p><h1 className="mt-2 text-3xl font-bold tracking-tight">Creá una nueva contraseña</h1><p className="mt-3 text-slate-600">Por seguridad, antes de continuar necesitás crear una nueva contraseña.</p>{error && <p role="alert" className="mt-5 rounded-xl bg-rose-50 p-3 text-sm text-rose-800">{error}</p>}<PasswordFields /><button disabled={mutation.isPending} className="mt-7 flex w-full items-center justify-center gap-2 rounded-xl bg-blue-700 py-3 font-semibold text-white hover:bg-blue-800 disabled:opacity-60">{mutation.isPending && <LoaderCircle className="animate-spin" size={18} />} Guardar contraseña</button></form></main>
 }
 
 function PasswordFields() { return <div className="mt-6 space-y-4"><label className="block text-sm font-semibold">Nueva contraseña<input required minLength={10} name="password" type="password" className="mt-2 h-12 w-full rounded-xl border border-slate-300 px-4 outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100" /></label><label className="block text-sm font-semibold">Repetir contraseña<input required minLength={10} name="confirm" type="password" className="mt-2 h-12 w-full rounded-xl border border-slate-300 px-4 outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100" /></label><p className="text-xs text-slate-500">Entre 10 y 72 caracteres.</p></div> }
@@ -91,7 +125,7 @@ function BottomNav({ role, screen, onNavigate }: { role: 'ADMIN' | 'DELEGADO'; s
   return <nav aria-label="Navegación principal" className="fixed inset-x-0 bottom-0 z-20 border-t border-slate-200 bg-white sm:static sm:mx-auto sm:max-w-7xl sm:border-0 sm:bg-transparent"><div className="mx-auto flex max-w-lg justify-around px-2 py-2 sm:hidden">{items.map(({ label, icon: Icon, screen: target }) => <button key={label} onClick={() => onNavigate(target)} className={`flex min-w-16 flex-col items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-medium ${screen === target ? 'text-blue-700' : 'text-slate-600'}`}><Icon size={20} strokeWidth={screen === target ? 2.5 : 2} />{label}</button>)}</div></nav>
 }
 
-function HomePage({ role, onNavigate }: { role: 'ADMIN' | 'DELEGADO'; onNavigate: (screen: Screen) => void }) { return <><section className="max-w-3xl"><p className="text-sm font-semibold text-blue-700">Zona 6</p><h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Bienvenido, Hernan</h1><p className="mt-3 text-slate-600">Elegí una acción para continuar.</p></section><section className="mt-8 grid gap-4 md:grid-cols-3"><ActionCard primary icon={Plus} title="Nuevo documento" description="Generá un nuevo Permiso Gremial." onClick={() => onNavigate('new-document')} /><ActionCard icon={UserRound} title="Mi perfil" description="Consultá tus datos y tu contraseña." onClick={() => onNavigate('profile')} />{role === 'ADMIN' && <ActionCard icon={ShieldCheck} title="Administración" description="Gestioná usuarios y catálogos." onClick={() => onNavigate('admin')} />}</section></> }
+function HomePage({ user, onNavigate }: { user: AuthUser; onNavigate: (screen: Screen) => void }) { return <><section className="max-w-3xl"><p className="text-sm font-semibold text-blue-700">Zona 6</p><h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Bienvenido, {user.nombre}</h1><p className="mt-3 text-slate-600">Elegí una acción para continuar.</p></section><section className="mt-8 grid gap-4 md:grid-cols-3"><ActionCard primary icon={Plus} title="Nuevo documento" description="Generá un nuevo Permiso Gremial." onClick={() => onNavigate('new-document')} /><ActionCard icon={UserRound} title="Mi perfil" description="Consultá tus datos y tu contraseña." onClick={() => onNavigate('profile')} />{user.role === 'ADMIN' && <ActionCard icon={ShieldCheck} title="Administración" description="Gestioná usuarios y catálogos." onClick={() => onNavigate('admin')} />}</section></> }
 function ActionCard({ icon: Icon, title, description, onClick, primary = false }: { icon: typeof Plus; title: string; description: string; onClick: () => void; primary?: boolean }) { return <button onClick={onClick} className={`min-h-48 rounded-2xl border p-6 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus-visible:ring-2 focus-visible:ring-blue-600 ${primary ? 'border-blue-700 bg-blue-700 text-white' : 'border-slate-200 bg-white text-slate-900'}`}><span className={`inline-flex rounded-xl p-3 ${primary ? 'bg-white/15' : 'bg-blue-50 text-blue-700'}`}><Icon size={25} /></span><h2 className="mt-8 text-xl font-bold">{title}</h2><p className={`mt-2 text-sm ${primary ? 'text-blue-100' : 'text-slate-600'}`}>{description}</p></button> }
 
 function PageIntro({ title, description }: { title: string; description: string }) { return <header className="max-w-2xl"><p className="text-sm font-semibold text-blue-700">Nuevo documento</p><h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">{title}</h1><p className="mt-3 leading-relaxed text-slate-600">{description}</p></header> }
@@ -104,7 +138,7 @@ function SelectField({ label, value, onChange, options, error }: { label: string
 
 function PreviewPage({ onEdit, onHome }: { onEdit: () => void; onHome: () => void }) { const [loading, setLoading] = useState(false); const action = () => { setLoading(true); window.setTimeout(() => setLoading(false), 700) }; return <><PageIntro title="Vista previa" description="Revisá el documento antes de descargarlo o imprimirlo." /><section className="mt-7 rounded-2xl bg-slate-300 p-4 sm:p-8"><article className="mx-auto min-h-[540px] max-w-[680px] bg-white p-8 shadow-lg sm:p-14"><p className="text-sm leading-relaxed text-slate-600">Central: Garay N° 431 Quilmes (CP 1878)<br />Delegación: Balcarce 3.102 Mar del Plata (7600)</p><hr className="my-9 border-slate-300" /><p className="text-right text-slate-600">Mar del Plata, 18 de agosto de 2026</p><h2 className="mt-10 text-xl font-bold">De nuestra mayor consideración:</h2><p className="mt-7 max-w-prose leading-8">Por intermedio de la presente, le comunicamos que el compañero delegado obrero de vuestro establecimiento no concurrirá a cumplir con sus tareas normales y habituales el día 18 del corriente mes, por encontrarse al servicio de nuestra Organización Gremial, en un todo de acuerdo a lo dispuesto por la Convención Colectiva de Trabajo.</p><p className="mt-8">Sin otro particular, saludamos atte.</p><div className="mt-20 border-t border-slate-300 pt-5 text-center"><strong>DIEGO BRUNA</strong><p className="text-slate-600">Sindicato de Alimentación</p></div></article></section><div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end"><button onClick={onEdit} className="rounded-xl border border-slate-300 px-5 py-3 font-semibold hover:bg-white">Volver y editar</button><button onClick={action} disabled={loading} className="flex items-center justify-center gap-2 rounded-xl border border-blue-200 px-5 py-3 font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-60"><Download size={19} /> Descargar PDF</button><button onClick={action} disabled={loading} className="flex items-center justify-center gap-2 rounded-xl bg-blue-700 px-5 py-3 font-semibold text-white hover:bg-blue-800 disabled:opacity-60">{loading ? <LoaderCircle className="animate-spin" size={19} /> : <Printer size={19} />} Imprimir</button></div><button onClick={onHome} className="mt-6 text-sm font-semibold text-slate-600">Volver al inicio</button></> }
 
-function ProfilePage({ role, onFirstLogin, onLogout }: { role: 'ADMIN' | 'DELEGADO'; onFirstLogin: () => void; onLogout: () => void }) { return <><PageIntro title="Mi perfil" description="Consultá la información de tu cuenta." /><section className="mt-8 max-w-xl rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><div className="flex items-center gap-4"><span className="rounded-full bg-blue-100 p-4 text-blue-700"><UserRound size={28} /></span><div><h2 className="text-xl font-bold">Hernan Echevarria</h2><p className="text-sm text-slate-600">DNI 44.267.021</p></div></div><dl className="mt-7 divide-y divide-slate-100 border-y border-slate-100"><div className="flex justify-between py-4"><dt className="text-slate-600">Rol</dt><dd className="font-semibold">{role}</dd></div><div className="flex justify-between py-4"><dt className="text-slate-600">Estado</dt><dd className="font-semibold text-emerald-700">Activo</dd></div></dl><button onClick={onFirstLogin} className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 px-4 py-3 font-semibold hover:bg-slate-50"><LockKeyhole size={18} /> Cambiar contraseña</button><button onClick={onLogout} className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 font-semibold text-rose-700 hover:bg-rose-50"><LogOut size={18} /> Cerrar sesión</button></section></> }
+function ProfilePage({ user, onLogout }: { user: AuthUser; onLogout: () => void }) { const [error, setError] = useState(''); const [success, setSuccess] = useState(''); const mutation = useMutation({ mutationFn: changePassword, onSuccess: (result) => { setError(''); setSuccess(result.message) }, onError: (requestError) => setError(requestError instanceof ApiError ? requestError.message : 'No pudimos actualizar la contraseña. Intentá nuevamente.') }); const submit = (event: React.FormEvent<HTMLFormElement>) => { event.preventDefault(); const data = new FormData(event.currentTarget); const currentPassword = String(data.get('currentPassword')); const newPassword = String(data.get('newPassword')); const confirmPassword = String(data.get('confirmPassword')); if (newPassword !== confirmPassword) { setError('Las contraseñas no coinciden.'); return } mutation.mutate({ currentPassword, newPassword, confirmPassword }) }; return <><PageIntro title="Mi perfil" description="Consultá la información de tu cuenta." /><section className="mt-8 max-w-xl rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><div className="flex items-center gap-4"><span className="rounded-full bg-blue-100 p-4 text-blue-700"><UserRound size={28} /></span><div><h2 className="text-xl font-bold">{user.nombre} {user.apellido}</h2><p className="text-sm text-slate-600">DNI {user.dni}</p></div></div><dl className="mt-7 divide-y divide-slate-100 border-y border-slate-100"><div className="flex justify-between py-4"><dt className="text-slate-600">Rol</dt><dd className="font-semibold">{user.role}</dd></div><div className="flex justify-between py-4"><dt className="text-slate-600">Estado</dt><dd className="font-semibold text-emerald-700">Activo</dd></div></dl><form onSubmit={submit} className="mt-7 border-t border-slate-100 pt-6"><h2 className="flex items-center gap-2 font-bold"><LockKeyhole size={18} /> Cambiar contraseña</h2>{success && <p role="status" className="mt-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">{success}</p>}{error && <p role="alert" className="mt-4 rounded-xl bg-rose-50 p-3 text-sm text-rose-800">{error}</p>}<label className="mt-4 block text-sm font-semibold">Contraseña actual<input required name="currentPassword" type="password" className="mt-2 h-12 w-full rounded-xl border border-slate-300 px-3 outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100" /></label><label className="mt-4 block text-sm font-semibold">Nueva contraseña<input required minLength={10} name="newPassword" type="password" className="mt-2 h-12 w-full rounded-xl border border-slate-300 px-3 outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100" /></label><label className="mt-4 block text-sm font-semibold">Repetir nueva contraseña<input required minLength={10} name="confirmPassword" type="password" className="mt-2 h-12 w-full rounded-xl border border-slate-300 px-3 outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100" /></label><button disabled={mutation.isPending} className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 px-4 py-3 font-semibold hover:bg-slate-50 disabled:opacity-60">{mutation.isPending && <LoaderCircle className="animate-spin" size={18} />} Guardar cambios</button></form><button onClick={onLogout} className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 font-semibold text-rose-700 hover:bg-rose-50"><LogOut size={18} /> Cerrar sesión</button></section></> }
 function AdminPage({ onNavigate }: { onNavigate: (screen: Screen) => void }) { const cards: { title: string; description: string; icon: typeof Users; screen: Screen }[] = [{ title: 'Usuarios', description: 'Personas, roles y accesos.', icon: Users, screen: 'users' }, { title: 'Empresas', description: 'Empresas disponibles.', icon: Landmark, screen: 'companies' }, { title: 'Convenios', description: 'Códigos y descripciones.', icon: FileText, screen: 'agreements' }, { title: 'Plantillas', description: 'Tipos de documento.', icon: FileText, screen: 'templates' }, { title: 'Variantes', description: 'Versiones PDF por plantilla.', icon: Pencil, screen: 'template-variants' }]; return <><PageIntro title="Administración" description="Gestioná los datos necesarios para generar documentos." /><section className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{cards.map(({ title, description, icon: Icon, screen }) => <button key={title} onClick={() => onNavigate(screen)} className="rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-sm hover:border-blue-300 hover:shadow-md"><Icon className="text-blue-700" /><h2 className="mt-6 text-lg font-bold">{title}</h2><p className="mt-2 text-sm text-slate-600">{description}</p><span className="mt-5 flex items-center gap-1 text-sm font-semibold text-blue-700">Abrir <ChevronRight size={16} /></span></button>)}</section></> }
 function EmptyState({ title, text }: { title: string; text: string }) { return <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center"><FileText className="mx-auto text-slate-400" /><h2 className="mt-4 font-bold">{title}</h2><p className="mt-2 text-sm text-slate-600">{text}</p></div> }
 function ErrorState({ text, onRetry }: { text: string; onRetry: () => void }) { return <div role="alert" className="rounded-2xl border border-rose-200 bg-rose-50 p-6"><p className="font-semibold text-rose-900">{text}</p><button onClick={onRetry} className="mt-3 text-sm font-bold text-rose-800 underline">Reintentar</button></div> }

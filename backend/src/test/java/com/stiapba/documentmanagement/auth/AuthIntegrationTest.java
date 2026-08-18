@@ -146,7 +146,7 @@ class AuthIntegrationTest {
                         .cookie(authCookie(login), csrfCookie(login))
                         .header("X-XSRF-TOKEN", csrfCookie(login).getValue())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(passwordChange(PASSWORD, "contraseña-nueva", "contraseña-nueva")))
+                        .content(firstLoginPasswordChange("contraseña-nueva", "contraseña-nueva")))
                 .andExpect(status().isOk());
         mockMvc.perform(get("/api/v1/auth/me").cookie(authCookie(login)))
                 .andExpect(status().isOk())
@@ -238,6 +238,10 @@ class AuthIntegrationTest {
 
     private String passwordChange(String currentPassword, String newPassword, String confirmPassword) throws Exception {
         return objectMapper.writeValueAsString(new ChangePasswordRequest(currentPassword, newPassword, confirmPassword));
+    }
+
+    private String firstLoginPasswordChange(String newPassword, String confirmPassword) throws Exception {
+        return objectMapper.writeValueAsString(new FirstLoginPasswordChangeRequest(newPassword, confirmPassword));
     }
 
     private String expiredToken(User user) {

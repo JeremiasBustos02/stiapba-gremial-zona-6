@@ -32,12 +32,13 @@ public class AuthService {
     }
 
     @Transactional
-    public void changeFirstLoginPassword(UserPrincipal principal, ChangePasswordRequest request) {
+    public void changeFirstLoginPassword(UserPrincipal principal, FirstLoginPasswordChangeRequest request) {
         User user = requireActiveUser(principal);
         if (!user.isFirstLogin()) {
             throw new AuthException(403, "FIRST_LOGIN_NOT_REQUIRED", "El cambio obligatorio de contraseña no está disponible.");
         }
-        updatePassword(user, request, false);
+        validatePasswordConfirmation(request.newPassword(), request.confirmPassword());
+        user.changePassword(passwordEncoder.encode(request.newPassword()));
         user.completeFirstLogin();
     }
 
@@ -60,15 +61,19 @@ public class AuthService {
             throw new AuthException(400, "CURRENT_PASSWORD_INVALID", "La contraseña actual no es correcta.",
                     Map.of("currentPassword", "La contraseña actual no es correcta."));
         }
-        if (!request.newPassword().equals(request.confirmPassword())) {
-            throw new AuthException(400, "PASSWORD_CONFIRMATION_MISMATCH", "Las contraseñas no coinciden.",
-                    Map.of("confirmPassword", "Las contraseñas no coinciden."));
-        }
+        validatePasswordConfirmation(request.newPassword(), request.confirmPassword());
         if (rejectCurrentPassword && passwordEncoder.matches(request.newPassword(), user.getPasswordHash())) {
             throw new AuthException(400, "PASSWORD_MUST_DIFFER", "La nueva contraseña debe ser distinta de la actual.",
                     Map.of("newPassword", "La nueva contraseña debe ser distinta de la actual."));
         }
         user.changePassword(passwordEncoder.encode(request.newPassword()));
+    }
+
+    private void validatePasswordConfirmation(String newPassword, String confirmPassword) {
+        if (!newPassword.equals(confirmPassword)) {
+            throw new AuthException(400, "PASSWORD_CONFIRMATION_MISMATCH", "Las contraseñas no coinciden.",
+                    Map.of("confirmPassword", "Las contraseñas no coinciden."));
+        }
     }
 
     private User requireActiveUser(UserPrincipal principal) {

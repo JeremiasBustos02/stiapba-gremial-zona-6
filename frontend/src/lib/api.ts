@@ -7,6 +7,16 @@ type ApiErrorBody = {
   errors?: Record<string, string>
 }
 
+type ApiRequestOptions = RequestInit & {
+  notifyUnauthorized?: boolean
+}
+
+let unauthorizedHandler: (() => void) | undefined
+
+export function setUnauthorizedHandler(handler?: () => void) {
+  unauthorizedHandler = handler
+}
+
 export class ApiError extends Error {
   readonly status: number
   readonly fields: Record<string, string>
@@ -25,7 +35,8 @@ function csrfToken() {
     ?.slice('XSRF-TOKEN='.length)
 }
 
-export async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
+export async function apiRequest<T>(path: string, requestOptions: ApiRequestOptions = {}): Promise<T> {
+  const { notifyUnauthorized = true, ...options } = requestOptions
   const method = options.method?.toUpperCase() ?? 'GET'
   const headers = new Headers(options.headers)
   if (options.body && !(options.body instanceof FormData) && !headers.has('Content-Type')) {
@@ -49,7 +60,9 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
     } catch {
       // The status still provides a useful fallback message.
     }
-    throw new ApiError(response.status, body)
+    const error = new ApiError(response.status, body)
+    if (response.status === 401 && notifyUnauthorized) unauthorizedHandler?.()
+    throw error
   }
 
   if (response.status === 204) return undefined as T

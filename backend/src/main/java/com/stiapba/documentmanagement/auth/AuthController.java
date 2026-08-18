@@ -52,7 +52,7 @@ public class AuthController {
     @PostMapping("/first-login/change-password")
     public MessageResponse changeFirstLoginPassword(
             @AuthenticationPrincipal UserPrincipal principal,
-            @Valid @RequestBody ChangePasswordRequest request
+            @Valid @RequestBody FirstLoginPasswordChangeRequest request
     ) {
         authService.changeFirstLoginPassword(principal, request);
         return new MessageResponse("Contraseña actualizada correctamente.");
