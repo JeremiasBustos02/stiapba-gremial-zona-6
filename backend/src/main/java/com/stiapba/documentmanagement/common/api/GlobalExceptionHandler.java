@@ -1,6 +1,8 @@
 package com.stiapba.documentmanagement.common.api;
 
 import com.stiapba.documentmanagement.auth.AuthException;
+import com.stiapba.documentmanagement.agreement.AgreementException;
+import com.stiapba.documentmanagement.company.CompanyException;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
@@ -32,6 +34,16 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AuthException.class)
     ResponseEntity<ApiError> handleAuth(AuthException exception) {
         return error(exception.getStatus(), exception.getCode(), exception.getMessage(), exception.getErrors());
+    }
+
+    @ExceptionHandler(CompanyException.class)
+    ResponseEntity<ApiError> handleCompany(CompanyException exception) {
+        return error(exception.getStatus(), exception.getCode(), exception.getMessage(), null);
+    }
+
+    @ExceptionHandler(AgreementException.class)
+    ResponseEntity<ApiError> handleAgreement(AgreementException exception) {
+        return error(exception.getStatus(), exception.getCode(), exception.getMessage(), null);
     }
 
     private ResponseEntity<ApiError> error(int status, String code, String message, Map<String, String> errors) {

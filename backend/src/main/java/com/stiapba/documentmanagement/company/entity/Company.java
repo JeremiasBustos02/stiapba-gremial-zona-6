@@ -32,4 +32,16 @@ public class Company extends AuditableEntity {
     public boolean isActive() {
         return active;
     }
+
+    public void updateNombre(String nombre) {
+        this.nombre = nombre;
+    }
+
+    public void activate() {
+        this.active = true;
+    }
+
+    public void deactivate() {
+        this.active = false;
+    }
 }

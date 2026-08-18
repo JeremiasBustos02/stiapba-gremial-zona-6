@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -74,8 +75,11 @@ public class SecurityConfig {
                         .accessDeniedHandler((request, response, exception) -> writeError(response, 403,
                                 "ACCESS_DENIED", "No tenés permisos para realizar esta acción.")))
                 .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers("/api/v1/auth/login").permitAll()
-                        .requestMatchers("/api/v1/users/**").hasRole("ADMIN")
+                         .requestMatchers("/api/v1/auth/login").permitAll()
+                         .requestMatchers("/api/v1/users/**").hasRole("ADMIN")
+                         .requestMatchers(HttpMethod.POST, "/api/v1/companies", "/api/v1/agreements").hasRole("ADMIN")
+                         .requestMatchers(HttpMethod.PUT, "/api/v1/companies/**", "/api/v1/agreements/**").hasRole("ADMIN")
+                         .requestMatchers(HttpMethod.PATCH, "/api/v1/companies/**", "/api/v1/agreements/**").hasRole("ADMIN")
                         .requestMatchers("/api/v1/auth/**").authenticated()
                         .requestMatchers("/api/v1/**").authenticated()
                         .anyRequest().denyAll())
