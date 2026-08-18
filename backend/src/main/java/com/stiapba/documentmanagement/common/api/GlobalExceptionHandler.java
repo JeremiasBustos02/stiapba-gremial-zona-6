@@ -4,6 +4,7 @@ import com.stiapba.documentmanagement.auth.AuthException;
 import com.stiapba.documentmanagement.agreement.AgreementException;
 import com.stiapba.documentmanagement.company.CompanyException;
 import com.stiapba.documentmanagement.template.TemplateException;
+import com.stiapba.documentmanagement.document.DocumentException;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
@@ -52,6 +53,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(TemplateException.class)
     ResponseEntity<ApiError> handleTemplate(TemplateException exception) {
         return error(exception.getStatus(), exception.getCode(), exception.getMessage(), exception.getErrors());
+    }
+
+    @ExceptionHandler(DocumentException.class)
+    ResponseEntity<ApiError> handleDocument(DocumentException exception) {
+        return error(exception.getStatus(), exception.getCode(), exception.getMessage(), null);
     }
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)

@@ -194,6 +194,14 @@ Cada convenio deberá disponer como mínimo de:
 
 ---
 
+## RF-14A — Consultar provincias
+
+Los usuarios autenticados deberán poder consultar el catálogo activo de provincias para completar Permiso Gremial.
+
+El catálogo inicial se provisiona de forma controlada por backend. No se incorpora un CRUD administrativo de provincias en este MVP porque no fue definido como módulo administrativo.
+
+---
+
 # 7. Plantillas
 
 ## RF-15 — Consultar tipos de documentos
@@ -281,14 +289,14 @@ El sistema deberá mostrar únicamente variantes pertenecientes al tipo de docum
 Para generar un Permiso Gremial deberán estar disponibles los siguientes datos:
 
 * Provincia.
-* Fecha.
+* Fecha de emisión.
+* Día de permiso gremial.
 * Empresa.
 * Delegado.
-* DNI.
 * Convenio.
 * Variante.
 
-`Provincia` queda pendiente de confirmación funcional: el PDF parece utilizar una localidad o lugar. No se fija todavía una interpretación distinta.
+`Mar del Plata` permanece impreso y fijo en la plantilla. La Provincia se selecciona desde el catálogo y completa el primer espacio punteado posterior a ese texto. La fecha de emisión se selecciona mediante Date Picker y completa día, mes en letras y los últimos dos dígitos del año en la cabecera. `permitDay` es un número elegido por el usuario y completa la zona de ausencia dentro del cuerpo.
 
 ---
 
@@ -298,11 +306,17 @@ El sistema deberá evitar solicitar manualmente información que ya posee.
 
 Cuando corresponda:
 
-* El delegado deberá obtenerse del usuario autenticado.
-* El DNI deberá obtenerse del usuario autenticado.
+* Provincia deberá seleccionarse entre las provincias activas.
+* La fecha de emisión deberá seleccionarse mediante Date Picker y no se persiste como catálogo.
+* Delegado deberá seleccionarse entre usuarios activos con rol `DELEGADO`.
+* El DNI deberá obtenerse del delegado seleccionado y no podrá escribirse manualmente.
 * Empresa deberá seleccionarse entre empresas registradas.
 * Convenio deberá seleccionarse entre convenios registrados.
 * Variante deberá seleccionarse entre las variantes correspondientes a Permiso Gremial.
+
+El usuario autenticado es quien utiliza el sistema y genera el documento; no se asume que sea el delegado seleccionado.
+
+El dato de ausencia gremial no se persiste como entidad. El Permiso Gremial admite un único día, enviado como `permitDay`.
 
 ---
 

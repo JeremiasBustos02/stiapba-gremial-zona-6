@@ -511,7 +511,51 @@ La contraseña temporal solo podrá devolverse en el momento del restablecimient
 
 ---
 
-# 21. Empresas
+# 21. Catálogos para Permiso Gremial
+
+## GET `/api/v1/provinces`
+
+### Acceso
+
+ADMIN / DELEGADO.
+
+Devuelve únicamente provincias activas del catálogo controlado por backend. No existe escritura administrativa de provincias en el MVP.
+
+### Response
+
+```json
+[
+  {
+    "id": "uuid",
+    "name": "Buenos Aires"
+  }
+]
+```
+
+---
+
+## GET `/api/v1/delegates`
+
+### Acceso
+
+ADMIN / DELEGADO.
+
+Devuelve usuarios activos con rol `DELEGADO` para seleccionar quién figurará en Permiso Gremial. El usuario autenticado que genera el documento no se asume como delegado.
+
+### Response
+
+```json
+[
+  {
+    "id": "uuid",
+    "nombre": "Juan",
+    "apellido": "Pérez",
+    "dni": "40123456"
+  }
+]
+```
+
+---
 
 ## GET `/api/v1/companies`
 
@@ -866,28 +910,31 @@ ADMIN / DELEGADO.
 
 ```json
 {
-  "provincia": "Buenos Aires",
-  "fecha": "2026-08-18",
+  "provinceId": "uuid",
+  "issueDate": "2026-08-18",
   "companyId": "uuid",
+  "delegateId": "uuid",
+  "permitDay": 21,
   "agreementId": "uuid",
   "variantId": "uuid"
 }
 ```
 
+`permitDay` es el número de día de ausencia gremial elegido por el usuario.
+
 ### Importante
 
-No será necesario enviar:
+No se enviarán como texto libre:
 
 ```text
 delegado
 dni
+provincia
+empresa
+convenio
 ```
 
-si dichos datos corresponden al usuario autenticado.
-
-El backend deberá obtenerlos desde la identidad de la sesión actual.
-
-Esto evita que un usuario modifique manualmente información que el sistema ya conoce.
+El backend resolverá los IDs contra los registros persistidos. `delegateId` debe identificar un `User` activo con rol `DELEGADO`; de allí se obtienen nombre, apellido y DNI. El usuario autenticado es quien genera el documento y puede ser distinto.
 
 ---
 
@@ -897,16 +944,20 @@ Antes de generar el PDF, el backend deberá validar:
 
 * Usuario autenticado.
 * Usuario activo.
+* Provincia existente y activa.
 * Empresa existente.
 * Empresa activa.
+* Delegado existente, activo y con rol `DELEGADO`.
 * Convenio existente.
 * Convenio activo.
 * Variante existente.
 * Variante activa.
 * Variante perteneciente a la plantilla Permiso Gremial.
 * Archivo PDF disponible.
-* Fecha válida.
-* El dato denominado actualmente `Provincia` queda pendiente de confirmación funcional; no se fija todavía si representa provincia, localidad o lugar.
+* Fecha de emisión válida.
+* `permitDay` válido.
+* Convenio con `codigo` disponible.
+* `Mar del Plata` permanece fijo en la plantilla; `Province.name` completa el primer espacio posterior.
 
 ---
 
@@ -1032,9 +1083,11 @@ aunque técnicamente el PDF ya haya sido generado en memoria.
 
 ```json
 {
-  "provincia": "Buenos Aires",
-  "fecha": "2026-08-18",
+  "provinceId": "uuid",
+  "issueDate": "2026-08-18",
   "companyId": "uuid",
+  "delegateId": "uuid",
+  "permitDay": 21,
   "agreementId": "uuid",
   "variantId": "uuid"
 }
@@ -1047,6 +1100,20 @@ aunque técnicamente el PDF ya haya sido generado en memoria.
 Content-Type: application/pdf
 Content-Disposition: inline; filename="permiso-gremial.pdf"
 ```
+
+### Resolución futura de datos
+
+```text
+provinceId  -> Province.name -> puntos posteriores a "Mar del Plata,"
+issueDate   -> día / mes en letras / últimos dos dígitos del año -> zonas punteadas de la cabecera
+companyId   -> Company.nombre -> zona Empresa
+delegateId  -> User nombre + apellido + DNI -> zona Delegado/documento
+permitDay   -> número de día de ausencia gremial -> zona del corriente mes
+agreementId -> Agreement.codigo -> zona Convenio
+variantId   -> TemplateVariant -> PDF base
+```
+
+Las coordenadas de esas zonas se definen y verifican visualmente durante M8.
 
 ---
 
@@ -1164,6 +1231,8 @@ Resumen:
 | PUT `/users/{id}`            |       ❌ |        ❌ |     ✅ |
 | Reset password               |       ❌ |        ❌ |     ✅ |
 | GET `/companies`             |       ❌ |        ✅ |     ✅ |
+| GET `/provinces`             |       ❌ |        ✅ |     ✅ |
+| GET `/delegates`             |       ❌ |        ✅ |     ✅ |
 | Administrar companies        |       ❌ |        ❌ |     ✅ |
 | GET `/agreements`            |       ❌ |        ✅ |     ✅ |
 | Administrar agreements       |       ❌ |        ❌ |     ✅ |
@@ -1221,6 +1290,8 @@ La API utilizará nombres consistentes en inglés para sus recursos técnicos:
 users
 companies
 agreements
+provinces
+delegates
 templates
 variants
 documents
@@ -1314,6 +1385,10 @@ GET /templates
 GET /templates/{id}/variants
         ↓
 GET /companies
+        ↓
+GET /provinces
+        ↓
+GET /delegates
         ↓
 GET /agreements
         ↓

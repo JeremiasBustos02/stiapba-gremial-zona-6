@@ -354,10 +354,10 @@ ADMIN / DELEGADO
 ## Datos requeridos
 
 * Provincia.
-* Fecha.
+* Fecha de emisión.
+* Día de permiso gremial.
 * Empresa.
 * Delegado.
-* DNI.
 * Convenio.
 * Variante.
 
@@ -365,23 +365,25 @@ ADMIN / DELEGADO
 
 1. El usuario accede al formulario.
 2. El sistema precarga la información que ya conoce.
-3. El usuario completa o selecciona la información restante.
-4. Empresa se selecciona entre las empresas activas.
-5. Convenio se selecciona entre los convenios activos.
-6. Variante corresponde a la seleccionada para el documento.
-7. El usuario revisa los datos.
-8. Selecciona la acción para generar la vista previa.
+3. El usuario selecciona Provincia entre las provincias activas y la fecha de emisión mediante Date Picker.
+4. El usuario indica el número del único día de ausencia gremial.
+5. Empresa se selecciona entre las empresas activas.
+6. Delegado se selecciona entre usuarios activos con rol `DELEGADO`; el sistema muestra su DNI sin permitir edición manual.
+7. Convenio se selecciona entre los convenios activos.
+8. Variante corresponde a la seleccionada para el documento.
+9. El usuario revisa los datos.
+10. Selecciona la acción para generar la vista previa.
 
 ---
 
 # 14. UF-11 — Autocompletado de datos del delegado
 
-Cuando corresponda, el sistema deberá obtener automáticamente:
+Al seleccionar un delegado, el sistema deberá obtener automáticamente:
 
 * Nombre del delegado.
 * DNI.
 
-Estos datos procederán del usuario autenticado.
+Estos datos procederán del usuario activo con rol `DELEGADO` seleccionado. El usuario autenticado es quien genera el documento y puede ser distinto.
 
 El objetivo es evitar que el usuario vuelva a introducir información que el sistema ya posee.
 
@@ -501,7 +503,8 @@ ADMIN / DELEGADO
 2. Revisa:
 
    * Provincia.
-   * Fecha.
+    * Fecha de emisión.
+     * Día de permiso gremial.
    * Empresa.
    * Delegado.
    * DNI.

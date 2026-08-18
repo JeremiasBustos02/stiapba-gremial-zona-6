@@ -56,6 +56,7 @@ El MVP debe implementar únicamente:
 * Usuarios.
 * Empresas.
 * Convenios.
+* Provincias.
 * Templates y TemplateVariants.
 
 ## Documentos
@@ -176,6 +177,7 @@ Implementar únicamente:
 User
 Company
 Agreement
+Province
 Template
 TemplateVariant
 ```
@@ -397,6 +399,7 @@ Implementar:
 * User.
 * Company.
 * Agreement.
+* Province.
 * Template.
 * TemplateVariant.
 
@@ -514,6 +517,10 @@ ADMIN y DELEGADO:
 
 Mismo patrón.
 
+## Province
+
+Catálogo inicial controlado mediante Flyway, disponible como consulta de provincias activas para el formulario. No se implementa CRUD administrativo de provincias en el MVP actual.
+
 ## UI
 
 Mobile:
@@ -618,18 +625,15 @@ DocumentGenerationService
 
 ## Datos
 
-* provincia;
-* fecha;
+* provinceId;
+* issueDate;
 * companyId;
+* delegateId;
+* permitDay;
 * agreementId;
 * variantId.
 
-Obtener automáticamente:
-
-* delegado;
-* DNI;
-
-desde el usuario autenticado.
+Resolver el delegado y su DNI desde el `User` activo seleccionado mediante `delegateId`. El usuario autenticado es quien genera el documento y no se asume que sea el delegado seleccionado.
 
 ## Resultado
 

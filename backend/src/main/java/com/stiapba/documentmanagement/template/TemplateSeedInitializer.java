@@ -6,6 +6,7 @@ import com.stiapba.documentmanagement.template.repository.TemplateRepository;
 import com.stiapba.documentmanagement.template.repository.TemplateVariantRepository;
 import com.stiapba.documentmanagement.template.storage.PdfUploadValidator;
 import com.stiapba.documentmanagement.template.storage.TemplateFileStorage;
+import jakarta.transaction.Transactional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -13,7 +14,9 @@ import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
 
+import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 
 @Component
@@ -39,29 +42,72 @@ public class TemplateSeedInitializer implements ApplicationRunner {
     }
 
     @Override
+    @Transactional
     public void run(ApplicationArguments args) {
-        if (!enabled || templateRepository.findByNombre("Permiso Gremial").isPresent()) {
-            return;
-        }
-        Path source = Path.of(seedFile).toAbsolutePath().normalize();
-        if (!Files.isRegularFile(source)) {
-            logger.warn("No se pudo provisionar Permiso Gremial: no existe {}", source);
+        if (!enabled) {
             return;
         }
         try {
-            byte[] content = Files.readAllBytes(source);
-            pdfUploadValidator.validateBytes(content);
-            Template template = templateRepository.saveAndFlush(new Template("Permiso Gremial", "Permiso gremial estándar"));
-            String fileKey = fileStorage.store(content);
-            try {
-                variantRepository.saveAndFlush(new TemplateVariant(template, "Bruna", fileKey));
-            } catch (RuntimeException exception) {
-                fileStorage.delete(fileKey);
-                throw exception;
+            Template template = templateRepository.findByNombre("Permiso Gremial").orElse(null);
+            if (template != null) {
+                TemplateVariant variant = variantRepository.findFirstByTemplate_IdAndNombre(template.getId(), "Bruna").orElse(null);
+                if (variant != null && hasStoredFile(variant.getFileKey())) {
+                    return;
+                }
+                repairVariant(template, variant);
+                return;
             }
-            logger.info("Se provisionó la plantilla inicial Permiso Gremial / Bruna.");
+            createTemplateAndVariant();
         } catch (Exception exception) {
             throw new IllegalStateException("No se pudo provisionar la plantilla inicial.", exception);
         }
+    }
+
+    private boolean hasStoredFile(String fileKey) throws IOException {
+        try {
+            pdfUploadValidator.validateBytes(fileStorage.load(fileKey));
+            return true;
+        } catch (NoSuchFileException exception) {
+            return false;
+        }
+    }
+
+    private void createTemplateAndVariant() throws IOException {
+        String fileKey = fileStorage.store(loadSeedContent());
+        try {
+            Template template = templateRepository.saveAndFlush(new Template("Permiso Gremial", "Permiso gremial estándar"));
+            variantRepository.saveAndFlush(new TemplateVariant(template, "Bruna", fileKey));
+            logger.info("Se provisionó la plantilla inicial Permiso Gremial / Bruna.");
+        } catch (RuntimeException exception) {
+            fileStorage.delete(fileKey);
+            throw exception;
+        }
+    }
+
+    private void repairVariant(Template template, TemplateVariant variant) throws IOException {
+        String fileKey = fileStorage.store(loadSeedContent());
+        try {
+            if (variant == null) {
+                variantRepository.saveAndFlush(new TemplateVariant(template, "Bruna", fileKey));
+                logger.info("Se provisionó la variante inicial Bruna.");
+            } else {
+                variant.updateFileKey(fileKey);
+                variantRepository.saveAndFlush(variant);
+                logger.info("Se reparó el archivo faltante de la variante inicial Bruna.");
+            }
+        } catch (RuntimeException exception) {
+            fileStorage.delete(fileKey);
+            throw exception;
+        }
+    }
+
+    private byte[] loadSeedContent() throws IOException {
+        Path source = Path.of(seedFile).toAbsolutePath().normalize();
+        if (!Files.isRegularFile(source)) {
+            throw new NoSuchFileException(source.toString());
+        }
+        byte[] content = Files.readAllBytes(source);
+        pdfUploadValidator.validateBytes(content);
+        return content;
     }
 }

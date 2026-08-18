@@ -4,6 +4,8 @@ import com.stiapba.documentmanagement.agreement.entity.Agreement;
 import com.stiapba.documentmanagement.agreement.repository.AgreementRepository;
 import com.stiapba.documentmanagement.company.entity.Company;
 import com.stiapba.documentmanagement.company.repository.CompanyRepository;
+import com.stiapba.documentmanagement.province.entity.Province;
+import com.stiapba.documentmanagement.province.repository.ProvinceRepository;
 import com.stiapba.documentmanagement.template.entity.Template;
 import com.stiapba.documentmanagement.template.entity.TemplateVariant;
 import com.stiapba.documentmanagement.template.repository.TemplateRepository;
@@ -38,6 +40,9 @@ class MvpPersistenceTest {
     private AgreementRepository agreementRepository;
 
     @Autowired
+    private ProvinceRepository provinceRepository;
+
+    @Autowired
     private TemplateRepository templateRepository;
 
     @Autowired
@@ -50,6 +55,7 @@ class MvpPersistenceTest {
                 "Ada", "Lovelace", dni, "hashed-password", Role.DELEGADO));
         Company company = companyRepository.save(new Company("Empresa Ejemplo"));
         Agreement agreement = agreementRepository.save(new Agreement(null, "Convenio de ejemplo"));
+        Province province = provinceRepository.save(new Province("Provincia de prueba"));
         Template template = templateRepository.save(new Template("Permiso Gremial", "Plantilla estándar"));
         TemplateVariant variant = templateVariantRepository.save(
                 new TemplateVariant(template, "Bruna", "permiso-gremial/bruna.pdf"));
@@ -61,6 +67,8 @@ class MvpPersistenceTest {
         assertThat(user.getUpdatedAt()).isNotNull();
         assertThat(company.getId()).isNotNull();
         assertThat(agreement.getId()).isNotNull();
+        assertThat(province.getId()).isNotNull();
+        assertThat(province.getCreatedAt()).isNotNull();
         assertThat(template.getId()).isNotNull();
         assertThat(variant.getId()).isNotNull();
         assertThat(variant.getTemplate().getId()).isEqualTo(template.getId());

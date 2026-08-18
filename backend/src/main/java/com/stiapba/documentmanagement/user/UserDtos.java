@@ -52,6 +52,9 @@ public final class UserDtos {
     ) {
     }
 
+    public record DelegateResponse(UUID id, String nombre, String apellido, String dni) {
+    }
+
     public record CreateUserResponse(
             UUID id,
             String nombre,

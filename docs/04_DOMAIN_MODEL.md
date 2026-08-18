@@ -21,6 +21,7 @@ El MVP estará compuesto inicialmente por las siguientes entidades:
 * Usuario
 * Empresa
 * Convenio
+* Provincia
 * Plantilla
 * TemplateVariant
 
@@ -165,9 +166,34 @@ Convenio
 
 ---
 
-# 6. Plantilla
+# 6. Provincia
 
 ## 6.1. Descripción
+
+Representa una provincia argentina disponible para completar Permiso Gremial. `Mar del Plata` no es una Provincia: es texto fijo de la plantilla.
+
+## 6.2. Atributos conceptuales
+
+```text
+Provincia
+- id
+- name
+- active
+- createdAt
+- updatedAt
+```
+
+## 6.3. Reglas
+
+* Solo las provincias activas están disponibles para nuevos documentos.
+* El catálogo inicial de provincias argentinas se provisiona de forma controlada mediante Flyway.
+* No se implementa un CRUD administrativo de provincias en este MVP.
+
+---
+
+# 7. Plantilla
+
+## 7.1. Descripción
 
 Representa conceptualmente un **tipo de documento** que el sistema puede generar.
 
@@ -184,7 +210,7 @@ En el MVP inicial existirá:
 
 ---
 
-## 6.2. Importante
+## 7.2. Importante
 
 `PermisoGremial`, `Acta`, `Licencia`, etc. **no serán entidades ni subclases diferentes de Plantilla**.
 
@@ -214,7 +240,7 @@ Esto permite incorporar nuevos tipos de documentos sin crear una entidad nueva p
 
 ---
 
-## 6.3. Atributos conceptuales
+## 7.3. Atributos conceptuales
 
 ```text
 Plantilla
@@ -228,15 +254,15 @@ Plantilla
 
 ---
 
-## 6.4. Numeración futura
+## 7.4. Numeración futura
 
 La numeración oficial queda fuera del MVP. `prefijo` y `ultimoNumero` no forman parte del modelo persistente actual y podrán evaluarse en una evolución futura.
 
 ---
 
-# 7. TemplateVariant
+# 8. TemplateVariant
 
-## 7.1. Descripción
+## 8.1. Descripción
 
 Representa una variante concreta de una Plantilla.
 
@@ -258,7 +284,7 @@ Cada una puede utilizar un PDF base diferente.
 
 ---
 
-## 7.2. Importante: la firma no es una entidad
+## 8.2. Importante: la firma no es una entidad
 
 La firma ya está incorporada dentro del archivo PDF.
 
@@ -283,7 +309,7 @@ No existirá una entidad `Firma` en el MVP.
 
 ---
 
-## 7.3. Atributos conceptuales
+## 8.3. Atributos conceptuales
 
 ```text
 TemplateVariant
@@ -298,7 +324,7 @@ TemplateVariant
 
 ---
 
-## 7.4. Reglas
+## 8.4. Reglas
 
 * Toda variante pertenece obligatoriamente a una Plantilla.
 * Una Plantilla puede tener múltiples variantes.
@@ -310,9 +336,9 @@ TemplateVariant
 
 ---
 
-# 8. Relaciones principales
+# 9. Relaciones principales
 
-## 8.1. Plantilla → TemplateVariant
+## 9.1. Plantilla → TemplateVariant
 
 Cardinalidad:
 
@@ -337,9 +363,9 @@ Permiso Gremial
 
 ---
 
-# 9. Relaciones con Empresa y Convenio
+# 10. Relaciones con datos del formulario
 
-En el MVP, Empresa y Convenio son datos reutilizables utilizados durante la generación de documentos.
+En el MVP, Empresa, Convenio y Provincia son datos reutilizables utilizados durante la generación de documentos.
 
 No existe todavía una entidad `Documento` persistida, por lo tanto no habrá una relación permanente como:
 
@@ -353,13 +379,15 @@ durante esta primera versión.
 Las relaciones se producen en tiempo de ejecución:
 
 ```text
-Usuario autenticado
+Usuario autenticado (generador)
       │
       ▼
 Formulario
       │
-      ├── Empresa seleccionada
-      ├── Convenio seleccionado
+       ├── Empresa seleccionada
+       ├── Provincia seleccionada
+       ├── Delegado seleccionado
+       ├── Convenio seleccionado
       ├── Plantilla seleccionada
       └── TemplateVariant seleccionada
               │
@@ -371,7 +399,7 @@ El PDF se devuelve al usuario, pero no se registra todavía como entidad persist
 
 ---
 
-# 10. Documento generado en el MVP
+# 11. Documento generado en el MVP
 
 Es importante distinguir entre:
 
@@ -400,7 +428,7 @@ No se almacenará todavía el documento generado como entidad persistente.
 
 ---
 
-# 11. Flujo del dominio para generar PDF
+# 12. Flujo del dominio para generar PDF
 
 Conceptualmente:
 
@@ -415,8 +443,14 @@ Selecciona TemplateVariant
    │
    ▼
 Selecciona Empresa
-   │
-   ▼
+    │
+    ▼
+Selecciona Provincia y Delegado
+    │
+    ▼
+Indica día de permiso gremial
+    │
+    ▼
 Selecciona Convenio
    │
    ▼
@@ -431,21 +465,24 @@ PDF generado
 
 ---
 
-# 12. Datos del Permiso Gremial
+# 13. Datos del Permiso Gremial
 
 Para la primera plantilla, el proceso de generación utiliza:
 
 ```text
 PermisoGremialData
-- provincia
-- fecha
-- empresa
-- delegado
-- dni
-- convenio
+- provinceId
+- issueDate
+- companyId
+- delegateId
+- permitDay
+- agreementId
+- variantId
 ```
 
 `PermisoGremialData` representa conceptualmente los datos necesarios para generar ese documento.
+
+`issueDate` representa la fecha de emisión. `permitDay` representa el único día de ausencia gremial y no se persiste como entidad.
 
 No necesariamente será una entidad JPA.
 
@@ -460,7 +497,7 @@ La decisión concreta corresponde a la arquitectura.
 
 ---
 
-# 13. Usuario y datos del delegado
+# 14. Usuario autenticado y delegado seleccionado
 
 En el Permiso Gremial:
 
@@ -469,12 +506,12 @@ Delegado
 DNI
 ```
 
-podrán derivarse directamente del `Usuario` autenticado.
+se resuelven desde el `User` activo seleccionado mediante `delegateId`, cuyo rol debe ser `DELEGADO`.
 
 Conceptualmente:
 
 ```text
-Usuario
+Delegado seleccionado (User con rol DELEGADO)
 - nombre
 - apellido
 - dni
@@ -489,11 +526,11 @@ DNI del delegado
 
 durante la generación.
 
-Esto evita duplicar datos.
+El usuario autenticado es quien genera el documento y puede ser diferente del delegado seleccionado. Esto evita duplicar datos sin crear una entidad `Delegate` redundante.
 
 ---
 
-# 14. Enumeración Role
+# 15. Enumeración Role
 
 El dominio deberá contemplar:
 
@@ -507,7 +544,7 @@ No será necesario crear una entidad persistente de roles para el MVP.
 
 ---
 
-# 15. Estado activo/inactivo
+# 16. Estado activo/inactivo
 
 Las siguientes entidades tendrán estado lógico:
 
@@ -515,6 +552,7 @@ Las siguientes entidades tendrán estado lógico:
 Usuario
 Empresa
 Convenio
+Provincia
 Plantilla
 TemplateVariant
 ```
@@ -529,7 +567,7 @@ Esto facilita:
 
 ---
 
-# 16. Eliminación lógica
+# 17. Eliminación lógica
 
 El comportamiento por defecto será:
 
@@ -553,7 +591,7 @@ El campo `activo` será suficiente.
 
 ---
 
-# 17. Modelo conceptual resumido
+# 18. Modelo conceptual resumido
 
 ```text
 ┌──────────────────┐
@@ -576,6 +614,15 @@ El campo `activo` será suficiente.
 │ id               │
 │ nombre           │
 │ activo           │
+└──────────────────┘
+
+
+┌──────────────────┐
+│    Provincia     │
+├──────────────────┤
+│ id               │
+│ name             │
+│ active           │
 └──────────────────┘
 
 
@@ -613,7 +660,7 @@ El campo `activo` será suficiente.
 
 ---
 
-# 18. Entidades excluidas del MVP
+# 19. Entidades excluidas del MVP
 
 Las siguientes entidades fueron consideradas durante el análisis, pero quedan fuera del modelo persistente inicial.
 
@@ -668,7 +715,7 @@ No se prevé incorporarla porque las firmas forman parte de los PDFs de `Templat
 
 ---
 
-# 19. Evolución futura: Documento persistente
+# 20. Evolución futura: Documento persistente
 
 Cuando se implemente historial, la estructura podrá evolucionar a:
 
@@ -703,7 +750,7 @@ Esta estructura no deberá implementarse anticipadamente en el MVP.
 
 ---
 
-# 20. Evolución futura: campos dinámicos
+# 21. Evolución futura: campos dinámicos
 
 En una versión futura podría ser necesario que cada Plantilla defina sus propios campos de manera configurable.
 
@@ -736,7 +783,7 @@ Esto evita sobreingeniería prematura.
 
 ---
 
-# 21. Principios del modelo
+# 22. Principios del modelo
 
 El modelo deberá seguir estos principios:
 
@@ -778,7 +825,7 @@ La arquitectura debe permitir crecimiento, pero el modelo del MVP debe manteners
 
 ---
 
-# 22. Decisiones de dominio confirmadas
+# 23. Decisiones de dominio confirmadas
 
 Quedan establecidas las siguientes decisiones:
 
@@ -788,7 +835,7 @@ Quedan establecidas las siguientes decisiones:
 4. Permiso Gremial es una Plantilla, no una entidad independiente.
 5. Las distintas firmas se representan mediante `TemplateVariant`.
 6. No existe entidad Firma.
-7. Empresa y Convenio son datos reutilizables.
+7. Empresa, Convenio y Provincia son datos reutilizables.
 8. El MVP no persiste documentos generados.
 9. El MVP no tiene Historial persistente.
 10. El MVP no tiene SMTP.
@@ -796,6 +843,8 @@ Quedan establecidas las siguientes decisiones:
 12. El formulario Permiso Gremial será específico en la V1.
 13. La arquitectura deberá permitir agregar otros tipos de documentos más adelante.
 14. La numeración oficial queda fuera del MVP.
+15. Un delegado seleccionable se representa mediante `User` con rol `DELEGADO`; puede ser distinto del usuario autenticado.
+16. Las provincias se provisionan como catálogo controlado y no tienen CRUD administrativo en el MVP.
 
 ---
 

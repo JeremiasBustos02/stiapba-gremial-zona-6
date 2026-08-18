@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
 import java.util.UUID;
+import java.util.List;
 import java.util.Optional;
 import com.stiapba.documentmanagement.user.entity.Role;
 import org.springframework.data.domain.Page;
@@ -15,5 +16,7 @@ public interface UserRepository extends JpaRepository<User, UUID>, JpaSpecificat
     Optional<User> findByDni(String dni);
 
     boolean existsByRole(Role role);
+
+    List<User> findByRoleAndActiveTrueOrderByApellidoAscNombreAsc(Role role);
 
 }

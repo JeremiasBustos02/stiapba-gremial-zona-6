@@ -269,11 +269,11 @@ según los wireframes.
 
 El formulario deberá mostrar:
 
- * Provincia/lugar, pendiente de confirmación funcional.
-* Fecha.
+* Provincia.
+* Fecha de emisión.
+* Día de permiso gremial.
 * Empresa.
 * Delegado.
-* DNI.
 * Convenio.
 * Variante seleccionada.
 
@@ -281,7 +281,9 @@ El formulario deberá mostrar:
 
 # 13. Datos automáticos
 
-Delegado y DNI deberán obtenerse del usuario autenticado cuando corresponda.
+El delegado deberá seleccionarse entre usuarios activos con rol `DELEGADO`. Su DNI deberá obtenerse automáticamente desde ese usuario y no será editable.
+
+El usuario autenticado genera el documento y puede ser distinto del delegado seleccionado.
 
 Si no pueden modificarse, no deberán parecer inputs editables.
 
@@ -326,21 +328,21 @@ CCT-001 — Convenio ejemplo
 
 ---
 
-# 16. Fecha
+# 16. Fecha de emisión
 
-La fecha deberá utilizar un control apropiado.
+La fecha de emisión deberá utilizar un control Date Picker apropiado.
 
 En mobile se podrá aprovechar el selector nativo cuando ofrezca mejor experiencia.
 
 No se requiere un calendario personalizado si no aporta valor.
 
+El día de permiso gremial es distinto de la fecha de emisión y se selecciona como un único número (`permitDay`).
+
 ---
 
 # 17. Provincia
 
-El significado de este dato está pendiente de confirmación funcional: el PDF parece utilizar una localidad o lugar. No deberá fijarse una lista de provincias hasta resolverlo.
-
-No deberá utilizarse texto libre si puede evitarse.
+Provincia deberá utilizar el catálogo de provincias activas; no se permite texto libre. `Mar del Plata` es texto fijo de la plantilla y no es el valor de Provincia.
 
 ---
 

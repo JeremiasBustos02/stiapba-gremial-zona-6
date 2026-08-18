@@ -144,6 +144,7 @@ The MVP includes:
 * Users.
 * Companies.
 * Agreements.
+* Provinces.
 
 ## Documents
 
@@ -361,6 +362,7 @@ Persistent entities for the MVP are limited to:
 User
 Company
 Agreement
+Province
 Template
 TemplateVariant
 ```

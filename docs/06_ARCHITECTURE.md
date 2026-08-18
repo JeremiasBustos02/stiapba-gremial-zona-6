@@ -177,6 +177,7 @@ El backend será responsable de:
 * Usuarios.
 * Empresas.
 * Convenios.
+* Provincias.
 * Administración de plantillas.
 * Administración de variantes.
 * Validaciones de negocio.
@@ -200,6 +201,7 @@ backend/
     ├── user/
     ├── company/
     ├── agreement/
+    ├── province/
     ├── template/
     ├── document/
     ├── security/
@@ -241,6 +243,7 @@ La base de datos persistirá únicamente la información necesaria para el MVP:
 * Usuarios.
 * Empresas.
 * Convenios.
+* Provincias.
 * Plantillas.
 * Variantes.
 
@@ -257,11 +260,9 @@ No se modificarán esquemas manualmente una vez iniciadas las migraciones.
 Ejemplo:
 
 ```text
-V1__create_users.sql
-V2__create_companies.sql
-V3__create_agreements.sql
-V4__create_templates.sql
-V5__create_template_variants.sql
+V1__bootstrap.sql
+V2__create_mvp_schema.sql
+V3__create_provinces.sql
 ```
 
 ---
@@ -538,9 +539,12 @@ Validation
 DocumentGenerationService
   │
   ├── carga Usuario autenticado
-  ├── carga Empresa
-  ├── carga Convenio
-  ├── carga TemplateVariant
+  ├── carga Provincia
+   ├── carga Delegado seleccionado
+   ├── carga Empresa
+   ├── carga Convenio
+   ├── carga TemplateVariant
+   ├── recibe issueDate y permitDay
   │
   ▼
 PermisoGremialGenerator

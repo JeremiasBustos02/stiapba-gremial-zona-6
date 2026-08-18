@@ -43,6 +43,11 @@ public class LocalTemplateFileStorage implements TemplateFileStorage {
         Files.deleteIfExists(resolveSafe(fileKey));
     }
 
+    @Override
+    public byte[] load(String fileKey) throws IOException {
+        return Files.readAllBytes(resolveSafe(fileKey));
+    }
+
     private Path resolveSafe(String fileKey) {
         if (fileKey == null || fileKey.isBlank()) {
             throw new IllegalArgumentException("La referencia del archivo no es válida.");

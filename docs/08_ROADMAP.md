@@ -184,6 +184,7 @@ Implementar el modelo persistente mínimo del MVP.
 * Usuario.
 * Empresa.
 * Convenio.
+* Provincia.
 * Plantilla.
 * TemplateVariant.
 
@@ -349,6 +350,12 @@ DELEGADO:
 
 * Consultar activos.
 
+## Provincias
+
+* Catálogo inicial controlado mediante Flyway.
+* Consulta de provincias activas para el formulario.
+* Sin CRUD administrativo durante el MVP actual.
+
 ## Criterio de salida
 
 Frontend/backend podrán consultar listas activas para utilizar posteriormente en el formulario.
@@ -418,11 +425,12 @@ Completar correctamente el documento Permiso Gremial.
 * Implementar `PermisoGremialGenerator`.
 * Cargar TemplateVariant.
 * Obtener datos de Empresa y Convenio.
-* Obtener usuario autenticado.
+* Obtener usuario autenticado como generador y delegado seleccionado de forma independiente.
 * Completar:
 
   * Provincia.
-  * Fecha.
+  * Fecha de emisión.
+  * Día de permiso gremial.
   * Empresa.
   * Delegado.
   * DNI.
@@ -561,8 +569,9 @@ Conectar el flujo principal completo con el backend.
 * Obtener variantes.
 * Obtener empresas.
 * Obtener convenios.
-* Precargar delegado.
-* Precargar DNI.
+* Obtener provincias.
+* Seleccionar delegado y mostrar su DNI automáticamente.
+* Capturar fecha de emisión y el único día de permiso gremial.
 * Validar formulario.
 * Generar PDF.
 * Recibir Blob.

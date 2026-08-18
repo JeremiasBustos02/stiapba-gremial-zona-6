@@ -217,8 +217,9 @@ La primera versión del sistema implementará la generación del documento **Per
 
 Los datos necesarios serán:
 
-* Provincia/lugar, pendiente de confirmación funcional.
-* Fecha.
+* Provincia.
+* Fecha de emisión.
+* Día o días de permiso gremial, pendiente de confirmación funcional sobre si puede abarcar uno o varios días.
 * Empresa.
 * Nombre del delegado.
 * DNI del delegado.
@@ -229,7 +230,9 @@ Siempre que sea posible, el sistema deberá reutilizar información existente.
 
 Por ejemplo:
 
-* El delegado y su DNI podrán obtenerse del usuario autenticado cuando corresponda.
+* El delegado y su DNI se obtendrán del usuario `DELEGADO` activo seleccionado.
+* El usuario autenticado es quien genera el documento y puede ser distinto del delegado seleccionado.
+* Las provincias estarán disponibles mediante un catálogo controlado por backend.
 * Las empresas estarán previamente registradas.
 * Los convenios estarán previamente registrados.
 * Las variantes disponibles pertenecerán al tipo de documento seleccionado.

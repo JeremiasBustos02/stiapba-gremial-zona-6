@@ -2,6 +2,7 @@ package com.stiapba.documentmanagement.user;
 
 import com.stiapba.documentmanagement.user.UserDtos.CreateUserRequest;
 import com.stiapba.documentmanagement.user.UserDtos.CreateUserResponse;
+import com.stiapba.documentmanagement.user.UserDtos.DelegateResponse;
 import com.stiapba.documentmanagement.user.UserDtos.ResetPasswordResponse;
 import com.stiapba.documentmanagement.user.UserDtos.UpdateUserRequest;
 import com.stiapba.documentmanagement.user.UserDtos.UserPageResponse;
@@ -19,6 +20,8 @@ import org.springframework.stereotype.Service;
 
 import java.security.SecureRandom;
 import java.util.UUID;
+import java.util.List;
+import com.stiapba.documentmanagement.user.entity.Role;
 
 @Service
 public class UserService {
@@ -103,6 +106,12 @@ public class UserService {
 
     public UserResponse get(UUID id) {
         return toResponse(findById(id));
+    }
+
+    public List<DelegateResponse> listActiveDelegates() {
+        return userRepository.findByRoleAndActiveTrueOrderByApellidoAscNombreAsc(Role.DELEGADO).stream()
+                .map(user -> new DelegateResponse(user.getId(), user.getNombre(), user.getApellido(), user.getDni()))
+                .toList();
     }
 
     private User findById(UUID id) {
