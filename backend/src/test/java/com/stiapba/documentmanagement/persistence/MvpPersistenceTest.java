@@ -18,6 +18,8 @@ import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabas
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.context.ActiveProfiles;
 
+import java.util.UUID;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -43,8 +45,9 @@ class MvpPersistenceTest {
 
     @Test
     void persistsTheMvpEntitiesWithUuidAndTimestamps() {
+        String dni = uniqueDni();
         User user = userRepository.save(new User(
-                "Ada", "Lovelace", "40123456", "hashed-password", Role.DELEGADO));
+                "Ada", "Lovelace", dni, "hashed-password", Role.DELEGADO));
         Company company = companyRepository.save(new Company("Empresa Ejemplo"));
         Agreement agreement = agreementRepository.save(new Agreement(null, "Convenio de ejemplo"));
         Template template = templateRepository.save(new Template("Permiso Gremial", "Plantilla estándar"));
@@ -65,12 +68,13 @@ class MvpPersistenceTest {
 
     @Test
     void rejectsDuplicateDni() {
+        String dni = uniqueDni();
         userRepository.save(new User(
-                "Ada", "Lovelace", "40123456", "hash-one", Role.DELEGADO));
+                "Ada", "Lovelace", dni, "hash-one", Role.DELEGADO));
         userRepository.flush();
 
         userRepository.save(new User(
-                "Grace", "Hopper", "40123456", "hash-two", Role.ADMIN));
+                "Grace", "Hopper", dni, "hash-two", Role.ADMIN));
 
         assertThrows(DataIntegrityViolationException.class, userRepository::flush);
     }
@@ -80,5 +84,9 @@ class MvpPersistenceTest {
         templateVariantRepository.save(new TemplateVariant(null, "Bruna", "bruna.pdf"));
 
         assertThrows(DataIntegrityViolationException.class, templateVariantRepository::flush);
+    }
+
+    private String uniqueDni() {
+        return UUID.randomUUID().toString().replace("-", "").substring(0, 20);
     }
 }

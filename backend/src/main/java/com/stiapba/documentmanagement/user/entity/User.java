@@ -75,4 +75,16 @@ public class User extends AuditableEntity {
     public boolean isFirstLogin() {
         return firstLogin;
     }
+
+    public void changePassword(String passwordHash) {
+        this.passwordHash = passwordHash;
+    }
+
+    public void completeFirstLogin() {
+        this.firstLogin = false;
+    }
+
+    public void deactivate() {
+        this.active = false;
+    }
 }

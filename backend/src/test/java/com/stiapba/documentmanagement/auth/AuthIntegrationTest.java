@@ -1,0 +1,250 @@
+package com.stiapba.documentmanagement.auth;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.stiapba.documentmanagement.security.JwtAuthenticationFilter;
+import com.stiapba.documentmanagement.user.entity.Role;
+import com.stiapba.documentmanagement.user.entity.User;
+import com.stiapba.documentmanagement.user.repository.UserRepository;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.io.Decoders;
+import io.jsonwebtoken.security.Keys;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.DefaultApplicationArguments;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockCookie;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Instant;
+import java.util.Date;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+@SpringBootTest
+@AutoConfigureMockMvc
+@ActiveProfiles("dev")
+@Transactional
+@TestPropertySource(properties = {
+        "app.security.jwt.secret=dGVzdC1qd3Qtc2VjcmV0LW11c3QtYmUtYXQtbGVhc3QtMzItYnl0ZXMtbG9uZw==",
+        "app.security.jwt.expiration-seconds=3600",
+        "app.security.initial-admin.dni=",
+        "app.security.initial-admin.password=",
+        "app.security.initial-admin.name=",
+        "app.security.initial-admin.lastname="
+})
+class AuthIntegrationTest {
+
+    private static final String PASSWORD = "contraseña-segura";
+    private static final String JWT_SECRET = "dGVzdC1qd3Qtc2VjcmV0LW11c3QtYmUtYXQtbGVhc3QtMzItYnl0ZXMtbG9uZw==";
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
+    @BeforeEach
+    void isolateUsers() {
+        userRepository.deleteAll();
+        userRepository.flush();
+    }
+
+    @Test
+    void logsInWithValidCredentialsAndSetsAuthAndCsrfCookies() throws Exception {
+        User user = saveUser("40123456", Role.DELEGADO, false);
+
+        MvcResult result = login(user.getDni(), PASSWORD)
+                .andExpect(status().isOk())
+                .andExpect(cookie().httpOnly(JwtAuthenticationFilter.AUTH_COOKIE, true))
+                .andExpect(cookie().httpOnly("XSRF-TOKEN", false))
+                .andExpect(jsonPath("$.user.dni").value(user.getDni()))
+                .andExpect(jsonPath("$.user.active").doesNotExist())
+                .andReturn();
+
+        assertThat(result.getResponse().getCookie(JwtAuthenticationFilter.AUTH_COOKIE)).isNotNull();
+    }
+
+    @Test
+    void rejectsUnknownDniAndIncorrectPasswordWithTheSameGenericError() throws Exception {
+        saveUser("40123456", Role.DELEGADO, false);
+
+        login("99999999", PASSWORD)
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"));
+        login("40123456", "incorrecta")
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"));
+    }
+
+    @Test
+    void rejectsInactiveUserLoginAndPreviouslyIssuedToken() throws Exception {
+        User user = saveUser("40123456", Role.DELEGADO, false);
+        MockCookie authCookie = authCookie(login(user.getDni(), PASSWORD).andReturn());
+        user.deactivate();
+        userRepository.saveAndFlush(user);
+
+        login(user.getDni(), PASSWORD)
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"));
+        mockMvc.perform(get("/api/v1/auth/me").cookie(authCookie))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("SESSION_INVALID"));
+    }
+
+    @Test
+    void requiresAuthenticationAndRejectsInvalidOrExpiredTokens() throws Exception {
+        User user = saveUser("40123456", Role.DELEGADO, false);
+
+        mockMvc.perform(get("/api/v1/auth/me"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("SESSION_INVALID"));
+        mockMvc.perform(get("/api/v1/auth/me").cookie(new MockCookie(JwtAuthenticationFilter.AUTH_COOKIE, "invalid")))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/v1/auth/me").cookie(new MockCookie(JwtAuthenticationFilter.AUTH_COOKIE, expiredToken(user))))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void returnsAuthenticatedUserFromValidCookie() throws Exception {
+        User user = saveUser("40123456", Role.DELEGADO, false);
+        MockCookie authCookie = authCookie(login(user.getDni(), PASSWORD).andReturn());
+
+        mockMvc.perform(get("/api/v1/auth/me").cookie(authCookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(user.getId().toString()))
+                .andExpect(jsonPath("$.active").value(true));
+    }
+
+    @Test
+    void restrictsFirstLoginUntilMandatoryPasswordChangeAndThenAllowsAccess() throws Exception {
+        User user = saveUser("40123456", Role.DELEGADO, true);
+        MvcResult login = login(user.getDni(), PASSWORD).andExpect(status().isOk()).andReturn();
+
+        mockMvc.perform(get("/api/v1/users").cookie(authCookie(login)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FIRST_LOGIN_REQUIRED"));
+        mockMvc.perform(post("/api/v1/auth/first-login/change-password")
+                        .cookie(authCookie(login), csrfCookie(login))
+                        .header("X-XSRF-TOKEN", csrfCookie(login).getValue())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(passwordChange(PASSWORD, "contraseña-nueva", "contraseña-nueva")))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/v1/auth/me").cookie(authCookie(login)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.firstLogin").value(false));
+    }
+
+    @Test
+    void changesPasswordNormallyAndEnforcesPasswordRules() throws Exception {
+        User user = saveUser("40123456", Role.DELEGADO, false);
+        MvcResult login = login(user.getDni(), PASSWORD).andReturn();
+
+        mockMvc.perform(post("/api/v1/auth/change-password")
+                        .cookie(authCookie(login), csrfCookie(login))
+                        .header("X-XSRF-TOKEN", csrfCookie(login).getValue())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(passwordChange(PASSWORD, "corta", "corta")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+        mockMvc.perform(post("/api/v1/auth/change-password")
+                        .cookie(authCookie(login), csrfCookie(login))
+                        .header("X-XSRF-TOKEN", csrfCookie(login).getValue())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(passwordChange(PASSWORD, "contraseña-nueva", "contraseña-nueva")))
+                .andExpect(status().isOk());
+        login(user.getDni(), PASSWORD).andExpect(status().isUnauthorized());
+        login(user.getDni(), "contraseña-nueva").andExpect(status().isOk());
+    }
+
+    @Test
+    void logoutClearsBothCookies() throws Exception {
+        User user = saveUser("40123456", Role.DELEGADO, false);
+        MvcResult login = login(user.getDni(), PASSWORD).andReturn();
+
+        mockMvc.perform(post("/api/v1/auth/logout")
+                        .cookie(authCookie(login), csrfCookie(login))
+                        .header("X-XSRF-TOKEN", csrfCookie(login).getValue()))
+                .andExpect(status().isNoContent())
+                .andExpect(cookie().maxAge(JwtAuthenticationFilter.AUTH_COOKIE, 0))
+                .andExpect(cookie().maxAge("XSRF-TOKEN", 0));
+    }
+
+    @Test
+    void deniesDelegateAccessToAdminRoutes() throws Exception {
+        User user = saveUser("40123456", Role.DELEGADO, false);
+        MockCookie authCookie = authCookie(login(user.getDni(), PASSWORD).andReturn());
+
+        mockMvc.perform(get("/api/v1/users").cookie(authCookie))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+    }
+
+    @Test
+    void provisionsInitialAdminOnlyWhenNoAdminExists() throws Exception {
+        InitialAdminInitializer provisioner = new InitialAdminInitializer(
+                userRepository, passwordEncoder, "30111222", "admin-temporal", "Admin", "Inicial");
+
+        provisioner.run(new DefaultApplicationArguments(new String[0]));
+        provisioner.run(new DefaultApplicationArguments(new String[0]));
+
+        assertThat(userRepository.count()).isEqualTo(1);
+        User admin = userRepository.findByDni("30111222").orElseThrow();
+        assertThat(admin.getRole()).isEqualTo(Role.ADMIN);
+        assertThat(admin.isFirstLogin()).isTrue();
+        assertThat(passwordEncoder.matches("admin-temporal", admin.getPasswordHash())).isTrue();
+    }
+
+    private org.springframework.test.web.servlet.ResultActions login(String dni, String password) throws Exception {
+        return mockMvc.perform(post("/api/v1/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"dni\":\"" + dni + "\",\"password\":\"" + password + "\"}"));
+    }
+
+    private User saveUser(String dni, Role role, boolean firstLogin) {
+        User user = new User("Ada", "Lovelace", dni, passwordEncoder.encode(PASSWORD), role);
+        if (!firstLogin) {
+            user.completeFirstLogin();
+        }
+        return userRepository.saveAndFlush(user);
+    }
+
+    private MockCookie authCookie(MvcResult result) {
+        return new MockCookie(JwtAuthenticationFilter.AUTH_COOKIE,
+                result.getResponse().getCookie(JwtAuthenticationFilter.AUTH_COOKIE).getValue());
+    }
+
+    private MockCookie csrfCookie(MvcResult result) {
+        return new MockCookie("XSRF-TOKEN", result.getResponse().getCookie("XSRF-TOKEN").getValue());
+    }
+
+    private String passwordChange(String currentPassword, String newPassword, String confirmPassword) throws Exception {
+        return objectMapper.writeValueAsString(new ChangePasswordRequest(currentPassword, newPassword, confirmPassword));
+    }
+
+    private String expiredToken(User user) {
+        return Jwts.builder()
+                .subject(user.getId().toString())
+                .expiration(Date.from(Instant.now().minusSeconds(60)))
+                .signWith(Keys.hmacShaKeyFor(Decoders.BASE64.decode(JWT_SECRET)), Jwts.SIG.HS256)
+                .compact();
+    }
+}

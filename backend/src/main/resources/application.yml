@@ -12,3 +12,20 @@ spring:
 
 server:
   port: ${BACKEND_PORT:8080}
+
+app:
+  security:
+    jwt:
+      secret: ${JWT_SECRET}
+      expiration-seconds: ${JWT_EXPIRATION_SECONDS:3600}
+    cookie:
+      secure: ${AUTH_COOKIE_SECURE:false}
+      same-site: ${AUTH_COOKIE_SAME_SITE:Lax}
+    initial-admin:
+      dni: ${INITIAL_ADMIN_DNI:}
+      password: ${INITIAL_ADMIN_PASSWORD:}
+      name: ${INITIAL_ADMIN_NAME:}
+      lastname: ${INITIAL_ADMIN_LASTNAME:}
+
+frontend:
+  url: ${FRONTEND_URL:http://localhost:5173}
