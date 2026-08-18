@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: stiapba-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-stiapba}
+      POSTGRES_USER: ${DB_USERNAME:-stiapba}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-change-me-local}
+    ports:
+      - "${DB_PORT:-5433}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-stiapba} -d ${DB_NAME:-stiapba}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres_data:

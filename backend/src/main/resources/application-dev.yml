@@ -1,0 +1,14 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5433}/${DB_NAME:stiapba}
+    username: ${DB_USERNAME:stiapba}
+    password: ${DB_PASSWORD:change-me-local}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    properties:
+      hibernate:
+        format_sql: true
+
+frontend:
+  url: ${FRONTEND_URL:http://localhost:5173}

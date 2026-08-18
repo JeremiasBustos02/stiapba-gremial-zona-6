@@ -1,0 +1,1 @@
+-- M1 establishes Flyway without introducing the M2 domain schema.
