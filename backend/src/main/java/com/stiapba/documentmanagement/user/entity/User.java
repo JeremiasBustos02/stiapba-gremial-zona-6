@@ -87,4 +87,18 @@ public class User extends AuditableEntity {
     public void deactivate() {
         this.active = false;
     }
+
+    public void activate() {
+        this.active = true;
+    }
+
+    public void updateProfile(String nombre, String apellido, Role role) {
+        this.nombre = nombre;
+        this.apellido = apellido;
+        this.role = role;
+    }
+
+    public void requireFirstLogin() {
+        this.firstLogin = true;
+    }
 }
