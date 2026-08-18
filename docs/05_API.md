@@ -1,0 +1,1325 @@
+# Contrato de API REST
+
+## 1. Propósito
+
+Este documento define el contrato inicial entre el frontend y el backend del MVP del Sistema de Gestión Documental.
+
+La API será responsable de:
+
+* Autenticación.
+* Autorización.
+* Gestión de usuarios.
+* Gestión de empresas.
+* Gestión de convenios.
+* Gestión de plantillas.
+* Gestión de variantes.
+* Generación de documentos PDF.
+
+Este documento describe:
+
+* Endpoints.
+* Métodos HTTP.
+* Requests.
+* Responses.
+* Permisos.
+* Errores esperados.
+
+No define todavía detalles internos de implementación.
+
+---
+
+# 2. Convenciones generales
+
+La API utilizará como prefijo:
+
+```text
+/api/v1
+```
+
+Ejemplo:
+
+```text
+/api/v1/auth/login
+/api/v1/users
+/api/v1/companies
+```
+
+---
+
+# 3. Formato de datos
+
+La comunicación normal entre frontend y backend utilizará:
+
+```http
+Content-Type: application/json
+```
+
+Excepto en operaciones relacionadas con archivos PDF.
+
+---
+
+# 4. Identificadores
+
+Las entidades expuestas por la API utilizarán identificadores opacos.
+
+Ejemplo:
+
+```json
+{
+  "id": "a785f5f9-fbb6-43cb-b6a4-71c12a63cc18"
+}
+```
+
+El frontend no deberá asumir cómo se generan internamente.
+
+---
+
+# 5. Fechas
+
+Las fechas deberán intercambiarse utilizando formatos estándar ISO.
+
+Ejemplo de fecha:
+
+```text
+2026-08-18
+```
+
+Ejemplo de fecha y hora:
+
+```text
+2026-08-18T14:30:00-03:00
+```
+
+---
+
+# 6. Respuesta estándar de error
+
+Los errores deberán devolver una estructura consistente.
+
+Ejemplo:
+
+```json
+{
+  "status": 400,
+  "code": "VALIDATION_ERROR",
+  "message": "Los datos enviados contienen errores.",
+  "errors": {
+    "dni": "El DNI es obligatorio."
+  },
+  "timestamp": "2026-08-18T14:30:00-03:00"
+}
+```
+
+`errors` podrá omitirse cuando no existan errores asociados a campos específicos.
+
+---
+
+# 7. Códigos HTTP
+
+Se utilizarán los códigos HTTP correspondientes.
+
+### 200 OK
+
+Operación completada correctamente.
+
+### 201 Created
+
+Recurso creado correctamente.
+
+### 204 No Content
+
+Operación completada sin contenido de respuesta.
+
+### 400 Bad Request
+
+Request inválido.
+
+### 401 Unauthorized
+
+Usuario no autenticado o sesión inválida.
+
+### 403 Forbidden
+
+Usuario autenticado sin permisos suficientes.
+
+### 404 Not Found
+
+Recurso inexistente.
+
+### 409 Conflict
+
+Conflicto con el estado actual del sistema.
+
+Ejemplo:
+
+* DNI duplicado.
+
+### 422 Unprocessable Entity
+
+Datos sintácticamente correctos pero incompatibles con una regla funcional, cuando resulte conveniente distinguirlo de un `400`.
+
+### 500 Internal Server Error
+
+Error interno inesperado.
+
+Nunca deberá exponerse información técnica sensible.
+
+---
+
+# 8. Autenticación
+
+## POST `/api/v1/auth/login`
+
+Permite iniciar sesión mediante DNI y contraseña.
+
+### Acceso
+
+Público.
+
+### Request
+
+```json
+{
+  "dni": "40123456",
+  "password": "********"
+}
+```
+
+### Response — 200
+
+```json
+{
+  "user": {
+    "id": "...",
+    "nombre": "Juan",
+    "apellido": "Pérez",
+    "dni": "40123456",
+    "role": "DELEGADO",
+    "firstLogin": false
+  }
+}
+```
+
+El backend envía la cookie mediante Set-Cookie.
+
+---
+
+## Errores
+
+### 401
+
+Credenciales inválidas.
+
+```json
+{
+  "status": 401,
+  "code": "INVALID_CREDENTIALS",
+  "message": "No pudimos iniciar sesión. Verificá tus datos e intentá nuevamente."
+}
+```
+
+---
+
+# 9. Obtener usuario autenticado
+
+## GET `/api/v1/auth/me`
+
+Devuelve la información del usuario correspondiente a la sesión actual.
+
+### Acceso
+
+Usuario autenticado.
+
+### Response
+
+```json
+{
+  "id": "uuid",
+  "nombre": "Juan",
+  "apellido": "Pérez",
+  "dni": "40123456",
+  "role": "DELEGADO",
+  "active": true,
+  "firstLogin": false
+}
+```
+
+---
+
+# 10. Cambiar contraseña
+
+## POST `/api/v1/auth/first-login/change-password`
+
+### Acceso
+
+Usuario autenticado.
+
+### Request
+
+```json
+{
+  "currentPassword": "contraseña-actual",
+  "newPassword": "nueva-contraseña",
+  "confirmPassword": "nueva-contraseña"
+}
+```
+
+Este endpoint se utiliza exclusivamente durante el primer ingreso y no requiere historial de contraseñas.
+
+### Response
+
+```json
+{
+  "message": "Contraseña actualizada correctamente."
+}
+```
+
+Cuando el cambio corresponda al primer ingreso:
+
+```text
+firstLogin = false
+```
+
+---
+
+# Cambio normal de contraseña
+
+## POST `/api/v1/auth/change-password`
+
+Requiere la contraseña actual. La nueva contraseña debe tener entre 10 y 72 caracteres, coincidir con `confirmPassword` y ser distinta de la actual. No se implementan reglas arbitrarias de composición ni historial de contraseñas.
+
+# 11. Cerrar sesión
+
+## POST `/api/v1/auth/logout`
+
+### Acceso
+
+Usuario autenticado.
+
+### Response
+
+```http
+204 No Content
+```
+
+La implementación concreta dependerá del mecanismo de autenticación seleccionado.
+
+---
+
+# 12. Usuarios
+
+Todos los endpoints administrativos de usuarios requieren rol:
+
+```text
+ADMIN
+```
+
+---
+
+# 13. Listar usuarios
+
+## GET `/api/v1/users`
+
+### Query params opcionales
+
+```text
+?page=0
+&size=20
+&search=juan
+&active=true
+&role=DELEGADO
+```
+
+### Response
+
+```json
+{
+  "content": [
+    {
+      "id": "uuid",
+      "nombre": "Juan",
+      "apellido": "Pérez",
+      "dni": "40123456",
+      "role": "DELEGADO",
+      "active": true,
+      "firstLogin": false,
+      "createdAt": "2026-08-18T10:00:00-03:00"
+    }
+  ],
+  "page": 0,
+  "size": 20,
+  "totalElements": 1,
+  "totalPages": 1
+}
+```
+
+Aunque inicialmente existan pocos usuarios, la API podrá utilizar paginación para mantener un contrato escalable.
+
+---
+
+# 14. Obtener usuario
+
+## GET `/api/v1/users/{id}`
+
+### Response
+
+```json
+{
+  "id": "uuid",
+  "nombre": "Juan",
+  "apellido": "Pérez",
+  "dni": "40123456",
+  "role": "DELEGADO",
+  "active": true,
+  "firstLogin": false,
+  "createdAt": "2026-08-18T10:00:00-03:00",
+  "updatedAt": "2026-08-18T10:00:00-03:00"
+}
+```
+
+Nunca deberá devolverse:
+
+```text
+passwordHash
+```
+
+---
+
+# 15. Crear usuario
+
+## POST `/api/v1/users`
+
+### Request
+
+```json
+{
+  "nombre": "Juan",
+  "apellido": "Pérez",
+  "dni": "40123456",
+  "role": "DELEGADO"
+}
+```
+
+### Response — 201
+
+```json
+{
+  "id": "uuid",
+  "nombre": "Juan",
+  "apellido": "Pérez",
+  "dni": "40123456",
+  "role": "DELEGADO",
+  "active": true,
+  "firstLogin": true,
+  "temporaryPassword": "..."
+}
+```
+
+### Importante
+
+Si el sistema decide mostrar la contraseña temporal al administrador:
+
+* Deberá mostrarse únicamente como resultado de la creación o reset.
+* No deberá poder consultarse posteriormente.
+* No deberá persistirse en texto plano.
+
+La decisión final sobre esta experiencia se definirá en `07_UI_UX.md`.
+
+---
+
+# 16. DNI duplicado
+
+Si el DNI ya existe:
+
+```http
+409 Conflict
+```
+
+```json
+{
+  "status": 409,
+  "code": "DNI_ALREADY_EXISTS",
+  "message": "Ya existe un usuario registrado con ese DNI."
+}
+```
+
+---
+
+# 17. Editar usuario
+
+## PUT `/api/v1/users/{id}`
+
+### Request
+
+```json
+{
+  "nombre": "Juan Carlos",
+  "apellido": "Pérez",
+  "role": "DELEGADO"
+}
+```
+
+El DNI no deberá modificarse mediante este endpoint salvo que posteriormente se defina explícitamente esa necesidad.
+
+---
+
+# 18. Activar usuario
+
+## PATCH `/api/v1/users/{id}/activate`
+
+### Response
+
+```http
+204 No Content
+```
+
+---
+
+# 19. Desactivar usuario
+
+## PATCH `/api/v1/users/{id}/deactivate`
+
+### Response
+
+```http
+204 No Content
+```
+
+No se realizará eliminación física.
+
+---
+
+# 20. Restablecer contraseña
+
+## POST `/api/v1/users/{id}/reset-password`
+
+### Response
+
+```json
+{
+  "temporaryPassword": "..."
+}
+```
+
+El usuario deberá quedar con:
+
+```text
+firstLogin = true
+```
+
+La contraseña temporal solo podrá devolverse en el momento del restablecimiento.
+
+---
+
+# 21. Empresas
+
+## GET `/api/v1/companies`
+
+### Acceso
+
+ADMIN / DELEGADO.
+
+Para usuarios normales deberán devolverse únicamente empresas utilizables para nuevos documentos.
+
+### Query params opcionales
+
+```text
+?search=empresa
+&active=true
+```
+
+### Response
+
+```json
+[
+  {
+    "id": "uuid",
+    "nombre": "Empresa Ejemplo",
+    "active": true
+  }
+]
+```
+
+---
+
+# 22. Crear empresa
+
+## POST `/api/v1/companies`
+
+### Acceso
+
+ADMIN.
+
+### Request
+
+```json
+{
+  "nombre": "Empresa Ejemplo"
+}
+```
+
+### Response — 201
+
+```json
+{
+  "id": "uuid",
+  "nombre": "Empresa Ejemplo",
+  "active": true
+}
+```
+
+---
+
+# 23. Editar empresa
+
+## PUT `/api/v1/companies/{id}`
+
+### Acceso
+
+ADMIN.
+
+### Request
+
+```json
+{
+  "nombre": "Nuevo nombre"
+}
+```
+
+---
+
+# 24. Activar / desactivar empresa
+
+```http
+PATCH /api/v1/companies/{id}/activate
+PATCH /api/v1/companies/{id}/deactivate
+```
+
+### Acceso
+
+ADMIN.
+
+---
+
+# 25. Convenios
+
+## GET `/api/v1/agreements`
+
+### Acceso
+
+ADMIN / DELEGADO.
+
+### Response
+
+```json
+[
+  {
+    "id": "uuid",
+    "codigo": "CCT-001",
+    "descripcion": "Convenio ejemplo",
+    "active": true
+  }
+]
+```
+
+---
+
+# 26. Crear convenio
+
+## POST `/api/v1/agreements`
+
+### Acceso
+
+ADMIN.
+
+### Request
+
+```json
+{
+  "codigo": "CCT-001",
+  "descripcion": "Convenio ejemplo"
+}
+```
+
+---
+
+# 27. Editar convenio
+
+## PUT `/api/v1/agreements/{id}`
+
+### Acceso
+
+ADMIN.
+
+---
+
+# 28. Activar / desactivar convenio
+
+```http
+PATCH /api/v1/agreements/{id}/activate
+PATCH /api/v1/agreements/{id}/deactivate
+```
+
+### Acceso
+
+ADMIN.
+
+---
+
+# 29. Plantillas
+
+## GET `/api/v1/templates`
+
+### Acceso
+
+ADMIN / DELEGADO.
+
+DELEGADO solo recibe Templates activos.
+
+### Query params
+
+```text
+?active=true
+```
+
+### Response
+
+```json
+[
+  {
+    "id": "uuid",
+    "nombre": "Permiso Gremial",
+    "descripcion": "Permiso gremial estándar",
+    "active": true
+  }
+]
+```
+
+---
+
+# 30. Obtener plantilla
+
+## GET `/api/v1/templates/{id}`
+
+### Acceso
+
+ADMIN / DELEGADO. DELEGADO solo puede obtener plantillas activas.
+
+### Response
+
+```json
+{
+  "id": "uuid",
+  "nombre": "Permiso Gremial",
+  "descripcion": "Permiso gremial estándar",
+  "active": true
+}
+```
+
+La numeración oficial queda fuera del MVP; `prefijo` y `ultimoNumero` no forman parte del modelo persistente actual.
+
+---
+
+# 31. Crear plantilla
+
+## POST `/api/v1/templates`
+
+### Acceso
+
+ADMIN.
+
+### Request
+
+```json
+{
+  "nombre": "Permiso Gremial",
+  "descripcion": "Permiso gremial estándar",
+}
+```
+
+Crear un Template no habilita automáticamente la generación de un nuevo tipo de documento. Los formularios y generadores de tipos distintos de Permiso Gremial requieren soporte de desarrollo mientras no exista un sistema de campos dinámicos.
+
+---
+
+# 32. Editar plantilla
+
+## PUT `/api/v1/templates/{id}`
+
+### Acceso
+
+ADMIN.
+
+---
+
+# 33. Activar / desactivar plantilla
+
+### Acceso
+
+ADMIN.
+
+```http
+PATCH /api/v1/templates/{id}/activate
+PATCH /api/v1/templates/{id}/deactivate
+```
+
+---
+
+# 34. Variantes
+
+## GET `/api/v1/templates/{templateId}/variants`
+
+### Acceso
+
+ADMIN / DELEGADO.
+
+DELEGADO solo recibe TemplateVariants activos.
+
+### Response
+
+```json
+[
+  {
+    "id": "uuid",
+    "nombre": "Firma A",
+    "active": true
+  },
+  {
+    "id": "uuid",
+    "nombre": "Firma B",
+    "active": true
+  }
+]
+```
+
+No deberá exponerse innecesariamente la ruta física del archivo PDF al frontend.
+
+---
+
+# 35. Crear variante
+
+## POST `/api/v1/templates/{templateId}/variants`
+
+### Acceso
+
+ADMIN.
+
+### Campos conceptuales
+
+La operación utiliza `multipart/form-data` con los campos `nombre` y `archivoPdf`. El archivo debe ser un PDF válido, respetar el límite de tamaño configurado y almacenarse con un nombre/ruta segura. PostgreSQL conserva únicamente `fileKey`.
+
+---
+
+# 36. Editar variante
+
+## PUT `/api/v1/templates/{templateId}/variants/{variantId}`
+
+### Acceso
+
+ADMIN.
+
+---
+
+# 37. Reemplazar archivo de variante
+
+ADMIN puede reemplazar el PDF de la variante.
+
+## PUT `/api/v1/templates/{templateId}/variants/{variantId}/file`
+
+### Content-Type
+
+`multipart/form-data`.
+
+### Acceso
+
+ADMIN.
+
+Esto evita mezclar modificación de metadatos con carga de archivos.
+
+---
+
+# 38. Activar / desactivar variante
+
+```http
+PATCH /api/v1/templates/{templateId}/variants/{variantId}/activate
+PATCH /api/v1/templates/{templateId}/variants/{variantId}/deactivate
+```
+
+---
+
+# 39. Generación de documentos
+
+Los endpoints de generación no implican persistencia del documento dentro del MVP.
+
+El backend recibe datos, genera el PDF y devuelve el resultado.
+
+---
+
+# 40. Preview de Permiso Gremial
+
+## POST `/api/v1/documents/permiso-gremial/preview`
+
+### Acceso
+
+ADMIN / DELEGADO.
+
+### Request
+
+```json
+{
+  "provincia": "Buenos Aires",
+  "fecha": "2026-08-18",
+  "companyId": "uuid",
+  "agreementId": "uuid",
+  "variantId": "uuid"
+}
+```
+
+### Importante
+
+No será necesario enviar:
+
+```text
+delegado
+dni
+```
+
+si dichos datos corresponden al usuario autenticado.
+
+El backend deberá obtenerlos desde la identidad de la sesión actual.
+
+Esto evita que un usuario modifique manualmente información que el sistema ya conoce.
+
+---
+
+# 41. Validaciones del preview
+
+Antes de generar el PDF, el backend deberá validar:
+
+* Usuario autenticado.
+* Usuario activo.
+* Empresa existente.
+* Empresa activa.
+* Convenio existente.
+* Convenio activo.
+* Variante existente.
+* Variante activa.
+* Variante perteneciente a la plantilla Permiso Gremial.
+* Archivo PDF disponible.
+* Fecha válida.
+* El dato denominado actualmente `Provincia` queda pendiente de confirmación funcional; no se fija todavía si representa provincia, localidad o lugar.
+
+---
+
+# 42. Response del preview
+
+La respuesta será directamente un archivo PDF.
+
+```http
+200 OK
+Content-Type: application/pdf
+Content-Disposition: inline; filename="PG-preview.pdf"
+```
+
+El cuerpo contendrá los bytes del documento.
+
+El frontend podrá convertir la respuesta en un `Blob` y mostrarla mediante el mecanismo de visualización elegido.
+
+---
+
+# 43. El preview no persiste
+
+La operación:
+
+```text
+POST /documents/permiso-gremial/preview
+```
+
+NO deberá:
+
+* Guardar el PDF en PostgreSQL.
+* Guardar el PDF permanentemente en el servidor.
+* Subirlo a Google Drive.
+* Crear historial.
+* Enviar correo.
+* Crear una entidad Documento.
+
+Su única responsabilidad es generar el resultado requerido.
+
+---
+
+# 44. Generación definitiva
+
+Dado que el MVP no mantiene historial ni almacenamiento persistente, no es estrictamente necesario distinguir entre:
+
+```text
+preview
+```
+
+y
+
+```text
+generate
+```
+
+desde el punto de vista del contenido del archivo.
+
+Sin embargo, para mantener una API semánticamente clara podrán existir dos enfoques.
+
+---
+
+## Alternativa A — Único endpoint
+
+```text
+POST /documents/permiso-gremial/generate
+```
+
+El frontend utiliza el mismo PDF tanto para preview como para descarga.
+
+### Ventaja
+
+Más simple.
+
+---
+
+## Alternativa B — Preview + Generate
+
+```text
+POST /documents/permiso-gremial/preview
+POST /documents/permiso-gremial/generate
+```
+
+### Ventaja
+
+Deja preparado el flujo para una futura generación definitiva persistente.
+
+### Desventaja
+
+En el MVP ambos endpoints harían prácticamente lo mismo.
+
+---
+
+# 45. Decisión recomendada para el MVP
+
+Se utilizará inicialmente:
+
+```text
+POST /api/v1/documents/permiso-gremial/generate
+```
+
+La respuesta será un PDF.
+
+El frontend lo utilizará para:
+
+1. Mostrar vista previa.
+2. Descargar el mismo archivo.
+3. Imprimir el mismo archivo.
+
+Esto evita generar dos veces el documento sin necesidad.
+
+La interfaz podrá seguir llamando conceptualmente a la pantalla:
+
+> Vista previa
+
+aunque técnicamente el PDF ya haya sido generado en memoria.
+
+---
+
+# 46. Endpoint definitivo recomendado
+
+## POST `/api/v1/documents/permiso-gremial/generate`
+
+### Request
+
+```json
+{
+  "provincia": "Buenos Aires",
+  "fecha": "2026-08-18",
+  "companyId": "uuid",
+  "agreementId": "uuid",
+  "variantId": "uuid"
+}
+```
+
+### Response
+
+```http
+200 OK
+Content-Type: application/pdf
+Content-Disposition: inline; filename="permiso-gremial.pdf"
+```
+
+---
+
+# 47. Flujo frontend usando el endpoint
+
+```text
+Formulario
+    ↓
+POST /documents/permiso-gremial/generate
+    ↓
+Backend genera PDF
+    ↓
+Frontend recibe Blob
+    ↓
+Vista previa
+    │
+    ├── Volver y modificar
+    │
+    ├── Descargar
+    │
+    └── Imprimir
+```
+
+Si el usuario vuelve y modifica información, se realiza una nueva solicitud.
+
+---
+
+# 48. Numeración del documento
+
+La numeración oficial queda fuera del MVP y no forma parte del modelo persistente actual.
+
+Sin embargo, existe una consideración importante.
+
+El MVP no persiste documentos generados.
+
+Incrementar una numeración oficial únicamente por mostrar una vista previa podría producir:
+
+```text
+PG-000001
+PG-000002
+PG-000003
+```
+
+aunque los dos primeros fueran previews descartados.
+
+Por este motivo, **la numeración definitiva no deberá implementarse hasta definir qué evento constituye formalmente la emisión del documento**.
+
+Opciones futuras:
+
+* Al descargar.
+* Al confirmar.
+* Al guardar en historial.
+* Al enviar.
+* Mediante una acción explícita "Emitir documento".
+
+Hasta cerrar esa regla de negocio, el MVP podrá generar PDFs sin numeración oficial automática.
+
+Esto evita consumir secuencias durante las vistas previas.
+
+---
+
+# 49. Descarga
+
+No se requiere un endpoint adicional para descargar.
+
+Una vez generado el PDF, el frontend ya dispone de los bytes del archivo.
+
+Podrá crear una descarga local mediante el navegador.
+
+Esto evita generar nuevamente el mismo documento.
+
+---
+
+# 50. Impresión
+
+No requiere endpoint específico.
+
+El frontend utilizará el PDF recibido y las capacidades de impresión del navegador.
+
+---
+
+# 51. Endpoint de salud
+
+## GET `/api/v1/health`
+
+Podrá existir para verificar disponibilidad del backend.
+
+### Response
+
+```json
+{
+  "status": "UP"
+}
+```
+
+En producción podrá utilizarse Spring Boot Actuator si se considera conveniente.
+
+Los detalles se definirán en arquitectura.
+
+---
+
+# 52. Seguridad por endpoint
+
+Resumen:
+
+| Endpoint                     | Público | DELEGADO | ADMIN |
+| ---------------------------- | ------: | -------: | ----: |
+| POST `/auth/login`           |       ✅ |        ✅ |     ✅ |
+| POST `/auth/first-login/change-password` |       ❌ |        ✅ |     ✅ |
+| POST `/auth/change-password` |       ❌ |        ✅ |     ✅ |
+| POST `/auth/logout`          |       ❌ |        ✅ |     ✅ |
+| GET `/auth/me`               |       ❌ |        ✅ |     ✅ |
+| GET `/users`                 |       ❌ |        ❌ |     ✅ |
+| POST `/users`                |       ❌ |        ❌ |     ✅ |
+| PUT `/users/{id}`            |       ❌ |        ❌ |     ✅ |
+| Reset password               |       ❌ |        ❌ |     ✅ |
+| GET `/companies`             |       ❌ |        ✅ |     ✅ |
+| Administrar companies        |       ❌ |        ❌ |     ✅ |
+| GET `/agreements`            |       ❌ |        ✅ |     ✅ |
+| Administrar agreements       |       ❌ |        ❌ |     ✅ |
+| GET `/templates`             |       ❌ |        ✅ |     ✅ |
+| Administrar templates        |       ❌ |        ❌ |     ✅ |
+| GET variants                 |       ❌ |        ✅ |     ✅ |
+| Administrar variants         |       ❌ |        ❌ |     ✅ |
+| Generar PDF                  |       ❌ |        ✅ |     ✅ |
+
+---
+
+# 53. Validación
+
+El frontend realizará validaciones orientadas a experiencia de usuario.
+
+Ejemplo:
+
+```text
+Campo requerido
+Formato inválido
+```
+
+El backend será la autoridad final.
+
+Nunca deberá asumir que un request es válido únicamente porque procede del frontend oficial.
+
+---
+
+# 54. DTOs
+
+Las entidades de persistencia no deberán exponerse directamente desde los controllers.
+
+La API utilizará DTOs para:
+
+* Requests.
+* Responses.
+
+Ejemplo:
+
+```text
+UserEntity
+    ↓
+UserResponse
+```
+
+Esto evita acoplar el contrato HTTP al esquema interno de PostgreSQL.
+
+---
+
+# 55. Naming
+
+La API utilizará nombres consistentes en inglés para sus recursos técnicos:
+
+```text
+users
+companies
+agreements
+templates
+variants
+documents
+```
+
+La interfaz visible para el usuario permanecerá en español.
+
+Esto permite mantener el código técnico consistente sin afectar la experiencia.
+
+---
+
+# 56. Versionado
+
+El prefijo:
+
+```text
+/api/v1
+```
+
+permitirá evolucionar posteriormente la API sin modificar silenciosamente contratos existentes.
+
+No será necesario crear una `v2` mientras no exista un cambio incompatible real.
+
+---
+
+# 57. Endpoints fuera del MVP
+
+No deberán implementarse todavía:
+
+```text
+/api/v1/emails/**
+/api/v1/storage/**
+/api/v1/history/**
+/api/v1/documents/{id}
+/api/v1/documents/{id}/send
+/api/v1/documents/{id}/upload
+```
+
+Tampoco:
+
+```text
+Google Drive API
+SMTP
+historial de documentos
+```
+
+---
+
+# 58. Evolución futura
+
+Cuando se incorpore historial, el flujo podría evolucionar a:
+
+```text
+POST /documents
+GET /documents
+GET /documents/{id}
+GET /documents/{id}/file
+POST /documents/{id}/send
+```
+
+Pero esos endpoints no deberán crearse preventivamente.
+
+---
+
+# 59. Principios del contrato
+
+La API deberá seguir estas reglas:
+
+1. Los endpoints deben representar recursos o acciones claras.
+2. Los errores deben ser consistentes.
+3. El frontend no debe conocer detalles internos del backend.
+4. Las entidades JPA no deben ser el contrato HTTP.
+5. Los permisos deben verificarse siempre en backend.
+6. No se enviará información que el backend pueda determinar mediante la identidad autenticada.
+7. Los archivos PDF no se almacenarán persistentemente en el MVP.
+8. El frontend reutilizará el PDF generado para vista previa, descarga e impresión.
+9. Las funcionalidades futuras no deberán contaminar el contrato actual.
+10. El contrato deberá mantenerse pequeño, explícito y fácil de probar.
+
+---
+
+# 60. Flujo API crítico del MVP
+
+```text
+POST /auth/login
+        ↓
+GET /auth/me
+        ↓
+GET /templates
+        ↓
+GET /templates/{id}/variants
+        ↓
+GET /companies
+        ↓
+GET /agreements
+        ↓
+POST /documents/permiso-gremial/generate
+        ↓
+application/pdf
+```
+
+Este será el flujo técnico más importante del MVP y deberá recibir prioridad durante implementación y testing.
