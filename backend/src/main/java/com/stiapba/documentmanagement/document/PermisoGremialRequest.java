@@ -3,13 +3,15 @@ package com.stiapba.documentmanagement.document;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PastOrPresent;
 
 import java.time.LocalDate;
 import java.util.UUID;
 
 public record PermisoGremialRequest(
         @NotNull(message = "La provincia es obligatoria.") UUID provinceId,
-        @NotNull(message = "La fecha de emisión es obligatoria.") LocalDate issueDate,
+        @NotNull(message = "La fecha de emisión es obligatoria.")
+        @PastOrPresent(message = "La fecha de emisión no puede ser futura.") LocalDate issueDate,
         @NotNull(message = "La empresa es obligatoria.") UUID companyId,
         @NotNull(message = "El delegado es obligatorio.") UUID delegateId,
         @NotNull(message = "El día de permiso es obligatorio.") @Min(value = 1, message = "El día de permiso debe estar entre 1 y 31.")

@@ -189,6 +189,32 @@ class AuthIntegrationTest {
     }
 
     @Test
+    void logoutInvalidatesPreviouslyIssuedToken() throws Exception {
+        User user = saveUser("40123456", Role.DELEGADO, false);
+        MvcResult login = login(user.getDni(), PASSWORD).andExpect(status().isOk()).andReturn();
+        MockCookie authCookie = authCookie(login);
+        MockCookie csrfCookie = csrfCookie(login);
+
+        mockMvc.perform(post("/api/v1/auth/logout")
+                        .cookie(authCookie, csrfCookie)
+                        .header("X-XSRF-TOKEN", csrfCookie.getValue()))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/api/v1/auth/me").cookie(authCookie))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("SESSION_INVALID"));
+    }
+
+    @Test
+    void rejectsMalformedJsonWithConsistentClientError() throws Exception {
+        mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{invalid"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+    }
+
+    @Test
     void deniesDelegateAccessToAdminRoutes() throws Exception {
         User user = saveUser("40123456", Role.DELEGADO, false);
         MockCookie authCookie = authCookie(login(user.getDni(), PASSWORD).andReturn());

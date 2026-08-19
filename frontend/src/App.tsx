@@ -54,6 +54,9 @@ function App() {
   useEffect(() => {
     setUnauthorizedHandler(() => {
       queryClient.removeQueries({ queryKey: ['auth', 'me'] })
+      setDocumentForm(initialDocumentForm)
+      setSelectedTemplateId(null)
+      setGeneratedPdf(null)
       setSessionExpired(true)
       setScreen('login')
     })
@@ -65,7 +68,7 @@ function App() {
 
   if (sessionQuery.isPending) return <SessionLoading />
   if (!currentUser) return <LoginPage error={loginMutation.error} pending={loginMutation.isPending} sessionExpired={sessionExpired} onSubmit={(dni, password) => loginMutation.mutate({ dni, password })} />
-  if (currentUser.firstLogin) return <FirstLoginPage onSaved={() => { void queryClient.invalidateQueries({ queryKey: ['auth', 'me'] }); go('home') }} />
+  if (currentUser.firstLogin) return <FirstLoginPage onSaved={async () => { await queryClient.invalidateQueries({ queryKey: ['auth', 'me'] }); go('home') }} />
   if (currentUser.role !== 'ADMIN' && ['admin', 'users', 'companies', 'agreements', 'templates', 'template-variants'].includes(screen)) {
     return <AppLayout screen="home" role={currentUser.role} onNavigate={go} onLogout={() => logoutMutation.mutate()}><HomePage user={currentUser} onNavigate={go} /></AppLayout>
   }
@@ -111,7 +114,7 @@ function LoginPage({ onSubmit, error, pending, sessionExpired }: { onSubmit: (dn
   </main>
 }
 
-function FirstLoginPage({ onSaved }: { onSaved: () => void }) {
+function FirstLoginPage({ onSaved }: { onSaved: () => void | Promise<void> }) {
   const [error, setError] = useState('')
   const mutation = useMutation({ mutationFn: changeFirstLoginPassword, onSuccess: onSaved, onError: (requestError) => setError(requestError instanceof ApiError ? requestError.message : 'No pudimos actualizar la contraseña. Intentá nuevamente.') })
   const submit = (event: React.FormEvent<HTMLFormElement>) => { event.preventDefault(); const data = new FormData(event.currentTarget); const newPassword = String(data.get('password')); const confirmPassword = String(data.get('confirm')); if (newPassword !== confirmPassword) { setError('Las contraseñas no coinciden.'); return } mutation.mutate({ newPassword, confirmPassword }) }
@@ -122,12 +125,12 @@ function PasswordFields() { return <div className="mt-6 space-y-4"><label classN
 
 function AppLayout({ children, screen, role, onNavigate, onLogout }: { children: React.ReactNode; screen: Screen; role: 'ADMIN' | 'DELEGADO'; onNavigate: (screen: Screen) => void; onLogout: () => void }) {
   const documentFlow = ['new-document', 'variants', 'form', 'preview'].includes(screen)
-  return <div className="min-h-screen bg-slate-50 text-slate-900"><header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur"><div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6"><button onClick={() => onNavigate('home')} className="flex items-center gap-2 font-bold"><BrandMark small /><span className="hidden sm:inline">StiaPba Gremial Zona 6</span></button>{documentFlow ? <button onClick={() => onNavigate(screen === 'new-document' ? 'home' : screen === 'variants' ? 'new-document' : screen === 'form' ? 'variants' : 'form')} className="flex items-center gap-2 text-sm font-semibold"><ArrowLeft size={18} /> Volver</button> : <button onClick={onLogout} className="hidden items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 sm:flex"><LogOut size={17} /> Cerrar sesión</button>}</div></header><main className="mx-auto max-w-7xl px-4 py-7 pb-28 sm:px-6 sm:py-10 sm:pb-10">{children}</main><BottomNav role={role} screen={screen} onNavigate={onNavigate} /></div>
+  return <div className="min-h-screen bg-slate-50 text-slate-900"><header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur"><div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6"><button onClick={() => onNavigate('home')} className="flex items-center gap-2 font-bold"><BrandMark small /><span className="hidden sm:inline">StiaPba Gremial Zona 6</span></button>{documentFlow ? <button onClick={() => onNavigate(screen === 'new-document' ? 'home' : screen === 'variants' ? 'new-document' : screen === 'form' ? 'variants' : 'form')} className="flex items-center gap-2 text-sm font-semibold"><ArrowLeft size={18} /> Volver</button> : <button onClick={onLogout} className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100"><LogOut size={17} /> <span className="hidden sm:inline">Cerrar sesión</span></button>}</div></header><main className="mx-auto max-w-7xl px-4 py-7 pb-28 sm:px-6 sm:py-10 sm:pb-10">{children}</main><BottomNav role={role} screen={screen} onNavigate={onNavigate} /></div>
 }
 
 function BottomNav({ role, screen, onNavigate }: { role: 'ADMIN' | 'DELEGADO'; screen: Screen; onNavigate: (screen: Screen) => void }) {
   const items: { label: string; icon: typeof Home; screen: Screen }[] = [{ label: 'Inicio', icon: Home, screen: 'home' }, { label: 'Nuevo', icon: Plus, screen: 'new-document' }, ...(role === 'ADMIN' ? [{ label: 'Administración', icon: Menu, screen: 'admin' as Screen }] : []), { label: 'Perfil', icon: UserRound, screen: 'profile' }]
-  return <nav aria-label="Navegación principal" className="fixed inset-x-0 bottom-0 z-20 border-t border-slate-200 bg-white sm:static sm:mx-auto sm:max-w-7xl sm:border-0 sm:bg-transparent"><div className="mx-auto flex max-w-lg justify-around px-2 py-2 sm:hidden">{items.map(({ label, icon: Icon, screen: target }) => <button key={label} onClick={() => onNavigate(target)} className={`flex min-w-16 flex-col items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-medium ${screen === target ? 'text-blue-700' : 'text-slate-600'}`}><Icon size={20} strokeWidth={screen === target ? 2.5 : 2} />{label}</button>)}</div></nav>
+  return <nav aria-label="Navegación principal" className="fixed inset-x-0 bottom-0 z-20 border-t border-slate-200 bg-white sm:static sm:mx-auto sm:max-w-7xl sm:border-0 sm:bg-transparent"><div className="mx-auto flex max-w-lg justify-around px-2 py-2 sm:hidden">{items.map(({ label, icon: Icon, screen: target }) => <button key={label} aria-current={screen === target ? 'page' : undefined} onClick={() => onNavigate(target)} className={`flex min-w-16 flex-col items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-medium ${screen === target ? 'text-blue-700' : 'text-slate-600'}`}><Icon size={20} strokeWidth={screen === target ? 2.5 : 2} />{label}</button>)}</div></nav>
 }
 
 function HomePage({ user, onNavigate }: { user: AuthUser; onNavigate: (screen: Screen) => void }) { return <><section className="max-w-3xl"><p className="text-sm font-semibold text-blue-700">Zona 6</p><h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Bienvenido, {user.nombre}</h1><p className="mt-3 text-slate-600">Elegí una acción para continuar.</p></section><section className="mt-8 grid gap-4 md:grid-cols-3"><ActionCard primary icon={Plus} title="Nuevo documento" description="Generá un nuevo Permiso Gremial." onClick={() => onNavigate('new-document')} /><ActionCard icon={UserRound} title="Mi perfil" description="Consultá tus datos y tu contraseña." onClick={() => onNavigate('profile')} />{user.role === 'ADMIN' && <ActionCard icon={ShieldCheck} title="Administración" description="Gestioná usuarios y catálogos." onClick={() => onNavigate('admin')} />}</section></> }

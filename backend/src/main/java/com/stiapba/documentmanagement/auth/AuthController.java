@@ -68,7 +68,8 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<Void> logout() {
+    public ResponseEntity<Void> logout(@AuthenticationPrincipal UserPrincipal principal) {
+        authService.logout(principal);
         ResponseCookie csrfCookie = ResponseCookie.from("XSRF-TOKEN", "")
                 .path("/")
                 .httpOnly(false)

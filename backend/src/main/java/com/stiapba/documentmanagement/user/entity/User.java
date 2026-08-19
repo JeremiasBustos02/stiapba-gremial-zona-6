@@ -37,6 +37,9 @@ public class User extends AuditableEntity {
     @Column(name = "first_login", nullable = false)
     private boolean firstLogin = true;
 
+    @Column(name = "session_version", nullable = false)
+    private long sessionVersion = 0;
+
     protected User() {
     }
 
@@ -74,6 +77,14 @@ public class User extends AuditableEntity {
 
     public boolean isFirstLogin() {
         return firstLogin;
+    }
+
+    public long getSessionVersion() {
+        return sessionVersion;
+    }
+
+    public void invalidateSessions() {
+        sessionVersion++;
     }
 
     public void changePassword(String passwordHash) {

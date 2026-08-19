@@ -28,7 +28,7 @@ public class AuthService {
         if (!user.isActive() || !passwordEncoder.matches(request.password(), user.getPasswordHash())) {
             throw invalidCredentials();
         }
-        return new LoginResult(jwtService.createToken(user.getId()), toResponse(user, false));
+        return new LoginResult(jwtService.createToken(user.getId(), user.getSessionVersion()), toResponse(user, false));
     }
 
     @Transactional
@@ -54,6 +54,12 @@ public class AuthService {
     public AuthenticatedUserResponse me(UserPrincipal principal) {
         User user = requireActiveUser(principal);
         return toResponse(user, true);
+    }
+
+    @Transactional
+    public void logout(UserPrincipal principal) {
+        User user = requireActiveUser(principal);
+        user.invalidateSessions();
     }
 
     private void updatePassword(User user, ChangePasswordRequest request, boolean rejectCurrentPassword) {

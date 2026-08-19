@@ -33,26 +33,31 @@ public class JwtService {
         this.expiration = Duration.ofSeconds(expirationSeconds);
     }
 
-    public String createToken(UUID userId) {
+    public String createToken(UUID userId, long sessionVersion) {
         Instant now = Instant.now();
         return Jwts.builder()
                 .subject(userId.toString())
+                .claim("sessionVersion", sessionVersion)
                 .issuedAt(java.util.Date.from(now))
                 .expiration(java.util.Date.from(now.plus(expiration)))
                 .signWith(key, Jwts.SIG.HS256)
                 .compact();
     }
 
-    public UUID parseUserId(String token) {
+    public TokenClaims parseToken(String token) {
         Claims claims = Jwts.parser()
                 .verifyWith(key)
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
-        return UUID.fromString(claims.getSubject());
+        Number sessionVersion = claims.get("sessionVersion", Number.class);
+        return new TokenClaims(UUID.fromString(claims.getSubject()), sessionVersion == null ? 0 : sessionVersion.longValue());
     }
 
     public Duration expiration() {
         return expiration;
+    }
+
+    public record TokenClaims(UUID userId, long sessionVersion) {
     }
 }

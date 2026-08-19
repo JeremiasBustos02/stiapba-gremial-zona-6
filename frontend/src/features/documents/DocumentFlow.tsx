@@ -36,7 +36,7 @@ export const initialDocumentForm: DocumentFormValues = {
 
 const formSchema = z.object({
   provinceId: z.string().min(1, 'Seleccioná una provincia.'),
-  issueDate: z.string().min(1, 'Seleccioná la fecha de emisión.'),
+  issueDate: z.string().date('La fecha de emisión no es válida.'),
   companyId: z.string().min(1, 'Seleccioná una empresa.'),
   delegateId: z.string().min(1, 'Seleccioná un delegado.'),
   permitDay: z.coerce.number().int().min(1, 'El día debe estar entre 1 y 31.').max(31, 'El día debe estar entre 1 y 31.'),
@@ -117,7 +117,7 @@ export function PdfPreview({ pdf, onEdit, onHome }: { pdf: Blob | null; onEdit: 
   const [url, setUrl] = useState<string | null>(null)
   const [previewError, setPreviewError] = useState('')
   useEffect(() => {
-    if (!pdf || pdf.type !== 'application/pdf') { setUrl(null); setPreviewError('No pudimos visualizar el PDF generado.'); return }
+    if (!pdf || (pdf.type && !pdf.type.toLowerCase().startsWith('application/pdf'))) { setUrl(null); setPreviewError('No pudimos visualizar el PDF generado.'); return }
     const nextUrl = URL.createObjectURL(pdf)
     setUrl(nextUrl)
     setPreviewError('')
@@ -129,7 +129,9 @@ export function PdfPreview({ pdf, onEdit, onHome }: { pdf: Blob | null; onEdit: 
     const link = document.createElement('a')
     link.href = downloadUrl
     link.download = 'permiso-gremial.pdf'
+    document.body.appendChild(link)
     link.click()
+    link.remove()
     window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 0)
   }
   const print = () => {

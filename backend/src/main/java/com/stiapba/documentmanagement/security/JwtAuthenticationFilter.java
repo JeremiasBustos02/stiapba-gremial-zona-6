@@ -44,9 +44,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
         try {
-            UUID userId = jwtService.parseUserId(token);
-            userRepository.findById(userId)
-                    .filter(User::isActive)
+            JwtService.TokenClaims claims = jwtService.parseToken(token);
+            userRepository.findById(claims.userId())
+                    .filter(user -> user.isActive() && user.getSessionVersion() == claims.sessionVersion())
                     .ifPresent(this::setAuthentication);
         } catch (JwtException | IllegalArgumentException ignored) {
             SecurityContextHolder.clearContext();
