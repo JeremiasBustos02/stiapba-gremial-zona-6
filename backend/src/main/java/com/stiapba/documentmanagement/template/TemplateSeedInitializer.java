@@ -31,7 +31,7 @@ public class TemplateSeedInitializer implements ApplicationRunner {
 
     public TemplateSeedInitializer(TemplateRepository templateRepository, TemplateVariantRepository variantRepository,
                                    TemplateFileStorage fileStorage, PdfUploadValidator pdfUploadValidator,
-                                   @Value("${app.template.seed-file:../docs/pdf-templates/Permiso-Gremial-Bruna.pdf}") String seedFile,
+                                    @Value("${app.template.seed-file:}") String seedFile,
                                    @Value("${app.template.seed-enabled:true}") boolean enabled) {
         this.templateRepository = templateRepository;
         this.variantRepository = variantRepository;
@@ -102,6 +102,9 @@ public class TemplateSeedInitializer implements ApplicationRunner {
     }
 
     private byte[] loadSeedContent() throws IOException {
+        if (seedFile == null || seedFile.isBlank()) {
+            throw new IllegalStateException("TEMPLATE_SEED_FILE debe configurarse cuando TEMPLATE_SEED_ENABLED=true.");
+        }
         Path source = Path.of(seedFile).toAbsolutePath().normalize();
         if (!Files.isRegularFile(source)) {
             throw new NoSuchFileException(source.toString());
