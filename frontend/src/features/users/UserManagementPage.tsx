@@ -87,8 +87,8 @@ export function UserManagementPage() {
     const action = user.active ? 'desactivar' : 'activar'
     if (user.active && !window.confirm(`¿Querés desactivar a ${user.nombre} ${user.apellido}?`)) return
     if (!user.active && !window.confirm(`¿Querés activar a ${user.nombre} ${user.apellido}?`)) return
-    activeMutation.mutate({ id: user.id, active: !user.active })
     setFeedback(`Procesando: ${action} usuario...`)
+    activeMutation.mutate({ id: user.id, active: !user.active })
   }
 
   function resetPassword(user: User) {
@@ -110,7 +110,7 @@ export function UserManagementPage() {
 
         {feedback && <p className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{feedback}</p>}
         {mutationError && <p role="alert" className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{errorMessage(mutationError)}</p>}
-        {usersQuery.isError && <p role="alert" className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{errorMessage(usersQuery.error)}</p>}
+        {usersQuery.isError && <p role="alert" className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800"><span>{errorMessage(usersQuery.error)}</span><button type="button" onClick={() => void usersQuery.refetch()} className="font-semibold underline">Reintentar</button></p>}
 
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
           <section aria-labelledby="users-list-title" className="order-2 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6 lg:order-1">
