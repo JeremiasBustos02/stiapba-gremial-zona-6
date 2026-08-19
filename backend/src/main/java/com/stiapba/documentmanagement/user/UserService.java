@@ -79,6 +79,7 @@ public class UserService {
         String temporaryPassword = generateTemporaryPassword();
         user.changePassword(passwordEncoder.encode(temporaryPassword));
         user.requireFirstLogin();
+        user.invalidateSessions();
         return new ResetPasswordResponse(temporaryPassword);
     }
 

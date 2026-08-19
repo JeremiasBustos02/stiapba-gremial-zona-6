@@ -15,7 +15,7 @@ import { DocumentTemplateSelection, DocumentVariantSelection, initialDocumentFor
 import { ApiError, setUnauthorizedHandler } from '@/lib/api'
 import { changeFirstLoginPassword, changePassword, getCurrentUser, login, logout, type AuthUser } from '@/features/auth/authApi'
 
-const queryClient = new QueryClient()
+const queryClient = new QueryClient({ defaultOptions: { mutations: { gcTime: 0 } } })
 
 type Screen = 'login' | 'first-login' | 'home' | 'new-document' | 'variants' | 'form' | 'preview' | 'profile' | 'admin' | 'users' | 'companies' | 'agreements' | 'templates' | 'template-variants'
 type FormData = { province: string; issueDate: string; company: string; delegate: string; permitDay: string; agreement: string; variant: string }
@@ -42,7 +42,7 @@ function App() {
   const logoutMutation = useMutation({
     mutationFn: logout,
     onSuccess: () => {
-      queryClient.removeQueries({ queryKey: ['auth', 'me'] })
+      queryClient.clear()
       setDocumentForm(initialDocumentForm)
       setSelectedTemplateId(null)
       setGeneratedPdf(null)
@@ -53,7 +53,7 @@ function App() {
 
   useEffect(() => {
     setUnauthorizedHandler(() => {
-      queryClient.removeQueries({ queryKey: ['auth', 'me'] })
+      queryClient.clear()
       setDocumentForm(initialDocumentForm)
       setSelectedTemplateId(null)
       setGeneratedPdf(null)

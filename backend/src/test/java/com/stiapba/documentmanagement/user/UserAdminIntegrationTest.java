@@ -168,6 +168,7 @@ class UserAdminIntegrationTest {
         delegate.completeFirstLogin();
         userRepository.saveAndFlush(delegate);
         MockMvcSession session = authenticate(admin.getDni(), ADMIN_PASSWORD);
+        MockMvcSession delegateSession = authenticate(delegate.getDni(), DELEGATE_PASSWORD);
 
         MvcResult reset = mockMvc.perform(post("/api/v1/users/{id}/reset-password", delegate.getId())
                         .cookie(session.authCookie(), session.csrfCookie())
@@ -180,6 +181,9 @@ class UserAdminIntegrationTest {
         User updated = userRepository.findById(delegate.getId()).orElseThrow();
         assertThat(updated.isFirstLogin()).isTrue();
         assertThat(passwordEncoder.matches(temporaryPassword, updated.getPasswordHash())).isTrue();
+
+        mockMvc.perform(get("/api/v1/auth/me").cookie(delegateSession.authCookie()))
+                .andExpect(status().isUnauthorized());
 
         mockMvc.perform(get("/api/v1/users/{id}", delegate.getId()).cookie(session.authCookie()))
                 .andExpect(status().isOk())

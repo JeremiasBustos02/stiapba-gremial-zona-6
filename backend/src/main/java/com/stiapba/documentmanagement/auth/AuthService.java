@@ -32,7 +32,7 @@ public class AuthService {
     }
 
     @Transactional
-    public void changeFirstLoginPassword(UserPrincipal principal, FirstLoginPasswordChangeRequest request) {
+    public String changeFirstLoginPassword(UserPrincipal principal, FirstLoginPasswordChangeRequest request) {
         User user = requireActiveUser(principal);
         if (!user.isFirstLogin()) {
             throw new AuthException(403, "FIRST_LOGIN_NOT_REQUIRED", "El cambio obligatorio de contraseña no está disponible.");
@@ -40,15 +40,19 @@ public class AuthService {
         validatePasswordConfirmation(request.newPassword(), request.confirmPassword());
         user.changePassword(passwordEncoder.encode(request.newPassword()));
         user.completeFirstLogin();
+        user.invalidateSessions();
+        return jwtService.createToken(user.getId(), user.getSessionVersion());
     }
 
     @Transactional
-    public void changePassword(UserPrincipal principal, ChangePasswordRequest request) {
+    public String changePassword(UserPrincipal principal, ChangePasswordRequest request) {
         User user = requireActiveUser(principal);
         if (user.isFirstLogin()) {
             throw new AuthException(403, "FIRST_LOGIN_REQUIRED", "Debés cambiar la contraseña temporal antes de continuar.");
         }
         updatePassword(user, request, true);
+        user.invalidateSessions();
+        return jwtService.createToken(user.getId(), user.getSessionVersion());
     }
 
     public AuthenticatedUserResponse me(UserPrincipal principal) {

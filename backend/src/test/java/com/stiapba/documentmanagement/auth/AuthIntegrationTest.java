@@ -142,13 +142,17 @@ class AuthIntegrationTest {
         mockMvc.perform(get("/api/v1/users").cookie(authCookie(login)))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("FIRST_LOGIN_REQUIRED"));
-        mockMvc.perform(post("/api/v1/auth/first-login/change-password")
+        MvcResult passwordChange = mockMvc.perform(post("/api/v1/auth/first-login/change-password")
                         .cookie(authCookie(login), csrfCookie(login))
                         .header("X-XSRF-TOKEN", csrfCookie(login).getValue())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(firstLoginPasswordChange("contraseña-nueva", "contraseña-nueva")))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andExpect(cookie().httpOnly(JwtAuthenticationFilter.AUTH_COOKIE, true))
+                .andReturn();
         mockMvc.perform(get("/api/v1/auth/me").cookie(authCookie(login)))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/v1/auth/me").cookie(authCookie(passwordChange)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.firstLogin").value(false));
     }
@@ -165,11 +169,17 @@ class AuthIntegrationTest {
                         .content(passwordChange(PASSWORD, "corta", "corta")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
-        mockMvc.perform(post("/api/v1/auth/change-password")
+        MvcResult passwordChange = mockMvc.perform(post("/api/v1/auth/change-password")
                         .cookie(authCookie(login), csrfCookie(login))
                         .header("X-XSRF-TOKEN", csrfCookie(login).getValue())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(passwordChange(PASSWORD, "contraseña-nueva", "contraseña-nueva")))
+                .andExpect(status().isOk())
+                .andExpect(cookie().httpOnly(JwtAuthenticationFilter.AUTH_COOKIE, true))
+                .andReturn();
+        mockMvc.perform(get("/api/v1/auth/me").cookie(authCookie(login)))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/v1/auth/me").cookie(authCookie(passwordChange)))
                 .andExpect(status().isOk());
         login(user.getDni(), PASSWORD).andExpect(status().isUnauthorized());
         login(user.getDni(), "contraseña-nueva").andExpect(status().isOk());

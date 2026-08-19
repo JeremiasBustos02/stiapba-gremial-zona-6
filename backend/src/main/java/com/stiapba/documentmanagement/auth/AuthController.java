@@ -50,21 +50,25 @@ public class AuthController {
     }
 
     @PostMapping("/first-login/change-password")
-    public MessageResponse changeFirstLoginPassword(
+    public ResponseEntity<MessageResponse> changeFirstLoginPassword(
             @AuthenticationPrincipal UserPrincipal principal,
             @Valid @RequestBody FirstLoginPasswordChangeRequest request
     ) {
-        authService.changeFirstLoginPassword(principal, request);
-        return new MessageResponse("Contraseña actualizada correctamente.");
+        String token = authService.changeFirstLoginPassword(principal, request);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, authCookie(token, jwtService.expiration().toSeconds()).toString())
+                .body(new MessageResponse("Contraseña actualizada correctamente."));
     }
 
     @PostMapping("/change-password")
-    public MessageResponse changePassword(
+    public ResponseEntity<MessageResponse> changePassword(
             @AuthenticationPrincipal UserPrincipal principal,
             @Valid @RequestBody ChangePasswordRequest request
     ) {
-        authService.changePassword(principal, request);
-        return new MessageResponse("Contraseña actualizada correctamente.");
+        String token = authService.changePassword(principal, request);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, authCookie(token, jwtService.expiration().toSeconds()).toString())
+                .body(new MessageResponse("Contraseña actualizada correctamente."));
     }
 
     @PostMapping("/logout")
