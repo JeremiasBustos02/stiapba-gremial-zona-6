@@ -36,6 +36,18 @@ function csrfToken() {
 }
 
 export async function apiRequest<T>(path: string, requestOptions: ApiRequestOptions = {}): Promise<T> {
+  const response = await apiResponse(path, requestOptions)
+
+  if (response.status === 204) return undefined as T
+  return (await response.json()) as T
+}
+
+export async function apiRequestBlob(path: string, requestOptions: ApiRequestOptions = {}): Promise<Blob> {
+  const response = await apiResponse(path, requestOptions)
+  return response.blob()
+}
+
+async function apiResponse(path: string, requestOptions: ApiRequestOptions): Promise<Response> {
   const { notifyUnauthorized = true, ...options } = requestOptions
   const method = options.method?.toUpperCase() ?? 'GET'
   const headers = new Headers(options.headers)
@@ -65,6 +77,5 @@ export async function apiRequest<T>(path: string, requestOptions: ApiRequestOpti
     throw error
   }
 
-  if (response.status === 204) return undefined as T
-  return (await response.json()) as T
+  return response
 }

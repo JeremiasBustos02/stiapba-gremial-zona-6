@@ -11,6 +11,7 @@ import { createAgreement, getAgreements, setAgreementActive, updateAgreement } f
 import { createCompany, getCompanies, setCompanyActive, updateCompany } from '@/features/catalog/companiesApi'
 import type { Agreement, AgreementForm, Company, CompanyForm } from '@/features/catalog/types'
 import { TemplateManagementPage } from '@/features/templates/TemplateManagementPage'
+import { DocumentTemplateSelection, DocumentVariantSelection, initialDocumentForm, PdfPreview, PermisoGremialForm, type DocumentFormValues } from '@/features/documents/DocumentFlow'
 import { ApiError, setUnauthorizedHandler } from '@/lib/api'
 import { changeFirstLoginPassword, changePassword, getCurrentUser, login, logout, type AuthUser } from '@/features/auth/authApi'
 
@@ -25,7 +26,9 @@ const delegates = [{ value: 'hernan', name: 'Hernan Echevarria', dni: '44.267.02
 function App() {
   const queryClient = useQueryClient()
   const [screen, setScreen] = useState<Screen>('home')
-  const [form, setForm] = useState<FormData>(initialForm)
+  const [documentForm, setDocumentForm] = useState<DocumentFormValues>(initialDocumentForm)
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
+  const [generatedPdf, setGeneratedPdf] = useState<Blob | null>(null)
   const [sessionExpired, setSessionExpired] = useState(false)
   const sessionQuery = useQuery({ queryKey: ['auth', 'me'], queryFn: getCurrentUser, retry: false })
   const loginMutation = useMutation({
@@ -40,7 +43,9 @@ function App() {
     mutationFn: logout,
     onSuccess: () => {
       queryClient.removeQueries({ queryKey: ['auth', 'me'] })
-      setForm(initialForm)
+      setDocumentForm(initialDocumentForm)
+      setSelectedTemplateId(null)
+      setGeneratedPdf(null)
       setSessionExpired(false)
       setScreen('login')
     },
@@ -72,10 +77,10 @@ function App() {
 
   return <AppLayout screen={screen} role={currentUser.role} onNavigate={go} onLogout={() => logoutMutation.mutate()}>
     {screen === 'home' && <HomePage user={currentUser} onNavigate={go} />}
-    {screen === 'new-document' && <TemplateSelection onBack={() => go('home')} onSelect={() => go('variants')} />}
-    {screen === 'variants' && <VariantSelection onBack={() => go('new-document')} onSelect={(variant) => { setForm({ ...form, variant }); go('form') }} />}
-    {screen === 'form' && <PermitForm form={form} onChange={setForm} onBack={() => go('variants')} onPreview={() => go('preview')} />}
-    {screen === 'preview' && <PreviewPage onEdit={() => go('form')} onHome={() => go('home')} />}
+    {screen === 'new-document' && <DocumentTemplateSelection onBack={() => go('home')} onSelect={(templateId) => { setSelectedTemplateId(templateId); setDocumentForm({ ...documentForm, variantId: '' }); go('variants') }} />}
+    {screen === 'variants' && <DocumentVariantSelection templateId={selectedTemplateId} onBack={() => go('new-document')} onSelect={(variantId) => { setDocumentForm({ ...documentForm, variantId }); go('form') }} />}
+    {screen === 'form' && <PermisoGremialForm value={documentForm} onChange={setDocumentForm} onBack={() => go('variants')} onGenerated={(pdf) => { setGeneratedPdf(pdf); go('preview') }} />}
+    {screen === 'preview' && <PdfPreview pdf={generatedPdf} onEdit={() => go('form')} onHome={() => go('home')} />}
     {screen === 'profile' && <ProfilePage user={currentUser} onLogout={() => logoutMutation.mutate()} />}
     {screen === 'admin' && <AdminPage onNavigate={go} />}
     {['users', 'companies', 'agreements', 'templates', 'template-variants'].includes(screen) && adminContent}
