@@ -15,6 +15,7 @@ import org.springframework.boot.DefaultApplicationArguments;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.http.HttpHeaders;
 import org.springframework.mock.web.MockCookie;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
@@ -24,10 +25,12 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Date;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -43,7 +46,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "app.security.initial-admin.dni=",
         "app.security.initial-admin.password=",
         "app.security.initial-admin.name=",
-        "app.security.initial-admin.lastname="
+        "app.security.initial-admin.lastname=",
+        "frontend.url=https://documentos.example.vercel.app"
 })
 class AuthIntegrationTest {
 
@@ -81,6 +85,28 @@ class AuthIntegrationTest {
                 .andReturn();
 
         assertThat(result.getResponse().getCookie(JwtAuthenticationFilter.AUTH_COOKIE)).isNotNull();
+    }
+
+    @Test
+    void providesCsrfTokenForCrossSiteClientsAndRestrictsCorsToConfiguredFrontend() throws Exception {
+        MvcResult tokenResult = mockMvc.perform(get("/api/v1/auth/csrf")
+                        .header(HttpHeaders.ORIGIN, "https://documentos.example.vercel.app"))
+                .andExpect(status().isOk())
+                .andExpect(cookie().httpOnly("XSRF-TOKEN", false))
+                .andExpect(jsonPath("$.token").isNotEmpty())
+                .andReturn();
+
+        assertThat(latestCsrfCookieValue(tokenResult))
+                .isEqualTo(objectMapper.readTree(tokenResult.getResponse().getContentAsString()).get("token").asText());
+        mockMvc.perform(options("/api/v1/auth/csrf")
+                        .header(HttpHeaders.ORIGIN, "https://documentos.example.vercel.app")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "POST")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "X-XSRF-TOKEN"))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
+                        .string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "https://documentos.example.vercel.app"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
+                        .string(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true"));
     }
 
     @Test
@@ -270,6 +296,14 @@ class AuthIntegrationTest {
 
     private MockCookie csrfCookie(MvcResult result) {
         return new MockCookie("XSRF-TOKEN", result.getResponse().getCookie("XSRF-TOKEN").getValue());
+    }
+
+    private String latestCsrfCookieValue(MvcResult result) {
+        return Arrays.stream(result.getResponse().getCookies())
+                .filter(cookie -> "XSRF-TOKEN".equals(cookie.getName()))
+                .reduce((first, second) -> second)
+                .orElseThrow()
+                .getValue();
     }
 
     private String passwordChange(String currentPassword, String newPassword, String confirmPassword) throws Exception {

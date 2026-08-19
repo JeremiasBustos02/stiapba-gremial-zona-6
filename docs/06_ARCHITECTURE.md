@@ -62,7 +62,7 @@ En el MVP no existirán todavía:
 * SMTP.
 * Google Drive.
 * Historial persistente.
-* Almacenamiento cloud de PDFs.
+* Almacenamiento cloud de PDFs generados.
 
 ---
 
@@ -430,7 +430,7 @@ Apache PDFBox.
 
 Cada `TemplateVariant` tendrá asociada una referencia `fileKey` a un archivo PDF base. PostgreSQL no almacenará los bytes del PDF.
 
-En el MVP, ADMIN podrá cargar y reemplazar PDFs desde la interfaz. Los archivos se almacenarán mediante `TemplateFileStorage`, inicialmente con `LocalTemplateFileStorage`. El almacenamiento local debe utilizar una ubicación persistente en producción.
+En el MVP, ADMIN podrá cargar y reemplazar PDFs desde la interfaz. Los archivos se almacenarán mediante `TemplateFileStorage`. Desarrollo local utiliza `LocalTemplateFileStorage`; el despliegue administrado utiliza una implementación S3-compatible con un bucket privado de Supabase Storage. El frontend nunca accede directamente al bucket.
 
 Ejemplo:
 
@@ -454,10 +454,11 @@ Se recomienda una interfaz conceptual:
 TemplateFileStorage
 ```
 
-Con una implementación inicial:
+Con implementaciones:
 
 ```text
 LocalTemplateFileStorage
+S3TemplateFileStorage
 ```
 
 En el futuro podría agregarse:
@@ -760,7 +761,13 @@ FRONTEND_URL
 INITIAL_ADMIN_DNI
 INITIAL_ADMIN_PASSWORD
 
+TEMPLATE_STORAGE_TYPE
 TEMPLATE_STORAGE_PATH
+S3_ENDPOINT
+S3_REGION
+S3_ACCESS_KEY
+S3_SECRET_KEY
+S3_BUCKET
 ```
 
 Se mantendrá:

@@ -1,182 +1,128 @@
 # Despliegue de producción
 
-## Alcance
+## Arquitectura inicial gratuita
 
-Esta guía prepara el MVP para un host, VM o plataforma de contenedores. No presupone proveedor cloud. El despliegue requiere cuatro componentes persistentes o configurados independientemente:
+```text
+React + Vite (Vercel)
+        |
+        | HTTPS + cookies cross-site
+        v
+Spring Boot (Render Docker)
+        |
+        +-- Supabase PostgreSQL
+        +-- Supabase Storage S3-compatible (bucket privado de templates)
+```
 
-- Frontend estático (`frontend/dist`).
-- Backend Spring Boot (`backend/target/document-management-0.0.1-SNAPSHOT.jar`).
-- PostgreSQL.
-- Directorio persistente de plantillas PDF (`TEMPLATE_STORAGE_PATH`).
+PostgreSQL conserva solo `TemplateVariant.fileKey`. Los PDFs generados continúan siendo efímeros: se generan en memoria, se envían al navegador y no se almacenan en Supabase Storage.
 
-El reverse proxy termina HTTPS, sirve el frontend y reenvía solo `/api/` al backend. PostgreSQL y el directorio de plantillas no se exponen por HTTP.
+No versionar valores de producción. Configurarlos únicamente desde los paneles de Vercel, Render y Supabase.
 
-## Requisitos
+## Supabase
 
-- Java 21 para ejecutar el backend.
-- Maven 3.9+ para construirlo.
-- Node.js 20+ y npm para construir el frontend.
-- PostgreSQL 16+.
-- Un reverse proxy con TLS, por ejemplo Nginx.
-- Un volumen/directorio persistente, de lectura y escritura para el usuario del backend.
-- El PDF seed `Permiso-Gremial-Bruna.pdf` disponible en una ruta absoluta, de solo lectura para el backend.
+1. Crear un proyecto y obtener los datos de conexión PostgreSQL para el backend. No usar Supabase Auth.
+2. Crear un bucket de Storage **privado** para las plantillas, por ejemplo con un nombre decidido al crear el recurso.
+3. Activar el protocolo S3 de Supabase Storage y crear un par de credenciales S3 con acceso limitado al bucket de templates.
+4. Tomar el endpoint S3, que tiene el formato `https://<project-ref>.storage.supabase.co/storage/v1/s3`, y la región del proyecto.
+
+Supabase Storage requiere acceso path-style para este flujo; la aplicación lo activa exclusivamente en el cliente S3 del backend. No se generan URLs públicas ni presigned URLs y las credenciales S3 no salen de Render.
 
 ## Variables
 
-No versionar el archivo que contiene valores de producción. Usar el gestor de secretos de la plataforma o variables de servicio. `.env.example` es solo una referencia de desarrollo.
+### Vercel
 
-| Variable | Producción | Uso |
-| --- | --- | --- |
-| `SPRING_PROFILES_ACTIVE` | `prod` | Activa el perfil seguro. |
-| `BACKEND_PORT` | Sí, si no se usa `8080` | Puerto local del JAR. No publicar a Internet. |
-| `DB_HOST` | Sí | Host privado de PostgreSQL. |
-| `DB_PORT` | Sí | Puerto PostgreSQL. |
-| `DB_NAME` | Sí | Base de datos de la aplicación. |
-| `DB_USERNAME` | Sí | Usuario de aplicación con privilegios mínimos. |
-| `DB_PASSWORD` | Sí, secreto | Contraseña del usuario de aplicación. |
-| `JWT_SECRET` | Sí, secreto | Base64 de al menos 32 bytes aleatorios. No reutilizar entre entornos. |
-| `JWT_EXPIRATION_SECONDS` | Sí | Duración positiva del JWT, por ejemplo `3600`. |
-| `AUTH_COOKIE_SECURE` | No en prod | El perfil `prod` fuerza `Secure=true`; en dev controla la cookie. |
-| `AUTH_COOKIE_SAME_SITE` | Sí | Normalmente `Lax`. Usar `None` solo si frontend y API están en sitios distintos; requiere HTTPS. |
-| `FRONTEND_URL` | Sí | Origen exacto permitido por CORS, por ejemplo `https://documentos.example.org`. |
-| `INITIAL_ADMIN_DNI` | Primer inicio | DNI del único ADMIN inicial. |
-| `INITIAL_ADMIN_PASSWORD` | Primer inicio, secreto | Entre 10 y 72 caracteres. |
-| `INITIAL_ADMIN_NAME` | Primer inicio | Nombre. |
-| `INITIAL_ADMIN_LASTNAME` | Primer inicio | Apellido. |
-| `TEMPLATE_STORAGE_PATH` | Sí | Ruta absoluta del volumen persistente, por ejemplo `/var/lib/stiapba/templates`. |
-| `TEMPLATE_MAX_FILE_SIZE` | Sí | Límite multipart de Spring, por ejemplo `10MB`. |
-| `TEMPLATE_MAX_FILE_SIZE_BYTES` | Sí | Mismo límite expresado en bytes, por ejemplo `10485760`. |
-| `TEMPLATE_SEED_ENABLED` | Sí | `true` para provisionar/verificar Bruna; `false` si la variante ya se administra por la aplicación. |
-| `TEMPLATE_SEED_FILE` | Si seed activo | Ruta absoluta al PDF seed, por ejemplo `/opt/stiapba/seed/Permiso-Gremial-Bruna.pdf`. |
+| Variable | Valor |
+| --- | --- |
+| `VITE_API_URL` | URL HTTPS del backend terminada en `/api/v1`, por ejemplo `https://<api>.onrender.com/api/v1`. |
 
-`AUTH_COOKIE_SECURE=false` solo sirve para HTTP local. Producción falla si faltan las variables requeridas por `application-prod.yml`; en particular no existe un secreto JWT ni credencial DB de respaldo.
+Vite solo incorpora variables con prefijo `VITE_` al bundle. No definir allí secretos, contraseñas, JWT ni credenciales S3.
 
-## Base de datos y Flyway
+### Render
 
-Flyway es la única autoridad del esquema. Hibernate opera con `ddl-auto=validate`, por lo que no crea ni modifica tablas. Al arrancar, Flyway valida/aplica las migraciones pendientes antes de usar el esquema.
+| Variable | Uso |
+| --- | --- |
+| `SPRING_PROFILES_ACTIVE` | `prod`. La imagen también lo establece por defecto. |
+| `PORT` | Lo proporciona Render. Spring escucha `server.port=${PORT:8080}`. |
+| `DB_HOST` | Host PostgreSQL proporcionado por Supabase. |
+| `DB_PORT` | Puerto PostgreSQL proporcionado por Supabase. |
+| `DB_NAME` | Base de datos proporcionada por Supabase. |
+| `DB_USERNAME` | Usuario PostgreSQL proporcionado por Supabase. |
+| `DB_PASSWORD` | Secreto PostgreSQL proporcionado por Supabase. |
+| `DB_SSL_MODE` | `require` para Supabase. El valor se aplica como `sslmode` JDBC. |
+| `JWT_SECRET` | Secreto Base64 de al menos 32 bytes aleatorios, único por entorno. |
+| `JWT_EXPIRATION_SECONDS` | Duración positiva del JWT, por ejemplo `3600`. |
+| `AUTH_COOKIE_SECURE` | `true`. El perfil `prod` fuerza Secure igualmente. |
+| `AUTH_COOKIE_SAME_SITE` | `None` para Vercel y Render en sitios distintos. Requiere HTTPS. |
+| `FRONTEND_URL` | Origen exacto de Vercel, por ejemplo `https://<app>.vercel.app`, sin barra final. |
+| `INITIAL_ADMIN_DNI` | DNI del ADMIN inicial, solo mientras aún no exista uno. |
+| `INITIAL_ADMIN_PASSWORD` | Contraseña temporal inicial, secreto de 10 a 72 caracteres. |
+| `INITIAL_ADMIN_NAME` | Nombre del ADMIN inicial. |
+| `INITIAL_ADMIN_LASTNAME` | Apellido del ADMIN inicial. |
+| `TEMPLATE_STORAGE_TYPE` | `s3`. |
+| `TEMPLATE_MAX_FILE_SIZE` | Límite multipart, por ejemplo `10MB`. |
+| `TEMPLATE_MAX_FILE_SIZE_BYTES` | El mismo límite en bytes, por ejemplo `10485760`. |
+| `TEMPLATE_SEED_ENABLED` | `true` para crear o reparar la variante Bruna; `false` para provisionarla manualmente mediante ADMIN. |
+| `TEMPLATE_SEED_FILE` | Opcional con Docker: por defecto `/app/seed/Permiso-Gremial-Bruna.pdf`. |
+| `S3_ENDPOINT` | Endpoint S3-compatible de Supabase Storage. |
+| `S3_REGION` | Región del proyecto Supabase. |
+| `S3_ACCESS_KEY` | Access key S3 de Supabase, secreto. |
+| `S3_SECRET_KEY` | Secret key S3 de Supabase, secreto. |
+| `S3_BUCKET` | Nombre del bucket privado creado en Supabase. |
 
-Crear una base y un usuario exclusivos de la aplicación. El usuario no debe ser superusuario, ni `CREATEDB`, ni `CREATEROLE`. Debe tener permisos sobre la base y el esquema `public` necesarios para que Flyway cree y migre sus tablas. Restringir la red de PostgreSQL a backend y operaciones administrativas; no publicar el puerto en Internet.
+`TEMPLATE_STORAGE_PATH` queda disponible solo para `TEMPLATE_STORAGE_TYPE=local`; no se configura ni se usa en Render. Si Supabase entrega una URL JDBC completa en vez de los componentes `DB_*`, se puede configurar como `SPRING_DATASOURCE_URL`; debe incluir `sslmode=require` o una política TLS más estricta compatible.
 
-`docker-compose.yml` es exclusivamente una ayuda de desarrollo: inicia solo PostgreSQL, persiste en el volumen `postgres_data` y lo enlaza a `127.0.0.1`. No construye ni publica frontend/backend de producción.
+## Seed Bruna
 
-## Templates y seed
+El Dockerfile copia `docs/pdf-templates/Permiso-Gremial-Bruna.pdf` a `/app/seed/Permiso-Gremial-Bruna.pdf` durante el build con el repositorio como contexto. El archivo empaquetado es inmutable y reproducible; el destino siempre se escribe mediante el `TemplateFileStorage` activo, incluido S3.
 
-Montar `TEMPLATE_STORAGE_PATH` como volumen persistente fuera del directorio de trabajo y otorgar lectura/escritura únicamente al usuario del backend. El backend crea archivos con claves internas y no publica esta ruta como recurso HTTP.
+Con `TEMPLATE_SEED_ENABLED=true`, el seed es idempotente: crea `Permiso Gremial / Bruna` si falta, o repone el objeto S3 si la referencia existe pero el objeto no está disponible. El archivo origen nunca se modifica.
 
-Para un primer despliegue reproducible, montar el PDF Bruna en una ruta absoluta de solo lectura, establecer `TEMPLATE_SEED_ENABLED=true` y `TEMPLATE_SEED_FILE` a esa ruta. El seed es idempotente: crea `Permiso Gremial / Bruna` solo si no existe y repone el archivo si la referencia existente quedó sin archivo. Nunca modifica el PDF origen. Tras verificar el provisionamiento puede mantenerse activo para reparación controlada o desactivarse; si se desactiva, conservar igualmente el PDF seed fuera del volumen como material de recuperación.
+Con `TEMPLATE_SEED_ENABLED=false`, el primer ADMIN debe crear `Permiso Gremial` y cargar la variante Bruna mediante la interfaz. No establecer ese valor en un despliegue vacío salvo que se siga ese procedimiento.
 
-La actualización de una variante combina filesystem y DB. Una interrupción entre ambas operaciones puede dejar un archivo huérfano o, ante una falla de almacenamiento, requerir intervención operativa. Antes de reemplazar PDFs, respaldar DB y storage juntos; ante inconsistencia, restaurar ambos desde el mismo punto o reparar la variante desde ADMIN.
+## Cookies, CSRF y CORS
 
-## Build y arranque
+Vercel y Render usan sitios distintos. En producción deben usarse `AUTH_COOKIE_SECURE=true` y `AUTH_COOKIE_SAME_SITE=None`; ambos servicios deben estar detrás de HTTPS. `FRONTEND_URL` se registra como el único origen CORS permitido, con `allowCredentials=true`. No se usa `*` ni se permite un origen adicional por defecto.
 
-Desde `frontend/`:
+La cookie JWT sigue siendo `HttpOnly`; no se mueve a `localStorage` ni `sessionStorage`. CSRF permanece habilitado con double-submit: antes de cada operación que modifica estado, el frontend solicita `GET /api/v1/auth/csrf` con credenciales y envía el token recibido en `X-XSRF-TOKEN`. Esto es necesario porque JavaScript servido desde Vercel no puede leer cookies alojadas en Render. Login conserva la excepción CSRF existente.
+
+Algunos navegadores o configuraciones de privacidad bloquean cookies de terceros. Debe realizarse una prueba real en los navegadores objetivo antes de M16. Si se bloquean, la alternativa a evaluar es un dominio propio compartido o un proxy same-origin, no almacenar el JWT en el navegador.
+
+## Render
+
+Render debe crear un Web Service Docker con el repositorio como directorio raíz y `backend/Dockerfile` como Dockerfile. El contexto raíz es necesario porque la imagen incluye el PDF seed desde `docs/pdf-templates/`.
+
+La imagen compila con Maven y Java 21, ejecuta un JRE 21 no privilegiado y no depende de almacenamiento local persistente. Render proporciona `PORT`; no definir un puerto público fijo ni montar un volumen de templates.
+
+Build local equivalente desde la raíz del repositorio:
+
+```bash
+docker build -f backend/Dockerfile -t stiapba-backend .
+```
+
+Flyway se ejecuta al iniciar el backend con `ddl-auto=validate`. No ejecutar migraciones manuales ni habilitar `ddl-auto=update`.
+
+## Vercel
+
+Crear un proyecto Vercel cuyo Root Directory sea `frontend/`. La configuración detecta Vite y utiliza:
 
 ```bash
 npm ci
 npm run build
 ```
 
-Publicar el contenido de `frontend/dist`. El bundle utiliza `VITE_API_BASE_URL=/api/v1` por defecto y no incorpora una URL localhost. Si se usa un origen de API separado, definir `VITE_API_BASE_URL` con su URL HTTPS antes de `npm run build` y hacer coincidir `FRONTEND_URL`, CORS y la política de cookies.
+El artefacto publicado es `frontend/dist`. `frontend/vercel.json` redirige las rutas al `index.html` para que React Router funcione al refrescar URLs internas. Definir `VITE_API_URL` antes del build; las variables de Vite se incorporan de forma estática y requieren un nuevo deploy cuando cambian.
 
-Desde `backend/`:
+## Operación y recuperación
 
-```bash
-mvn clean package
-java -jar target/document-management-0.0.1-SNAPSHOT.jar
-```
+- Mantener el bucket privado y otorgar a las credenciales S3 solo los permisos mínimos necesarios sobre ese bucket.
+- Respaldar PostgreSQL y los objetos `templates/` del bucket como una misma unidad lógica. Restaurarlos juntos para no dejar `fileKey` inválidos.
+- Mantener `TEMPLATE_MAX_FILE_SIZE` y `TEMPLATE_MAX_FILE_SIZE_BYTES` alineados en 10 MB salvo revisión explícita.
+- Tras crear el ADMIN inicial y validar el acceso, retirar `INITIAL_ADMIN_PASSWORD` del entorno.
+- No registrar JWT, cookies, contraseñas, secretos JDBC ni credenciales S3.
 
-El proceso debe recibir `SPRING_PROFILES_ACTIVE=prod` y todas las variables de la tabla. Maven no es necesario para ejecutar el JAR ya construido.
+## Verificación previa a M16
 
-En el primer arranque, si no existe ningún ADMIN y las cuatro variables `INITIAL_ADMIN_*` están completas, se crea uno con BCrypt y `firstLogin=true`. No se registra la contraseña, no se recrea ni restablece en reinicios y no se crean duplicados. El administrador debe iniciar sesión y cambiar esa contraseña inmediatamente. Después puede retirarse `INITIAL_ADMIN_PASSWORD` del entorno; dejar las cuatro variables vacías también es válido cuando ya existe un ADMIN.
-
-## HTTPS, proxy y rate limit
-
-HTTPS es obligatorio. Redirigir HTTP a HTTPS y dejar el backend accesible solo desde la red local/privada del proxy. Configuración Nginx de referencia, ajustando dominios, rutas de certificados y backend:
-
-```nginx
-# Contexto http {}
-limit_req_zone $binary_remote_addr zone=login_per_ip:10m rate=5r/m;
-
-server {
-    listen 80;
-    server_name documentos.example.org;
-    return 301 https://$host$request_uri;
-}
-
-server {
-    listen 443 ssl http2;
-    server_name documentos.example.org;
-    ssl_certificate /etc/letsencrypt/live/documentos.example.org/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/documentos.example.org/privkey.pem;
-
-    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-    add_header X-Content-Type-Options "nosniff" always;
-    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-    add_header Permissions-Policy "camera=(), geolocation=(), microphone=(), payment=(), usb=()" always;
-    add_header X-Frame-Options "DENY" always;
-    add_header Content-Security-Policy "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; frame-src 'self' blob:; worker-src 'self' blob:" always;
-
-    root /srv/stiapba/frontend;
-    index index.html;
-    client_max_body_size 10m;
-
-    location = /api/v1/auth/login {
-        limit_req zone=login_per_ip burst=5 nodelay;
-        proxy_pass http://127.0.0.1:8080;
-        proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-Proto https;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_read_timeout 30s;
-    }
-
-    location /api/ {
-        proxy_pass http://127.0.0.1:8080;
-        proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-Proto https;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_read_timeout 30s;
-    }
-
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-}
-```
-
-El límite de login permite cinco solicitudes por minuto por IP con una ráfaga inicial de cinco; Nginx devuelve `503` cuando se supera. Ajustar según tráfico real y convertir ese `503` en `429` si la plataforma/proxy lo permite. Es deliberadamente infraestructura, no una dependencia de aplicación. Si el proxy está detrás de otro balanceador, configurar correctamente la IP real antes de usar `$binary_remote_addr`.
-
-La CSP permite `frame-src blob:` porque el preview usa un `iframe` con una object URL; bloquearlo rompería vista previa e impresión. Probarla en el navegador objetivo antes de activar un cambio de CSP.
-
-## Política PDF y operación
-
-Solo ADMIN puede cargar o reemplazar PDFs. Mantener ambos límites de tamaño en 10 MB y el `client_max_body_size` del proxy alineado. El límite de bytes no limita páginas, objetos comprimidos ni complejidad interna: reservar memoria suficiente para PDFBox, conservar `proxy_read_timeout 30s` como límite inicial y observar errores de generación. Ante un PDF problemático, retirar/desactivar la variante, analizarla fuera de producción y cargar una versión validada. No aumentar límites ni reintentar automáticamente sin investigar.
-
-No registrar passwords, contraseñas temporales, JWT, cookies, `JWT_SECRET` ni `DB_PASSWORD`. Los errores inesperados se registran en backend con stack trace para operación y el cliente recibe solo `INTERNAL_ERROR`, sin detalle interno. En producción mantener logs en `INFO` y proteger su acceso.
-
-No se agrega Actuator al MVP. Para health checks, el supervisor debe comprobar que el proceso/JAR está vivo y que el puerto privado `127.0.0.1:8080` acepta TCP después del arranque; el proxy puede comprobar la misma conectividad. Validar además el arranque de Flyway en logs. No usar un endpoint autenticado como health check público.
-
-## Backups y recuperación
-
-PostgreSQL y `TEMPLATE_STORAGE_PATH` forman conjuntamente el estado persistente. Respaldarlos con una frecuencia acordada y conservar copias cifradas fuera del host. Usar `pg_dump` o backup nativo consistente de PostgreSQL y una copia consistente del volumen de templates. Etiquetar ambos con la misma fecha/hora, probar restauraciones periódicas y restaurarlos juntos para evitar referencias `fileKey` inválidas.
-
-## Troubleshooting
-
-- Arranque falla por `JWT_SECRET`: suministrar Base64 válido de 32 bytes o más y un `JWT_EXPIRATION_SECONDS` positivo.
-- Arranque falla por DB: revisar conectividad privada, variables `DB_*`, privilegios Flyway y que no haya una base vacía con migraciones modificadas.
-- Seed falla: comprobar que `TEMPLATE_SEED_FILE` es absoluto, existe, es un PDF válido y el usuario del backend puede leerlo.
-- Upload/generación falla: confirmar espacio y permisos de `TEMPLATE_STORAGE_PATH`, y que el máximo de proxy/Spring sea el mismo.
-- Cookies no persisten: confirmar HTTPS, `Secure=true`, `FRONTEND_URL` exacta, CORS y `SameSite`. Para dominios distintos se requiere `SameSite=None; Secure` y revisión explícita de seguridad.
-
-## Riesgos residuales M13/M14
-
-| Hallazgo | Estado M15 |
-| --- | --- |
-| Atomicidad filesystem/DB al reemplazar PDF | Mitigado operacionalmente con backup conjunto y procedimiento de reparación; deuda técnica sin transacción distribuida. |
-| Ruta relativa del seed | Corregido para producción: el seed requiere una ruta configurada y se documenta como absoluta. |
-| Rate limiting de login | Mitigado con límite Nginx concreto; requiere que el proxy sea desplegado. |
-| Complejidad interna de PDF | Mitigado con política de tamaño, timeout, memoria y operación; no hay sandbox PDF. |
-| Headers de seguridad | Mitigado por configuración Nginx de referencia, incluida CSP compatible con Blob. |
-| Logging de errores 500 | Corregido: log operacional interno y respuesta genérica al cliente. |
-| Longitud de búsquedas | Deuda técnica baja: los listados actuales no imponen máximo de query; el proxy puede limitar URI y el volumen MVP es pequeño. |
-| Foco/accesibilidad avanzada de diálogos | Deuda técnica de UX: requiere prueba manual con teclado/lector de pantalla en cada diálogo. |
-| Ausencia de E2E frontend | Deuda técnica: tests unitarios/build no sustituyen un flujo de navegador de producción. |
+1. Configurar las variables sin valores reales en archivos versionados.
+2. Crear el bucket privado y las credenciales S3 en Supabase.
+3. Confirmar el arranque de Render, Flyway y la creación idempotente del seed.
+4. Probar login, cambio de contraseña, CRUD de variantes, generación, descarga e impresión desde un celular.
+5. Verificar desde Vercel que el preflight CORS permite solo `FRONTEND_URL`, las cookies llevan `Secure; SameSite=None` y las mutaciones incluyen `X-XSRF-TOKEN`.

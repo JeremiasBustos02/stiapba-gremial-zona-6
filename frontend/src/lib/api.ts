@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api/v1'
+const API_BASE_URL = (import.meta.env.VITE_API_URL ?? '/api/v1').replace(/\/$/, '')
 
 type ApiErrorBody = {
   message?: string
@@ -28,11 +28,16 @@ export class ApiError extends Error {
   }
 }
 
-function csrfToken() {
-  return document.cookie
-    .split('; ')
-    .find((cookie) => cookie.startsWith('XSRF-TOKEN='))
-    ?.slice('XSRF-TOKEN='.length)
+function apiUrl(path: string) {
+  return `${API_BASE_URL}${path.startsWith('/') ? path : `/${path}`}`
+}
+
+async function csrfToken() {
+  const response = await fetch(apiUrl('/auth/csrf'), { credentials: 'include' })
+  if (!response.ok) {
+    throw new ApiError(response.status, {})
+  }
+  return ((await response.json()) as { token: string }).token
 }
 
 export async function apiRequest<T>(path: string, requestOptions: ApiRequestOptions = {}): Promise<T> {
@@ -54,12 +59,11 @@ async function apiResponse(path: string, requestOptions: ApiRequestOptions): Pro
   if (options.body && !(options.body instanceof FormData) && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json')
   }
-  if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
-    const token = csrfToken()
-    if (token) headers.set('X-XSRF-TOKEN', decodeURIComponent(token))
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(method) && path !== '/auth/login') {
+    headers.set('X-XSRF-TOKEN', await csrfToken())
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await fetch(apiUrl(path), {
     ...options,
     headers,
     credentials: 'include',

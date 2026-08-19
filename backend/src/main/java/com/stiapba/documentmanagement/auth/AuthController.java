@@ -4,11 +4,15 @@ import com.stiapba.documentmanagement.security.JwtAuthenticationFilter;
 import com.stiapba.documentmanagement.security.JwtService;
 import com.stiapba.documentmanagement.security.UserPrincipal;
 import jakarta.validation.Valid;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.web.csrf.CsrfToken;
+import org.springframework.security.web.csrf.CsrfTokenRepository;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -23,17 +27,20 @@ public class AuthController {
     private final JwtService jwtService;
     private final boolean secureCookies;
     private final String sameSite;
+    private final CsrfTokenRepository csrfTokenRepository;
 
     public AuthController(
             AuthService authService,
             JwtService jwtService,
             @Value("${app.security.cookie.secure}") boolean secureCookies,
-            @Value("${app.security.cookie.same-site}") String sameSite
+            @Value("${app.security.cookie.same-site}") String sameSite,
+            CsrfTokenRepository csrfTokenRepository
     ) {
         this.authService = authService;
         this.jwtService = jwtService;
         this.secureCookies = secureCookies;
         this.sameSite = sameSite;
+        this.csrfTokenRepository = csrfTokenRepository;
     }
 
     @PostMapping("/login")
@@ -47,6 +54,16 @@ public class AuthController {
     @GetMapping("/me")
     public AuthenticatedUserResponse me(@AuthenticationPrincipal UserPrincipal principal) {
         return authService.me(principal);
+    }
+
+    @GetMapping("/csrf")
+    public CsrfTokenResponse csrf(HttpServletRequest request, HttpServletResponse response) {
+        CsrfToken csrfToken = csrfTokenRepository.loadToken(request);
+        if (csrfToken == null) {
+            csrfToken = csrfTokenRepository.generateToken(request);
+            csrfTokenRepository.saveToken(csrfToken, request, response);
+        }
+        return new CsrfTokenResponse(csrfToken.getToken());
     }
 
     @PostMapping("/first-login/change-password")

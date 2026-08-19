@@ -58,14 +58,19 @@ public class SecurityConfig {
     }
 
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    CookieCsrfTokenRepository csrfTokenRepository() {
         CookieCsrfTokenRepository csrfRepository = CookieCsrfTokenRepository.withHttpOnlyFalse();
         csrfRepository.setCookieCustomizer(cookie -> cookie.path("/").secure(secureCookies).sameSite(sameSite));
+        return csrfRepository;
+    }
+
+    @Bean
+    SecurityFilterChain securityFilterChain(HttpSecurity http, CookieCsrfTokenRepository csrfTokenRepository) throws Exception {
 
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(csrf -> csrf
-                        .csrfTokenRepository(csrfRepository)
+                        .csrfTokenRepository(csrfTokenRepository)
                         .csrfTokenRequestHandler(new SpaCsrfTokenRequestHandler())
                         .ignoringRequestMatchers("/api/v1/auth/login"))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -75,7 +80,8 @@ public class SecurityConfig {
                         .accessDeniedHandler((request, response, exception) -> writeError(response, 403,
                                 "ACCESS_DENIED", "No tenés permisos para realizar esta acción.")))
                 .authorizeHttpRequests(authorize -> authorize
-                         .requestMatchers("/api/v1/auth/login").permitAll()
+                          .requestMatchers("/api/v1/auth/login").permitAll()
+                          .requestMatchers("/api/v1/auth/csrf").permitAll()
                          .requestMatchers("/api/v1/users/**").hasRole("ADMIN")
                          .requestMatchers(HttpMethod.POST, "/api/v1/companies", "/api/v1/agreements").hasRole("ADMIN")
                          .requestMatchers(HttpMethod.PUT, "/api/v1/companies/**", "/api/v1/agreements/**").hasRole("ADMIN")

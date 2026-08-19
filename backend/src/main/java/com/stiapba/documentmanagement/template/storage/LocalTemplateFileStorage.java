@@ -1,6 +1,7 @@
 package com.stiapba.documentmanagement.template.storage;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -12,6 +13,7 @@ import java.nio.file.StandardCopyOption;
 import java.util.UUID;
 
 @Component
+@ConditionalOnProperty(prefix = "app.template", name = "storage-type", havingValue = "local", matchIfMissing = true)
 public class LocalTemplateFileStorage implements TemplateFileStorage {
     private final Path root;
 
