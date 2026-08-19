@@ -15,16 +15,16 @@ import java.util.Locale;
 
 @Component
 public class PermisoGremialGenerator implements DocumentGenerator {
-    private static final float BASE_FONT_SIZE = 10f;
+    private static final float BASE_FONT_SIZE = 10.5f;
     private static final float MIN_FONT_SIZE = 7f;
-    private static final PDType1Font FONT = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
+    private static final PDType1Font FONT = new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD);
 
-    private static final Field PROVINCE = new Field(315f, 635f, 100f);
-    private static final Field ISSUE_DAY = new Field(389f, 635f, 28f);
-    private static final Field ISSUE_MONTH = new Field(477f, 635f, 92f);
-    private static final Field ISSUE_YEAR = new Field(565f, 635f, 20f);
-    private static final Field COMPANY = new Field(105f, 552f, 115f);
-    private static final Field DELEGATE = new Field(151f, 408f, 208f);
+    private static final Field PROVINCE = new Field(318f, 638f, 100f);
+    private static final Field ISSUE_DAY = new Field(389f, 638f, 28f);
+    private static final Field ISSUE_MONTH = new Field(477f, 638f, 92f);
+    private static final Field ISSUE_YEAR = new Field(551f, 638f, 20f);
+    private static final Field COMPANY = new Field(105f, 555f, 115f);
+    private static final Field DELEGATE = new Field(151f, 411f, 208f);
     private static final Field PERMIT_DAY = new Field(490f, 387f, 105f);
     private static final Field AGREEMENT = new Field(449f, 340f, 54f);
 

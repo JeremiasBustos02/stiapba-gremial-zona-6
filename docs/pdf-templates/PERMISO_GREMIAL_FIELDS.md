@@ -92,16 +92,16 @@ Las coordenadas usan puntos PDF sobre A4 (`595 x 842`), con origen en la esquina
 
 | Campo | Centro x | Baseline y | Ancho máximo |
 | --- | ---: | ---: | ---: |
-| Provincia | 315 | 635 | 100 |
-| Día de emisión | 389 | 635 | 28 |
-| Mes de emisión | 477 | 635 | 92 |
-| Año de emisión | 565 | 635 | 20 |
-| Empresa | 105 | 552 | 115 |
-| Delegado y DNI | 151 | 408 | 208 |
+| Provincia | 318 | 638 | 100 |
+| Día de emisión | 389 | 638 | 28 |
+| Mes de emisión | 477 | 638 | 92 |
+| Año de emisión | 551 | 638 | 20 |
+| Empresa | 105 | 555 | 115 |
+| Delegado y DNI | 151 | 411 | 208 |
 | Día de permiso | 490 | 387 | 105 |
 | Convenio | 449 | 340 | 54 |
 
-Se usa Helvetica, fuente estándar PDF reproducible, con 10 pt y reducción limitada hasta 7 pt. Si el texto aún excede su ancho máximo, la generación falla con un error controlado; no se trunca texto.
+Se usa Helvetica-Bold, fuente estándar PDF reproducible, con 10.5 pt y reducción limitada hasta 7 pt. Si el texto aún excede su ancho máximo, la generación falla con un error controlado; no se trunca texto.
 
 ## Verificacion ejecutada
 
