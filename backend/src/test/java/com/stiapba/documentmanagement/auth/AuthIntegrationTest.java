@@ -175,19 +175,26 @@ class AuthIntegrationTest {
                 .andExpect(jsonPath("$.user.firstLogin").value(true))
                 .andReturn();
         MockCookie authCookie = authCookie(login);
-        MvcResult csrf = mockMvc.perform(get("/api/v1/auth/csrf").cookie(authCookie))
+        MvcResult csrf = mockMvc.perform(get("/api/v1/auth/csrf")
+                        .cookie(authCookie)
+                        .header(HttpHeaders.ORIGIN, "https://documentos.example.vercel.app"))
                 .andExpect(status().isOk())
                 .andExpect(cookie().httpOnly("XSRF-TOKEN", false))
                 .andExpect(jsonPath("$.token").isNotEmpty())
                 .andReturn();
-        MockCookie csrfCookie = csrfCookie(csrf);
+        String csrfToken = csrfToken(csrf);
+        MockCookie csrfCookie = new MockCookie("XSRF-TOKEN", latestCsrfCookieValue(csrf));
+
+        assertThat(csrfCookieCount(csrf)).isEqualTo(1);
+        assertThat(csrfCookie.getValue()).isEqualTo(csrfToken);
 
         mockMvc.perform(get("/api/v1/companies").cookie(authCookie))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("FIRST_LOGIN_REQUIRED"));
         MvcResult passwordChange = mockMvc.perform(post("/api/v1/auth/first-login/change-password")
                         .cookie(authCookie, csrfCookie)
-                        .header("X-XSRF-TOKEN", csrfCookie.getValue())
+                        .header(HttpHeaders.ORIGIN, "https://documentos.example.vercel.app")
+                        .header("X-XSRF-TOKEN", csrfToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(firstLoginPasswordChange("contraseña-nueva", "contraseña-nueva")))
                 .andExpect(status().isOk())
@@ -200,6 +207,50 @@ class AuthIntegrationTest {
                 .andExpect(jsonPath("$.firstLogin").value(false));
         mockMvc.perform(get("/api/v1/companies").cookie(authCookie(passwordChange)))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void rejectsFirstLoginPasswordChangeWithoutCsrfToken() throws Exception {
+        User user = saveUser("40123456", Role.DELEGADO, true);
+        MockCookie authCookie = authCookie(login(user.getDni(), PASSWORD).andReturn());
+
+        mockMvc.perform(post("/api/v1/auth/first-login/change-password")
+                        .cookie(authCookie)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(firstLoginPasswordChange("contraseña-nueva", "contraseña-nueva")))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+    }
+
+    @Test
+    void rejectsFirstLoginPasswordChangeWithMismatchedCsrfToken() throws Exception {
+        User user = saveUser("40123456", Role.DELEGADO, true);
+        MockCookie authCookie = authCookie(login(user.getDni(), PASSWORD).andReturn());
+        MvcResult csrf = mockMvc.perform(get("/api/v1/auth/csrf").cookie(authCookie))
+                .andExpect(status().isOk())
+                .andReturn();
+        MockCookie csrfCookie = new MockCookie("XSRF-TOKEN", latestCsrfCookieValue(csrf));
+
+        mockMvc.perform(post("/api/v1/auth/first-login/change-password")
+                        .cookie(authCookie, csrfCookie)
+                        .header("X-XSRF-TOKEN", csrfToken(csrf) + "-mismatch")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(firstLoginPasswordChange("contraseña-nueva", "contraseña-nueva")))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+    }
+
+    @Test
+    void requiresAuthenticationForFirstLoginPasswordChangeAfterCsrfValidation() throws Exception {
+        String csrfToken = "csrf-token-for-authentication-test";
+
+        mockMvc.perform(post("/api/v1/auth/first-login/change-password")
+                        .cookie(new MockCookie("XSRF-TOKEN", csrfToken))
+                        .header("X-XSRF-TOKEN", csrfToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(firstLoginPasswordChange("contraseña-nueva", "contraseña-nueva")))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("SESSION_INVALID"));
     }
 
     @Test
@@ -323,6 +374,16 @@ class AuthIntegrationTest {
                 .reduce((first, second) -> second)
                 .orElseThrow()
                 .getValue();
+    }
+
+    private long csrfCookieCount(MvcResult result) {
+        return Arrays.stream(result.getResponse().getCookies())
+                .filter(cookie -> "XSRF-TOKEN".equals(cookie.getName()))
+                .count();
+    }
+
+    private String csrfToken(MvcResult result) throws Exception {
+        return objectMapper.readTree(result.getResponse().getContentAsString()).get("token").asText();
     }
 
     private String passwordChange(String currentPassword, String newPassword, String confirmPassword) throws Exception {

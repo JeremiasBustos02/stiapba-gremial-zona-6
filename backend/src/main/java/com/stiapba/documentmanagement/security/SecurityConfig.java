@@ -19,8 +19,6 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
-import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
-import org.springframework.security.web.csrf.XorCsrfTokenRequestAttributeHandler;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -28,7 +26,6 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import java.io.IOException;
 import java.time.OffsetDateTime;
 import java.util.List;
-import java.util.function.Supplier;
 
 @Configuration
 @EnableWebSecurity
@@ -126,23 +123,4 @@ public class SecurityConfig {
         objectMapper.writeValue(response.getOutputStream(), new ApiError(status, code, message, null, OffsetDateTime.now()));
     }
 
-    private static final class SpaCsrfTokenRequestHandler extends CsrfTokenRequestAttributeHandler {
-        private final XorCsrfTokenRequestAttributeHandler xor = new XorCsrfTokenRequestAttributeHandler();
-
-        @Override
-        public void handle(jakarta.servlet.http.HttpServletRequest request, jakarta.servlet.http.HttpServletResponse response,
-                           Supplier<org.springframework.security.web.csrf.CsrfToken> deferredCsrfToken) {
-            xor.handle(request, response, deferredCsrfToken);
-            deferredCsrfToken.get();
-        }
-
-        @Override
-        public String resolveCsrfTokenValue(jakarta.servlet.http.HttpServletRequest request,
-                                            org.springframework.security.web.csrf.CsrfToken csrfToken) {
-            String headerValue = request.getHeader(csrfToken.getHeaderName());
-            return headerValue != null && !headerValue.isBlank()
-                    ? super.resolveCsrfTokenValue(request, csrfToken)
-                    : xor.resolveCsrfTokenValue(request, csrfToken);
-        }
-    }
 }
