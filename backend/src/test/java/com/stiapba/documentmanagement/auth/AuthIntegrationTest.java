@@ -89,7 +89,11 @@ class AuthIntegrationTest {
 
     @Test
     void providesCsrfTokenForCrossSiteClientsAndRestrictsCorsToConfiguredFrontend() throws Exception {
+        User user = saveUser("40123456", Role.DELEGADO, false);
+        MockCookie authCookie = authCookie(login(user.getDni(), PASSWORD).andReturn());
+
         MvcResult tokenResult = mockMvc.perform(get("/api/v1/auth/csrf")
+                        .cookie(authCookie)
                         .header(HttpHeaders.ORIGIN, "https://documentos.example.vercel.app"))
                 .andExpect(status().isOk())
                 .andExpect(cookie().httpOnly("XSRF-TOKEN", false))
@@ -143,6 +147,9 @@ class AuthIntegrationTest {
         mockMvc.perform(get("/api/v1/auth/me"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("SESSION_INVALID"));
+        mockMvc.perform(get("/api/v1/auth/csrf"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("SESSION_INVALID"));
         mockMvc.perform(get("/api/v1/auth/me").cookie(new MockCookie(JwtAuthenticationFilter.AUTH_COOKIE, "invalid")))
                 .andExpect(status().isUnauthorized());
         mockMvc.perform(get("/api/v1/auth/me").cookie(new MockCookie(JwtAuthenticationFilter.AUTH_COOKIE, expiredToken(user))))
@@ -163,24 +170,36 @@ class AuthIntegrationTest {
     @Test
     void restrictsFirstLoginUntilMandatoryPasswordChangeAndThenAllowsAccess() throws Exception {
         User user = saveUser("40123456", Role.DELEGADO, true);
-        MvcResult login = login(user.getDni(), PASSWORD).andExpect(status().isOk()).andReturn();
+        MvcResult login = login(user.getDni(), PASSWORD)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.user.firstLogin").value(true))
+                .andReturn();
+        MockCookie authCookie = authCookie(login);
+        MvcResult csrf = mockMvc.perform(get("/api/v1/auth/csrf").cookie(authCookie))
+                .andExpect(status().isOk())
+                .andExpect(cookie().httpOnly("XSRF-TOKEN", false))
+                .andExpect(jsonPath("$.token").isNotEmpty())
+                .andReturn();
+        MockCookie csrfCookie = csrfCookie(csrf);
 
-        mockMvc.perform(get("/api/v1/users").cookie(authCookie(login)))
+        mockMvc.perform(get("/api/v1/companies").cookie(authCookie))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("FIRST_LOGIN_REQUIRED"));
         MvcResult passwordChange = mockMvc.perform(post("/api/v1/auth/first-login/change-password")
-                        .cookie(authCookie(login), csrfCookie(login))
-                        .header("X-XSRF-TOKEN", csrfCookie(login).getValue())
+                        .cookie(authCookie, csrfCookie)
+                        .header("X-XSRF-TOKEN", csrfCookie.getValue())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(firstLoginPasswordChange("contraseña-nueva", "contraseña-nueva")))
                 .andExpect(status().isOk())
                 .andExpect(cookie().httpOnly(JwtAuthenticationFilter.AUTH_COOKIE, true))
                 .andReturn();
-        mockMvc.perform(get("/api/v1/auth/me").cookie(authCookie(login)))
+        mockMvc.perform(get("/api/v1/auth/me").cookie(authCookie))
                 .andExpect(status().isUnauthorized());
         mockMvc.perform(get("/api/v1/auth/me").cookie(authCookie(passwordChange)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.firstLogin").value(false));
+        mockMvc.perform(get("/api/v1/companies").cookie(authCookie(passwordChange)))
+                .andExpect(status().isOk());
     }
 
     @Test

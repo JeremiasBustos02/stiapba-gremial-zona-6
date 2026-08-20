@@ -81,7 +81,6 @@ public class SecurityConfig {
                                 "ACCESS_DENIED", "No tenés permisos para realizar esta acción.")))
                 .authorizeHttpRequests(authorize -> authorize
                           .requestMatchers("/api/v1/auth/login").permitAll()
-                          .requestMatchers("/api/v1/auth/csrf").permitAll()
                          .requestMatchers("/api/v1/users/**").hasRole("ADMIN")
                          .requestMatchers(HttpMethod.POST, "/api/v1/companies", "/api/v1/agreements").hasRole("ADMIN")
                          .requestMatchers(HttpMethod.PUT, "/api/v1/companies/**", "/api/v1/agreements/**").hasRole("ADMIN")
