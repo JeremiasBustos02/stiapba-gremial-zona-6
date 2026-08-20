@@ -56,8 +56,8 @@ class CompanyAgreementIntegrationTest {
 
     @BeforeEach
     void cleanCatalog() {
-        agreementRepository.deleteAll();
         companyRepository.deleteAll();
+        agreementRepository.deleteAll();
         userRepository.deleteAll();
         userRepository.flush();
     }
@@ -123,6 +123,38 @@ class CompanyAgreementIntegrationTest {
         mockMvc.perform(post("/api/v1/agreements").cookie(session.authCookie(), session.csrfCookie()).header("X-XSRF-TOKEN", session.csrfToken())
                         .contentType(MediaType.APPLICATION_JSON).content("{\"codigo\":\"C-1\"}"))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.errors.descripcion").exists());
+    }
+
+    @Test
+    void managesOptionalCompanyAgreementAndRejectsInactiveAgreement() throws Exception {
+        User admin = saveUser("30000105", Role.ADMIN, ADMIN_PASSWORD);
+        MockMvcSession session = authenticate(admin.getDni(), ADMIN_PASSWORD);
+        MvcResult agreementResult = mockMvc.perform(post("/api/v1/agreements")
+                        .cookie(session.authCookie(), session.csrfCookie()).header("X-XSRF-TOKEN", session.csrfToken())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"codigo\":\"C-1\",\"descripcion\":\"Convenio Uno\"}"))
+                .andExpect(status().isCreated()).andReturn();
+        String agreementId = objectMapper.readTree(agreementResult.getResponse().getContentAsString()).get("id").asText();
+
+        MvcResult withoutAgreement = mockMvc.perform(post("/api/v1/companies")
+                        .cookie(session.authCookie(), session.csrfCookie()).header("X-XSRF-TOKEN", session.csrfToken())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"nombre\":\"Empresa Sin Convenio\",\"agreementId\":null}"))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.agreementId").doesNotExist()).andReturn();
+        String companyId = objectMapper.readTree(withoutAgreement.getResponse().getContentAsString()).get("id").asText();
+
+        mockMvc.perform(put("/api/v1/companies/{id}", companyId)
+                        .cookie(session.authCookie(), session.csrfCookie()).header("X-XSRF-TOKEN", session.csrfToken())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"nombre\":\"Empresa Con Convenio\",\"agreementId\":\"" + agreementId + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.agreementId").value(agreementId))
+                .andExpect(jsonPath("$.agreement.codigo").value("C-1"));
+
+        mockMvc.perform(patch("/api/v1/agreements/{id}/deactivate", agreementId)
+                        .cookie(session.authCookie(), session.csrfCookie()).header("X-XSRF-TOKEN", session.csrfToken()))
+                .andExpect(status().isNoContent());
+        mockMvc.perform(post("/api/v1/companies")
+                        .cookie(session.authCookie(), session.csrfCookie()).header("X-XSRF-TOKEN", session.csrfToken())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"nombre\":\"Empresa Inválida\",\"agreementId\":\"" + agreementId + "\"}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("AGREEMENT_NOT_AVAILABLE"));
     }
 
     private User saveUser(String dni, Role role, String password) {

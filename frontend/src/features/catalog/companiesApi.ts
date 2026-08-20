@@ -8,11 +8,11 @@ export function getCompanies(search = '') {
 }
 
 export function createCompany(data: CompanyForm) {
-  return apiRequest<Company>('/companies', { method: 'POST', body: JSON.stringify(data) })
+  return apiRequest<Company>('/companies', { method: 'POST', body: JSON.stringify({ ...data, agreementId: data.agreementId || null }) })
 }
 
 export function updateCompany(id: string, data: CompanyForm) {
-  return apiRequest<Company>(`/companies/${id}`, { method: 'PUT', body: JSON.stringify(data) })
+  return apiRequest<Company>(`/companies/${id}`, { method: 'PUT', body: JSON.stringify({ ...data, agreementId: data.agreementId || null }) })
 }
 
 export function setCompanyActive(id: string, active: boolean) {

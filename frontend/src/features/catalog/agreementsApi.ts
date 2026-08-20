@@ -1,9 +1,10 @@
 import { apiRequest } from '@/lib/api'
 import type { Agreement, AgreementForm } from './types'
 
-export function getAgreements(search = '') {
+export function getAgreements(search = '', active?: boolean) {
   const params = new URLSearchParams()
   if (search.trim()) params.set('search', search.trim())
+  if (active !== undefined) params.set('active', String(active))
   return apiRequest<Agreement[]>(`/agreements?${params.toString()}`)
 }
 

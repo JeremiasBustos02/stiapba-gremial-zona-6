@@ -578,7 +578,13 @@ Para usuarios normales deberán devolverse únicamente empresas utilizables para
   {
     "id": "uuid",
     "nombre": "Empresa Ejemplo",
-    "active": true
+    "active": true,
+    "agreementId": "uuid",
+    "agreement": {
+      "id": "uuid",
+      "codigo": "CCT-001",
+      "descripcion": "Convenio ejemplo"
+    }
   }
 ]
 ```
@@ -597,7 +603,8 @@ ADMIN.
 
 ```json
 {
-  "nombre": "Empresa Ejemplo"
+  "nombre": "Empresa Ejemplo",
+  "agreementId": "uuid"
 }
 ```
 
@@ -607,7 +614,8 @@ ADMIN.
 {
   "id": "uuid",
   "nombre": "Empresa Ejemplo",
-  "active": true
+  "active": true,
+  "agreementId": "uuid"
 }
 ```
 
@@ -625,9 +633,12 @@ ADMIN.
 
 ```json
 {
-  "nombre": "Nuevo nombre"
+  "nombre": "Nuevo nombre",
+  "agreementId": "uuid"
 }
 ```
+
+`agreementId` es opcional y podrá enviarse como `null`. Si existe, deberá identificar un Convenio activo. Es una sugerencia para el formulario: la generación de PDF continúa recibiendo y validando `agreementId` explícitamente.
 
 ---
 

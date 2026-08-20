@@ -71,7 +71,8 @@ La firma de Diego Bruna, membrete, logos, textos fijos y `Mar del Plata` ya form
 
 - Al ser una imagen aplanada, no hay semantica de formulario ni posiciones verificables por campos. Toda escritura futura por coordenadas puede desalinearse respecto de la plantilla o de una variante distinta.
 - No hay fuentes ni flujo de texto de la plantilla reutilizable. M8 debera elegir y embebir/configurar una fuente compatible, controlar longitud y evitar tapar lineas o texto preimpreso.
-- Las coordenadas de esta variante no deben aplicarse automaticamente a futuras variantes. Cada PDF nuevo necesita su propia inspeccion tecnica y validacion visual.
+- Una variante de Permiso Gremial que comparta exactamente este layout puede reutilizar las coordenadas calibradas. Un layout o tipo de PDF nuevo requiere configuración o implementación específica y validación visual.
+- El sistema no detecta automáticamente espacios punteados, campos ni posiciones de texto. No se aplica OCR, computer vision ni inferencia de layout.
 - Las zonas punteadas están confirmadas funcionalmente, pero las coordenadas exactas para escribir texto aún deben determinarse y verificarse visualmente en M8.
 
 ## Estrategia recomendada para M8

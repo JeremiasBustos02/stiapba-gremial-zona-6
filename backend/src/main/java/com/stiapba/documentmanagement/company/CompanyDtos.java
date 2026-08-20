@@ -12,10 +12,22 @@ public final class CompanyDtos {
 
     public record CompanyRequest(
             @NotBlank(message = "El nombre es obligatorio.")
-            @Size(max = 200, message = "El nombre es demasiado largo.") String nombre
+            @Size(max = 200, message = "El nombre es demasiado largo.") String nombre,
+            UUID agreementId
     ) {
     }
 
-    public record CompanyResponse(UUID id, String nombre, boolean active, OffsetDateTime createdAt, OffsetDateTime updatedAt) {
+    public record CompanyAgreementResponse(UUID id, String codigo, String descripcion) {
+    }
+
+    public record CompanyResponse(
+            UUID id,
+            String nombre,
+            boolean active,
+            UUID agreementId,
+            CompanyAgreementResponse agreement,
+            OffsetDateTime createdAt,
+            OffsetDateTime updatedAt
+    ) {
     }
 }

@@ -1,5 +1,21 @@
 @import "tailwindcss";
 
+[role="dialog"][aria-labelledby="temporary-password-title"] {
+  z-index: 40;
+}
+
+@media (max-width: 639px) {
+  [role="dialog"][aria-labelledby="temporary-password-title"] {
+    padding: 1rem;
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+
+  [role="dialog"][aria-labelledby="temporary-password-title"] > div {
+    max-height: calc(100dvh - 2rem - env(safe-area-inset-bottom));
+    overflow-y: auto;
+  }
+}
+
 :root {
   font-family: Inter, ui-sans-serif, system-ui, sans-serif;
   color: #0f172a;

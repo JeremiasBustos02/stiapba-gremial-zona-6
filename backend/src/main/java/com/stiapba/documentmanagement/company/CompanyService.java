@@ -2,6 +2,9 @@ package com.stiapba.documentmanagement.company;
 
 import com.stiapba.documentmanagement.company.CompanyDtos.CompanyRequest;
 import com.stiapba.documentmanagement.company.CompanyDtos.CompanyResponse;
+import com.stiapba.documentmanagement.company.CompanyDtos.CompanyAgreementResponse;
+import com.stiapba.documentmanagement.agreement.entity.Agreement;
+import com.stiapba.documentmanagement.agreement.repository.AgreementRepository;
 import com.stiapba.documentmanagement.company.entity.Company;
 import com.stiapba.documentmanagement.company.repository.CompanyRepository;
 import jakarta.transaction.Transactional;
@@ -15,11 +18,14 @@ import java.util.UUID;
 @Service
 public class CompanyService {
     private final CompanyRepository companyRepository;
+    private final AgreementRepository agreementRepository;
 
-    public CompanyService(CompanyRepository companyRepository) {
+    public CompanyService(CompanyRepository companyRepository, AgreementRepository agreementRepository) {
         this.companyRepository = companyRepository;
+        this.agreementRepository = agreementRepository;
     }
 
+    @Transactional
     public List<CompanyResponse> list(String search, Boolean active, boolean admin) {
         Specification<Company> specification = (root, query, builder) -> builder.conjunction();
         if (!admin || active != null && active) {
@@ -37,13 +43,14 @@ public class CompanyService {
 
     @Transactional
     public CompanyResponse create(CompanyRequest request) {
-        return toResponse(companyRepository.save(new Company(request.nombre().trim())));
+        return toResponse(companyRepository.save(new Company(request.nombre().trim(), findActiveAgreement(request.agreementId()))));
     }
 
     @Transactional
     public CompanyResponse update(UUID id, CompanyRequest request) {
         Company company = findById(id);
         company.updateNombre(request.nombre().trim());
+        company.assignAgreement(findActiveAgreement(request.agreementId()));
         return toResponse(companyRepository.save(company));
     }
 
@@ -62,7 +69,21 @@ public class CompanyService {
                 new CompanyException(404, "COMPANY_NOT_FOUND", "No encontramos la empresa solicitada."));
     }
 
+    private Agreement findActiveAgreement(UUID agreementId) {
+        if (agreementId == null) {
+            return null;
+        }
+        return agreementRepository.findById(agreementId)
+                .filter(Agreement::isActive)
+                .orElseThrow(() -> new CompanyException(400, "AGREEMENT_NOT_AVAILABLE",
+                        "El convenio asociado debe existir y estar activo."));
+    }
+
     private CompanyResponse toResponse(Company company) {
-        return new CompanyResponse(company.getId(), company.getNombre(), company.isActive(), company.getCreatedAt(), company.getUpdatedAt());
+        Agreement agreement = company.getAgreement();
+        CompanyAgreementResponse agreementResponse = agreement == null ? null
+                : new CompanyAgreementResponse(agreement.getId(), agreement.getCodigo(), agreement.getDescripcion());
+        return new CompanyResponse(company.getId(), company.getNombre(), company.isActive(),
+                agreement == null ? null : agreement.getId(), agreementResponse, company.getCreatedAt(), company.getUpdatedAt());
     }
 }

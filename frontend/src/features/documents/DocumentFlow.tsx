@@ -1,8 +1,9 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { ChevronRight, Download, FileText, LoaderCircle, Pencil, Printer } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { z } from 'zod'
 import { ApiError } from '@/lib/api'
+import { agreementAfterCompanyChange } from './companyAgreement'
 import {
   generatePermisoGremial,
   getDelegates,
@@ -82,12 +83,19 @@ export function PermisoGremialForm({ value, onChange, onBack, onGenerated }: { v
   const delegatesQuery = useQuery({ queryKey: ['documents', 'delegates'], queryFn: getDelegates })
   const agreementsQuery = useQuery({ queryKey: ['documents', 'agreements'], queryFn: getDocumentAgreements })
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const previousCompanyId = useRef(value.companyId)
   const mutation = useMutation({ mutationFn: generatePermisoGremial, onSuccess: onGenerated })
   const delegate = delegatesQuery.data?.find((item: Delegate) => item.id === value.delegateId)
   const loadingCatalogs = [provincesQuery, companiesQuery, delegatesQuery, agreementsQuery].some((query) => query.isPending)
   const catalogError = [provincesQuery, companiesQuery, delegatesQuery, agreementsQuery].find((query) => query.isError)
   const catalogsEmpty = !loadingCatalogs && !catalogError && [provincesQuery.data, companiesQuery.data, delegatesQuery.data, agreementsQuery.data].some((items) => !items?.length)
   const set = (field: keyof DocumentFormValues, next: string) => onChange({ ...value, [field]: next })
+  useEffect(() => {
+    const previousId = previousCompanyId.current
+    previousCompanyId.current = value.companyId
+    const agreementId = agreementAfterCompanyChange(companiesQuery.data ?? [], previousId, value.companyId, value.agreementId)
+    if (agreementId !== value.agreementId) onChange({ ...value, agreementId })
+  }, [companiesQuery.data, onChange, value])
   const submit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const result = formSchema.safeParse(value)

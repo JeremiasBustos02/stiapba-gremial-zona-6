@@ -115,6 +115,7 @@ Su objetivo es evitar que el usuario tenga que escribir manualmente el nombre de
 Empresa
 - id
 - nombre
+- convenioPredeterminado opcional
 - activo
 - createdAt
 - updatedAt
@@ -127,6 +128,8 @@ Empresa
 * Solo las empresas activas deberán estar disponibles para nuevos documentos.
 * Una empresa desactivada no debe eliminarse físicamente por defecto.
 * El administrador podrá crear, editar, activar y desactivar empresas.
+* Una empresa podrá tener un Convenio predeterminado opcional para sugerirlo al completar Permiso Gremial.
+* El Convenio seleccionado en el formulario seguirá siendo explícito y podrá modificarse manualmente.
 
 ---
 

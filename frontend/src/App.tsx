@@ -74,11 +74,12 @@ function App() {
   }
 
   const adminContent = screen === 'users' ? <UserManagementPage />
-    : screen === 'companies' ? <CatalogManagementPage<Company, CompanyForm> kind="companies" title="Empresas" description="Administrá las empresas disponibles para completar documentos." emptyForm={{ nombre: '' }} getItems={getCompanies} createItem={createCompany} updateItem={updateCompany} setActive={setCompanyActive} />
+    : screen === 'companies' ? <CatalogManagementPage<Company, CompanyForm> kind="companies" title="Empresas" description="Administrá las empresas disponibles para completar documentos." emptyForm={{ nombre: '', agreementId: '' }} getItems={getCompanies} createItem={createCompany} updateItem={updateCompany} setActive={setCompanyActive} />
       : screen === 'agreements' ? <CatalogManagementPage<Agreement, AgreementForm> kind="agreements" title="Convenios" description="Administrá los convenios disponibles para completar documentos." emptyForm={{ codigo: '', descripcion: '' }} getItems={getAgreements} createItem={createAgreement} updateItem={updateAgreement} setActive={setAgreementActive} />
         : <TemplateManagementPage />
 
   return <AppLayout screen={screen} role={currentUser.role} onNavigate={go} onLogout={() => logoutMutation.mutate()}>
+    <SecondaryNavigation screen={screen} onNavigate={go} />
     {screen === 'home' && <HomePage user={currentUser} onNavigate={go} />}
     {screen === 'new-document' && <DocumentTemplateSelection onBack={() => go('home')} onSelect={(templateId) => { setSelectedTemplateId(templateId); setDocumentForm({ ...documentForm, variantId: '' }); go('variants') }} />}
     {screen === 'variants' && <DocumentVariantSelection templateId={selectedTemplateId} onBack={() => go('new-document')} onSelect={(variantId) => { setDocumentForm({ ...documentForm, variantId }); go('form') }} />}
@@ -91,6 +92,20 @@ function App() {
 }
 
 function SessionLoading() { return <main className="flex min-h-screen items-center justify-center bg-slate-50"><div className="flex items-center gap-3 text-sm font-semibold text-slate-600"><LoaderCircle className="animate-spin text-blue-700" /> Verificando sesión...</div></main> }
+
+const screenParents: Partial<Record<Screen, Screen>> = {
+  profile: 'home', admin: 'home', users: 'admin', companies: 'admin', agreements: 'admin', templates: 'admin', 'template-variants': 'admin', 'new-document': 'home', variants: 'new-document', form: 'variants', preview: 'form',
+}
+
+const screenLabels: Partial<Record<Screen, string>> = {
+  home: 'Inicio', profile: 'Mi perfil', admin: 'Administración', users: 'Usuarios', companies: 'Empresas', agreements: 'Convenios', templates: 'Templates', 'template-variants': 'Variantes', 'new-document': 'Nuevo documento', variants: 'Versión del documento', form: 'Permiso Gremial', preview: 'Vista previa',
+}
+
+function SecondaryNavigation({ screen, onNavigate }: { screen: Screen; onNavigate: (screen: Screen) => void }) {
+  const parent = screenParents[screen]
+  if (!parent) return null
+  return <nav aria-label="Navegación secundaria" className="mb-5 flex min-h-11 items-center"><button type="button" onClick={() => onNavigate(parent)} className="flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm font-semibold text-slate-700 hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-blue-600"><ArrowLeft size={20} /><span>Volver</span><span className="hidden border-l border-slate-300 pl-3 text-slate-500 sm:inline">{screenLabels[parent]} &gt; {screenLabels[screen]}</span></button></nav>
+}
 
 function LoginPage({ onSubmit, error, pending, sessionExpired }: { onSubmit: (dni: string, password: string) => void; error: Error | null; pending: boolean; sessionExpired: boolean }) {
   const [visible, setVisible] = useState(false)
@@ -124,8 +139,7 @@ function FirstLoginPage({ onSaved }: { onSaved: () => void | Promise<void> }) {
 function PasswordFields() { return <div className="mt-6 space-y-4"><label className="block text-sm font-semibold">Nueva contraseña<input required minLength={10} name="password" type="password" className="mt-2 h-12 w-full rounded-xl border border-slate-300 px-4 outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100" /></label><label className="block text-sm font-semibold">Repetir contraseña<input required minLength={10} name="confirm" type="password" className="mt-2 h-12 w-full rounded-xl border border-slate-300 px-4 outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100" /></label><p className="text-xs text-slate-500">Entre 10 y 72 caracteres.</p></div> }
 
 function AppLayout({ children, screen, role, onNavigate, onLogout }: { children: React.ReactNode; screen: Screen; role: 'ADMIN' | 'DELEGADO'; onNavigate: (screen: Screen) => void; onLogout: () => void }) {
-  const documentFlow = ['new-document', 'variants', 'form', 'preview'].includes(screen)
-  return <div className="min-h-screen bg-slate-50 text-slate-900"><header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur"><div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6"><button onClick={() => onNavigate('home')} className="flex items-center gap-2 font-bold"><BrandMark small /><span className="hidden sm:inline">StiaPba Gremial Zona 6</span></button>{documentFlow ? <button onClick={() => onNavigate(screen === 'new-document' ? 'home' : screen === 'variants' ? 'new-document' : screen === 'form' ? 'variants' : 'form')} className="flex items-center gap-2 text-sm font-semibold"><ArrowLeft size={18} /> Volver</button> : <button onClick={onLogout} className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100"><LogOut size={17} /> <span className="hidden sm:inline">Cerrar sesión</span></button>}</div></header><main className="mx-auto max-w-7xl px-4 py-7 pb-28 sm:px-6 sm:py-10 sm:pb-10">{children}</main><BottomNav role={role} screen={screen} onNavigate={onNavigate} /></div>
+  return <div className="min-h-screen bg-slate-50 text-slate-900"><header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur"><div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6"><button onClick={() => onNavigate('home')} className="flex items-center gap-2 font-bold"><BrandMark small /><span className="hidden sm:inline">StiaPba Gremial Zona 6</span></button><button onClick={onLogout} className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100"><LogOut size={17} /> <span className="hidden sm:inline">Cerrar sesión</span></button></div></header><main className="mx-auto max-w-7xl px-4 py-7 pb-28 sm:px-6 sm:py-10 sm:pb-10">{children}</main><BottomNav role={role} screen={screen} onNavigate={onNavigate} /></div>
 }
 
 function BottomNav({ role, screen, onNavigate }: { role: 'ADMIN' | 'DELEGADO'; screen: Screen; onNavigate: (screen: Screen) => void }) {
