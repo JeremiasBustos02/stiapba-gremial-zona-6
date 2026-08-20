@@ -48,6 +48,8 @@ Vite solo incorpora variables con prefijo `VITE_` al bundle. No definir allí se
 | `DB_USERNAME` | Usuario PostgreSQL proporcionado por Supabase. |
 | `DB_PASSWORD` | Secreto PostgreSQL proporcionado por Supabase. |
 | `DB_SSL_MODE` | `require` para Supabase. El valor se aplica como `sslmode` JDBC. |
+| `DB_POOL_MAX_SIZE` | Máximo de conexiones Hikari por instancia Render. Default seguro: `3`. |
+| `DB_POOL_MIN_IDLE` | Conexiones Hikari inactivas mantenidas por instancia Render. Default seguro: `1`. |
 | `JWT_SECRET` | Secreto Base64 de al menos 32 bytes aleatorios, único por entorno. |
 | `JWT_EXPIRATION_SECONDS` | Duración positiva del JWT, por ejemplo `3600`. |
 | `AUTH_COOKIE_SECURE` | `true`. El perfil `prod` fuerza Secure igualmente. |
@@ -69,6 +71,12 @@ Vite solo incorpora variables con prefijo `VITE_` al bundle. No definir allí se
 | `S3_BUCKET` | Nombre del bucket privado creado en Supabase. |
 
 `TEMPLATE_STORAGE_PATH` queda disponible solo para `TEMPLATE_STORAGE_TYPE=local`; no se configura ni se usa en Render. Si Supabase entrega una URL JDBC completa en vez de los componentes `DB_*`, se puede configurar como `SPRING_DATASOURCE_URL`; debe incluir `sslmode=require` o una política TLS más estricta compatible.
+
+## Conexiones PostgreSQL
+
+Render debe usar el **Session Pooler** de Supabase para este backend. Hibernate/JPA y Flyway pueden mantener estado de sesión y usar prepared statements; el Transaction Pooler está orientado a funciones serverless y no soporta prepared statements.
+
+En producción Hikari usa un máximo de `3` conexiones y mantiene `1` inactiva por instancia. Flyway y JPA comparten el DataSource auto-configurado por Spring Boot, por lo que no crean pools independientes. Con una instancia Render, la aplicación no mantiene más de tres clientes simultáneos del Session Pooler, dejando margen dentro del límite de 15.
 
 ## Seed Bruna
 
