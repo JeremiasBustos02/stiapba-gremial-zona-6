@@ -12,6 +12,7 @@ import { createCompany, getCompanies, setCompanyActive, updateCompany } from '@/
 import type { Agreement, AgreementForm, Company, CompanyForm } from '@/features/catalog/types'
 import { TemplateManagementPage } from '@/features/templates/TemplateManagementPage'
 import { DocumentTemplateSelection, DocumentVariantSelection, initialDocumentForm, PdfPreview, PermisoGremialForm, type DocumentFormValues } from '@/features/documents/DocumentFlow'
+import { shouldShowStartupLoading, StartupLoadingScreen } from '@/components/StartupLoadingScreen'
 import { ApiError, setUnauthorizedHandler } from '@/lib/api'
 import { changeFirstLoginPassword, changePassword, getCurrentUser, login, logout, type AuthUser } from '@/features/auth/authApi'
 
@@ -30,6 +31,7 @@ function App() {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
   const [generatedPdf, setGeneratedPdf] = useState<Blob | null>(null)
   const [sessionExpired, setSessionExpired] = useState(false)
+  const [startupComplete, setStartupComplete] = useState(false)
   const sessionQuery = useQuery({ queryKey: ['auth', 'me'], queryFn: getCurrentUser, retry: false })
   const loginMutation = useMutation({
     mutationFn: ({ dni, password }: { dni: string; password: string }) => login(dni, password),
@@ -66,7 +68,9 @@ function App() {
   const go = (next: Screen) => setScreen(next)
   const currentUser = sessionQuery.data
 
-  if (sessionQuery.isPending) return <SessionLoading />
+  if (shouldShowStartupLoading({ isPending: sessionQuery.isPending, isSuccess: sessionQuery.isSuccess, startupComplete })) {
+    return <StartupLoadingScreen completed={sessionQuery.isSuccess} onComplete={() => setStartupComplete(true)} />
+  }
   if (!currentUser) return <LoginPage error={loginMutation.error} pending={loginMutation.isPending} sessionExpired={sessionExpired} onSubmit={(dni, password) => loginMutation.mutate({ dni, password })} />
   if (currentUser.firstLogin) return <FirstLoginPage onSaved={async () => { await queryClient.invalidateQueries({ queryKey: ['auth', 'me'] }); go('home') }} />
   if (currentUser.role !== 'ADMIN' && ['admin', 'users', 'companies', 'agreements', 'templates', 'template-variants'].includes(screen)) {
@@ -90,8 +94,6 @@ function App() {
     {['users', 'companies', 'agreements', 'templates', 'template-variants'].includes(screen) && adminContent}
   </AppLayout>
 }
-
-function SessionLoading() { return <main className="flex min-h-screen items-center justify-center bg-slate-50"><div className="flex items-center gap-3 text-sm font-semibold text-slate-600"><LoaderCircle className="animate-spin text-blue-700" /> Verificando sesión...</div></main> }
 
 const screenParents: Partial<Record<Screen, Screen>> = {
   profile: 'home', admin: 'home', users: 'admin', companies: 'admin', agreements: 'admin', templates: 'admin', 'template-variants': 'admin', 'new-document': 'home', variants: 'new-document', form: 'variants', preview: 'form',
