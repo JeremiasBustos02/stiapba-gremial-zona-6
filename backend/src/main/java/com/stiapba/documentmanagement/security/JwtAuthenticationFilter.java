@@ -23,6 +23,7 @@ import java.util.UUID;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     public static final String AUTH_COOKIE = "AUTH_TOKEN";
+    private static final String HEALTH_PATH = "/api/v1/health";
 
     private final JwtService jwtService;
     private final UserRepository userRepository;
@@ -30,6 +31,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     public JwtAuthenticationFilter(JwtService jwtService, UserRepository userRepository) {
         this.jwtService = jwtService;
         this.userRepository = userRepository;
+    }
+
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        return "GET".equals(request.getMethod()) && HEALTH_PATH.equals(request.getRequestURI());
     }
 
     @Override

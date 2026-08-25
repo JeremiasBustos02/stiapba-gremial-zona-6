@@ -73,6 +73,21 @@ class AuthIntegrationTest {
     }
 
     @Test
+    void exposesHealthEndpointWithoutAuthenticationOrCsrf() throws Exception {
+        mockMvc.perform(get("/api/v1/health"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("UP"))
+                .andExpect(cookie().doesNotExist("JSESSIONID"))
+                .andExpect(cookie().doesNotExist("XSRF-TOKEN"));
+    }
+
+    @Test
+    void keepsOtherApiEndpointsProtected() throws Exception {
+        mockMvc.perform(get("/api/v1/auth/me"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void logsInWithValidCredentialsAndSetsAuthAndCsrfCookies() throws Exception {
         User user = saveUser("40123456", Role.DELEGADO, false);
 

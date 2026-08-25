@@ -1209,7 +1209,7 @@ El frontend utilizará el PDF recibido y las capacidades de impresión del naveg
 
 ## GET `/api/v1/health`
 
-Podrá existir para verificar disponibilidad del backend.
+Es público y responde desde memoria para verificar disponibilidad del backend.
 
 ### Response
 
@@ -1219,7 +1219,7 @@ Podrá existir para verificar disponibilidad del backend.
 }
 ```
 
-En producción podrá utilizarse Spring Boot Actuator si se considera conveniente.
+No consulta PostgreSQL ni Supabase Storage y no requiere autenticación ni CSRF.
 
 Los detalles se definirán en arquitectura.
 

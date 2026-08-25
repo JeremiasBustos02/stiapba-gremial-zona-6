@@ -108,6 +108,16 @@ docker build -f backend/Dockerfile -t stiapba-backend .
 
 Flyway se ejecuta al iniciar el backend con `ddl-auto=validate`. No ejecutar migraciones manuales ni habilitar `ddl-auto=update`.
 
+## Render Free Keep-Alive
+
+Render Free puede suspender el Web Service después de un período sin tráfico. Para reducir la demora del primer acceso, configurar un monitor externo que realice una request `GET` a:
+
+```text
+https://<render-backend>/api/v1/health
+```
+
+Usar una frecuencia aproximada de 13-14 minutos. El endpoint es público, responde únicamente `{ "status": "UP" }` desde memoria y no consulta PostgreSQL ni Supabase Storage. El ping debe provenir de un servicio externo: no se implementa un scheduler dentro del backend ni un ping desde el frontend.
+
 ## Vercel
 
 Crear un proyecto Vercel cuyo Root Directory sea `frontend/`. La configuración detecta Vite y utiliza:

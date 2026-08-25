@@ -20,6 +20,7 @@ import java.util.Set;
 public class FirstLoginRestrictionFilter extends OncePerRequestFilter {
 
     private static final Set<String> ALLOWED_PATHS = Set.of(
+            "/api/v1/health",
             "/api/v1/auth/me",
             "/api/v1/auth/csrf",
             "/api/v1/auth/first-login/change-password",

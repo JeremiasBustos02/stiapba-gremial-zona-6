@@ -77,6 +77,7 @@ public class SecurityConfig {
                         .accessDeniedHandler((request, response, exception) -> writeError(response, 403,
                                 "ACCESS_DENIED", "No tenés permisos para realizar esta acción.")))
                 .authorizeHttpRequests(authorize -> authorize
+                          .requestMatchers(HttpMethod.GET, "/api/v1/health").permitAll()
                           .requestMatchers("/api/v1/auth/login").permitAll()
                          .requestMatchers("/api/v1/users/**").hasRole("ADMIN")
                          .requestMatchers(HttpMethod.POST, "/api/v1/companies", "/api/v1/agreements").hasRole("ADMIN")
