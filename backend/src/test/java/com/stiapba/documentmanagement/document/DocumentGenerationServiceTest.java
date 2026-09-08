@@ -7,6 +7,9 @@ import com.stiapba.documentmanagement.company.repository.CompanyRepository;
 import com.stiapba.documentmanagement.province.entity.Province;
 import com.stiapba.documentmanagement.province.repository.ProvinceRepository;
 import com.stiapba.documentmanagement.template.entity.Template;
+import com.stiapba.documentmanagement.template.entity.FieldDefinition;
+import com.stiapba.documentmanagement.template.entity.TemplateField;
+import com.stiapba.documentmanagement.template.entity.TemplateFieldMode;
 import com.stiapba.documentmanagement.template.entity.TemplateVariant;
 import com.stiapba.documentmanagement.template.repository.TemplateVariantRepository;
 import com.stiapba.documentmanagement.template.storage.TemplateFileStorage;
@@ -27,6 +30,8 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -38,6 +43,7 @@ class DocumentGenerationServiceTest {
     @Mock private TemplateVariantRepository variantRepository;
     @Mock private TemplateFileStorage fileStorage;
     @Mock private DocumentGenerator generator;
+    @Mock private PdfTemplateRenderer pdfTemplateRenderer;
 
     private DocumentGenerationService service;
     private PermisoGremialRequest request;
@@ -45,7 +51,7 @@ class DocumentGenerationServiceTest {
     @BeforeEach
     void setUp() throws Exception {
         service = new DocumentGenerationService(provinceRepository, companyRepository, userRepository, agreementRepository,
-                variantRepository, fileStorage, generator);
+                variantRepository, fileStorage, generator, pdfTemplateRenderer);
         request = new PermisoGremialRequest(UUID.randomUUID(), LocalDate.of(2026, 8, 18), UUID.randomUUID(),
                 UUID.randomUUID(), 21, UUID.randomUUID(), UUID.randomUUID());
     }
@@ -106,6 +112,24 @@ class DocumentGenerationServiceTest {
         request = new PermisoGremialRequest(request.provinceId(), request.issueDate(), request.companyId(), request.delegateId(),
                 32, request.agreementId(), request.variantId());
         assertCode("INVALID_PERMIT_DAY");
+    }
+
+    @Test
+    void generatesAcroformVariantWithLogicalValues() throws Exception {
+        stubProvince();
+        stubCompany();
+        stubDelegate();
+        stubAgreement();
+        TemplateVariant variant = new TemplateVariant(new Template("Permiso Gremial", "Descripción"), "Bruna AcroForm", "template.pdf");
+        variant.addField(new TemplateField(variant, new FieldDefinition("delegate"), TemplateFieldMode.ACROFORM,
+                "Nombre delegado y dni", true, 1));
+        when(variantRepository.findById(request.variantId())).thenReturn(Optional.of(variant));
+        when(fileStorage.load("template.pdf")).thenReturn(new byte[]{1});
+        when(pdfTemplateRenderer.render(eq(variant), argThat(values ->
+                "Ana Pérez DNI 40123456".equals(values.get("delegate"))
+                        && "40123456".equals(values.get("delegateDni"))), any(byte[].class))).thenReturn(new byte[]{3});
+
+        assertThat(service.generatePermisoGremial(request)).containsExactly(3);
     }
 
     private void assertCode(String expectedCode) {

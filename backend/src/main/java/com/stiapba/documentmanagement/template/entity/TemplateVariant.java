@@ -7,7 +7,12 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
+
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 
 @Entity
 @Table(name = "template_variants", indexes = {
@@ -28,6 +33,9 @@ public class TemplateVariant extends AuditableEntity {
 
     @Column(nullable = false)
     private boolean active = true;
+
+    @OneToMany(mappedBy = "templateVariant")
+    private final List<TemplateField> fields = new ArrayList<>();
 
     protected TemplateVariant() {
     }
@@ -52,6 +60,14 @@ public class TemplateVariant extends AuditableEntity {
 
     public boolean isActive() {
         return active;
+    }
+
+    public List<TemplateField> getFields() {
+        return fields.stream().sorted(Comparator.comparingInt(TemplateField::getDisplayOrder)).toList();
+    }
+
+    public void addField(TemplateField field) {
+        fields.add(field);
     }
 
     public void updateNombre(String nombre) {

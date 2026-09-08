@@ -11,6 +11,8 @@ import { createAgreement, getAgreements, setAgreementActive, updateAgreement } f
 import { createCompany, getCompanies, setCompanyActive, updateCompany } from '@/features/catalog/companiesApi'
 import type { Agreement, AgreementForm, Company, CompanyForm } from '@/features/catalog/types'
 import { TemplateManagementPage } from '@/features/templates/TemplateManagementPage'
+import { PositionedFieldEditor } from '@/features/templates/PositionedFieldEditor'
+import type { TemplateVariant } from '@/features/templates/types'
 import { DocumentTemplateSelection, DocumentVariantSelection, initialDocumentForm, PdfPreview, PermisoGremialForm, type DocumentFormValues } from '@/features/documents/DocumentFlow'
 import { shouldShowStartupLoading, StartupLoadingScreen } from '@/components/StartupLoadingScreen'
 import { ApiError, setUnauthorizedHandler } from '@/lib/api'
@@ -18,7 +20,7 @@ import { changeFirstLoginPassword, changePassword, getCurrentUser, login, logout
 
 const queryClient = new QueryClient({ defaultOptions: { mutations: { gcTime: 0 } } })
 
-type Screen = 'login' | 'first-login' | 'home' | 'new-document' | 'variants' | 'form' | 'preview' | 'profile' | 'admin' | 'users' | 'companies' | 'agreements' | 'templates' | 'template-variants'
+type Screen = 'login' | 'first-login' | 'home' | 'new-document' | 'variants' | 'form' | 'preview' | 'profile' | 'admin' | 'users' | 'companies' | 'agreements' | 'templates' | 'template-variants' | 'positioned-editor'
 type FormData = { province: string; issueDate: string; company: string; delegate: string; permitDay: string; agreement: string; variant: string }
 
 const initialForm: FormData = { province: '', issueDate: '2026-08-18', company: '', delegate: 'hernan', permitDay: '', agreement: '', variant: 'bruna' }
@@ -29,6 +31,7 @@ function App() {
   const [screen, setScreen] = useState<Screen>('home')
   const [documentForm, setDocumentForm] = useState<DocumentFormValues>(initialDocumentForm)
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
+  const [configuredVariant, setConfiguredVariant] = useState<{ templateId: string; variant: TemplateVariant } | null>(null)
   const [generatedPdf, setGeneratedPdf] = useState<Blob | null>(null)
   const [sessionExpired, setSessionExpired] = useState(false)
   const [startupComplete, setStartupComplete] = useState(false)
@@ -73,14 +76,15 @@ function App() {
   }
   if (!currentUser) return <LoginPage error={loginMutation.error} pending={loginMutation.isPending} sessionExpired={sessionExpired} onSubmit={(dni, password) => loginMutation.mutate({ dni, password })} />
   if (currentUser.firstLogin) return <FirstLoginPage onSaved={async () => { await queryClient.invalidateQueries({ queryKey: ['auth', 'me'] }); go('home') }} />
-  if (currentUser.role !== 'ADMIN' && ['admin', 'users', 'companies', 'agreements', 'templates', 'template-variants'].includes(screen)) {
+  if (currentUser.role !== 'ADMIN' && ['admin', 'users', 'companies', 'agreements', 'templates', 'template-variants', 'positioned-editor'].includes(screen)) {
     return <AppLayout screen="home" role={currentUser.role} onNavigate={go} onLogout={() => logoutMutation.mutate()}><HomePage user={currentUser} onNavigate={go} /></AppLayout>
   }
 
   const adminContent = screen === 'users' ? <UserManagementPage />
     : screen === 'companies' ? <CatalogManagementPage<Company, CompanyForm> kind="companies" title="Empresas" description="Administrá las empresas disponibles para completar documentos." emptyForm={{ nombre: '', agreementId: '' }} getItems={getCompanies} createItem={createCompany} updateItem={updateCompany} setActive={setCompanyActive} />
       : screen === 'agreements' ? <CatalogManagementPage<Agreement, AgreementForm> kind="agreements" title="Convenios" description="Administrá los convenios disponibles para completar documentos." emptyForm={{ codigo: '', descripcion: '' }} getItems={getAgreements} createItem={createAgreement} updateItem={updateAgreement} setActive={setAgreementActive} />
-        : <TemplateManagementPage />
+        : screen === 'positioned-editor' && configuredVariant ? <PositionedFieldEditor templateId={configuredVariant.templateId} variant={configuredVariant.variant} onBack={() => go('templates')} />
+          : <TemplateManagementPage onConfigureFields={(templateId, variant) => { setConfiguredVariant({ templateId, variant }); go('positioned-editor') }} />
 
   return <AppLayout screen={screen} role={currentUser.role} onNavigate={go} onLogout={() => logoutMutation.mutate()}>
     <SecondaryNavigation screen={screen} onNavigate={go} />
@@ -91,7 +95,7 @@ function App() {
     {screen === 'preview' && <PdfPreview pdf={generatedPdf} onEdit={() => go('form')} onHome={() => go('home')} />}
     {screen === 'profile' && <ProfilePage user={currentUser} onLogout={() => logoutMutation.mutate()} />}
     {screen === 'admin' && <AdminPage onNavigate={go} />}
-    {['users', 'companies', 'agreements', 'templates', 'template-variants'].includes(screen) && adminContent}
+    {['users', 'companies', 'agreements', 'templates', 'template-variants', 'positioned-editor'].includes(screen) && adminContent}
   </AppLayout>
 }
 

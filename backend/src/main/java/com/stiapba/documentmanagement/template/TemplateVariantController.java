@@ -56,6 +56,11 @@ public class TemplateVariantController {
         return variantService.replaceFile(templateId, variantId, file);
     }
 
+    @GetMapping(value = "/{variantId}/file", produces = MediaType.APPLICATION_PDF_VALUE)
+    public ResponseEntity<byte[]> file(@PathVariable UUID templateId, @PathVariable UUID variantId) {
+        return ResponseEntity.ok().contentType(MediaType.APPLICATION_PDF).body(variantService.loadFile(templateId, variantId));
+    }
+
     @PatchMapping("/{variantId}/activate")
     public ResponseEntity<Void> activate(@PathVariable UUID templateId, @PathVariable UUID variantId) {
         variantService.activate(templateId, variantId);

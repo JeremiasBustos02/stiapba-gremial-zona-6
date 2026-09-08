@@ -35,6 +35,7 @@ app:
     storage-type: ${TEMPLATE_STORAGE_TYPE:local}
     storage-path: ${TEMPLATE_STORAGE_PATH:storage/templates}
     seed-file: ${TEMPLATE_SEED_FILE:}
+    acroform-seed-file: ${TEMPLATE_ACROFORM_SEED_FILE:}
     seed-enabled: ${TEMPLATE_SEED_ENABLED:true}
     s3:
       endpoint: ${S3_ENDPOINT:}

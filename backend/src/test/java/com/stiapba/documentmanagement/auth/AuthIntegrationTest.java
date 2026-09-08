@@ -78,6 +78,17 @@ class AuthIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("UP"))
                 .andExpect(cookie().doesNotExist("JSESSIONID"))
+                .andExpect(cookie().doesNotExist(JwtAuthenticationFilter.AUTH_COOKIE))
+                .andExpect(cookie().doesNotExist("XSRF-TOKEN"));
+    }
+
+    @Test
+    void healthRequestWithMalformedAuthCookieDoesNotMaterializeCsrfToken() throws Exception {
+        mockMvc.perform(get("/api/v1/health")
+                        .cookie(new MockCookie(JwtAuthenticationFilter.AUTH_COOKIE, "malformed-token")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("UP"))
+                .andExpect(cookie().doesNotExist(JwtAuthenticationFilter.AUTH_COOKIE))
                 .andExpect(cookie().doesNotExist("XSRF-TOKEN"));
     }
 

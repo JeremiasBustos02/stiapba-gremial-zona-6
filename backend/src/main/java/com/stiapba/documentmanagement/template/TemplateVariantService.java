@@ -104,6 +104,15 @@ public class TemplateVariantService {
         findVariant(templateId, variantId).deactivate();
     }
 
+    public byte[] loadFile(UUID templateId, UUID variantId) {
+        TemplateVariant variant = findVariant(templateId, variantId);
+        try {
+            return fileStorage.load(variant.getFileKey());
+        } catch (IOException exception) {
+            throw new TemplateException(422, "TEMPLATE_FILE_UNAVAILABLE", "No pudimos leer el archivo de la plantilla.");
+        }
+    }
+
     private TemplateVariant findVariant(UUID templateId, UUID variantId) {
         templateService.findById(templateId);
         return variantRepository.findById(variantId)

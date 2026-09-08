@@ -11,11 +11,15 @@ import java.util.function.Supplier;
 public final class SpaCsrfTokenRequestHandler extends CsrfTokenRequestAttributeHandler {
 
     public static final String RAW_CSRF_TOKEN_ATTRIBUTE = "csrfToken";
+    private static final String HEALTH_PATH = "/api/v1/health";
 
     private final XorCsrfTokenRequestAttributeHandler xor = new XorCsrfTokenRequestAttributeHandler();
 
     @Override
     public void handle(HttpServletRequest request, HttpServletResponse response, Supplier<CsrfToken> deferredCsrfToken) {
+        if ("GET".equals(request.getMethod()) && HEALTH_PATH.equals(request.getRequestURI())) {
+            return;
+        }
         xor.handle(request, response, deferredCsrfToken);
         CsrfToken csrfToken = deferredCsrfToken.get();
         request.setAttribute(RAW_CSRF_TOKEN_ATTRIBUTE, csrfToken);

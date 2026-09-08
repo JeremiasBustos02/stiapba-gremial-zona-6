@@ -1,5 +1,46 @@
 # Permiso Gremial / Bruna - Inspeccion tecnica
 
+## Permiso-Gremial-Bruna-ACROFORM.pdf
+
+### Resultado de inspeccion
+
+| Propiedad | Valor |
+| --- | --- |
+| AcroForm | Si, valido y legible con PDFBox 3.0.6 |
+| Paginas | 1 |
+| `NeedAppearances` | `false` |
+| DA global | `/Helv 0 Tf 0 g` |
+| Recursos de fuente | `Helv`: Helvetica Type1 con `WinAnsiEncoding` |
+
+Los nueve campos son `PDTextField`; son visibles, imprimibles, editables, no requeridos, no multiline, no son password/file-select/comb/rich-text, y usan alineacion izquierda (`Q=0`). No hay checkboxes ni campos combo/select. Sus widgets estan en la pagina 1, no son hidden, invisible ni `noView`.
+
+| Campo AcroForm real | Rectangulo PDF `(x1, y1, x2, y2)` | DA local | Mapeo logico |
+| --- | --- | --- | --- |
+| `Provincia` | `(286.81, 633.72, 363.65, 646.20)` | `/Helvetica 12 Tf 0 g` | `province` |
+| `Dia fecha` | `(368.50, 633.84, 406.31, 646.41)` | `/Helvetica 12 Tf 0 g` | `issueDay` |
+| `Mes` | `(428.13, 633.86, 507.09, 647.03)` | `/Helvetica 12 Tf 0 g` | `issueMonth` |
+| `Año` | `(540.83, 633.84, 558.96, 645.81)` | `/Helvetica 12 Tf 0 g` | `issueYear` |
+| `Empresa` | `(50.09, 553.41, 155.04, 568.90)` | `/Helvetica 12 Tf 0 g` | `company` |
+| `Direccion` | `(48.89, 508.63, 241.13, 524.78)` | `/Helvetica 12 Tf 0 g` | Sin mapeo: esta sobre la linea `S / D` |
+| `Nombre delegado y dni` | `(49.50, 409.05, 252.48, 422.21)` | `/Helvetica 12 Tf 0 g` | `delegate` con nombre y DNI combinados |
+| `Dia de permiso` | `(435.29, 384.01, 538.09, 399.56)` | `/Helvetica 12 Tf 0 g` | `permitDay` |
+| `Convenio` | `(426.34, 338.69, 477.27, 352.45)` | `/Helvetica 12 Tf 0 g` | `agreement` |
+
+### Problemas del PDF
+
+- El campo `Nombre delegado y dni` es el unico widget para los dos datos y recibe el valor combinado `nombre apellido DNI <dni>`. `delegateDni` se conserva como valor logico, pero no tiene un `TemplateField` propio. `Direccion` no se mapea porque corresponde a la linea `S / D`.
+- Los campos nombran la fuente `/Helvetica`, pero los recursos del AcroForm solo declaran `/Helv`. Esta inconsistencia es del PDF y puede impedir la regeneracion de appearances. El renderer corrige la DA solo en la copia generada con `/Helv` y un tamano entre 7 y 12 pt; nunca modifica el PDF fuente.
+
+### Tamano de fuente y caracteres espanoles
+
+La DA global usa fuente Helvetica y tamano `0`, que solicita autosize. La prueba visual con PDFBox demostro que la empresa larga se reduce a un tamano ilegible. Por eso el renderer calcula un tamano explicito por campo entre 7 y 12 pt, respetando el rectangulo del widget. Si no entra a 7 pt, devuelve `PDF_TEXT_TOO_LONG`; no trunca ni genera texto ilegible. Helvetica con `WinAnsiEncoding` admite `ñ`, `á`, `é`, `í`, `ó` y `ú`.
+
+Se genera `permiso-gremial-acroform-short.pdf` en `backend/target/acroform-validation/` al ejecutar las pruebas. El caso largo se valida como rechazo controlado porque la empresa no entra al minimo de 7 pt. Para admitirla, el PDF debe ampliar el campo `Empresa`, habilitar multiline o definir una politica de longitud explicita.
+
+### Diferencia con Permiso-Gremial-Bruna.pdf
+
+La variante anterior no tiene AcroForm y se sigue completando con el renderer `POSITIONED`. La nueva se completa mediante `FieldDefinition.key -> TemplateField.acroFieldName`, sin coordenadas hardcodeadas. `POSITIONED` sigue previsto en `TemplateFieldMode`, pero sus coordenadas no se almacenan en este modelo.
+
 ## Archivo analizado
 
 | Propiedad | Valor |

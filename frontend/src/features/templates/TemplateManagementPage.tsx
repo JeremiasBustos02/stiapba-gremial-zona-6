@@ -15,7 +15,7 @@ function errorMessage(error: unknown) {
   return 'No pudimos completar la operación. Intentá nuevamente.'
 }
 
-export function TemplateManagementPage() {
+export function TemplateManagementPage({ onConfigureFields }: { onConfigureFields?: (templateId: string, variant: TemplateVariant) => void }) {
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<Template | null>(null)
@@ -114,6 +114,7 @@ export function TemplateManagementPage() {
 
   return <main className="min-h-screen bg-[#f4f7fb] text-slate-900"><div className="mx-auto max-w-7xl px-4 py-6 sm:px-8 sm:py-10">
     <header className="mb-8 border-b border-slate-200 pb-6"><p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-700">Administración</p><h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">Plantillas y variantes</h1><p className="mt-2 max-w-2xl text-sm text-slate-600">Gestioná los tipos de documento y sus versiones PDF. Los archivos se validan y almacenan de forma segura.</p></header>
+    {selected && variantsQuery.data && <section className="mb-4 flex flex-wrap gap-2 rounded-xl border border-blue-200 bg-blue-50 p-3"><span className="py-2 text-sm font-semibold text-blue-900">Configurar campos:</span>{variantsQuery.data.map(variant => <button key={variant.id} type="button" onClick={() => onConfigureFields?.(selected.id, variant)} className="rounded-lg bg-white px-3 py-2 text-sm font-semibold text-blue-700 shadow-sm">{variant.nombre}</button>)}</section>}
     {feedback && <p className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{feedback}</p>}
     {mutationError && <p role="alert" className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{errorMessage(mutationError)}</p>}
     {templatesQuery.isError && <p role="alert" className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{errorMessage(templatesQuery.error)}</p>}

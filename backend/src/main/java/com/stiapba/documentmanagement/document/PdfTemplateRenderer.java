@@ -1,0 +1,147 @@
+package com.stiapba.documentmanagement.document;
+
+import com.stiapba.documentmanagement.template.entity.TemplateField;
+import com.stiapba.documentmanagement.template.entity.TemplateFieldMode;
+import com.stiapba.documentmanagement.template.entity.TemplateFieldAlignment;
+import com.stiapba.documentmanagement.template.entity.TemplateVariant;
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.PDPageContentStream;
+import org.apache.pdfbox.pdmodel.common.PDRectangle;
+import org.apache.pdfbox.pdmodel.font.PDType1Font;
+import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
+import org.apache.pdfbox.pdmodel.interactive.annotation.PDAnnotationWidget;
+import org.apache.pdfbox.pdmodel.interactive.form.PDAcroForm;
+import org.apache.pdfbox.pdmodel.interactive.form.PDField;
+import org.apache.pdfbox.pdmodel.interactive.form.PDTextField;
+import org.springframework.stereotype.Component;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
+
+@Component
+public class PdfTemplateRenderer {
+    private static final float MAX_FONT_SIZE = 12f;
+    private static final float MIN_FONT_SIZE = 7f;
+    private static final float HORIZONTAL_PADDING = 4f;
+    private static final float VERTICAL_PADDING = 2f;
+    private static final PDType1Font FONT = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
+
+    public byte[] render(TemplateVariant variant, Map<String, String> logicalValues, byte[] templateContent) throws IOException {
+        try (PDDocument document = Loader.loadPDF(templateContent); ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            PDAcroForm acroForm = document.getDocumentCatalog().getAcroForm();
+            boolean hasAcroformFields = variant.getFields().stream().anyMatch(field -> field.getMode() == TemplateFieldMode.ACROFORM);
+            if (hasAcroformFields && acroForm == null) {
+                throw new DocumentException(422, "ACROFORM_NOT_FOUND", "La plantilla no contiene campos AcroForm.");
+            }
+            Map<String, PDField> fieldsByName = acroForm == null ? Map.of() : fieldsByName(acroForm);
+            if (acroForm != null) {
+                for (PDField field : fieldsByName.values()) {
+                    if (field instanceof PDTextField textField) {
+                        textField.setDefaultAppearance(defaultAppearance(MAX_FONT_SIZE));
+                    }
+                }
+            }
+
+            for (TemplateField templateField : variant.getFields()) {
+                if (templateField.getMode() != TemplateFieldMode.ACROFORM) {
+                    continue;
+                }
+                String logicalKey = templateField.getFieldDefinition().getKey();
+                String value = logicalValues.get(logicalKey);
+                if (templateField.isRequired() && (value == null || value.isBlank())) {
+                    throw new DocumentException(422, "TEMPLATE_FIELD_REQUIRED", "Falta un dato obligatorio para completar la plantilla.");
+                }
+                if (value == null || value.isBlank()) {
+                    continue;
+                }
+                PDField field = fieldsByName.get(templateField.getAcroFieldName());
+                if (field == null) {
+                    throw new DocumentException(422, "ACROFORM_FIELD_NOT_FOUND", "La plantilla no contiene uno de los campos configurados.");
+                }
+                if (!(field instanceof PDTextField textField)) {
+                    throw new DocumentException(422, "ACROFORM_FIELD_TYPE_UNSUPPORTED", "La plantilla contiene un tipo de campo no compatible.");
+                }
+                textField.setDefaultAppearance(defaultAppearance(fontSizeFor(textField, value)));
+                textField.setValue(value);
+            }
+            if (acroForm != null) {
+                acroForm.setNeedAppearances(false);
+                acroForm.refreshAppearances();
+            }
+            for (TemplateField templateField : variant.getFields()) {
+                if (templateField.getMode() == TemplateFieldMode.POSITIONED) {
+                    drawPositionedField(document, templateField, logicalValues);
+                }
+            }
+            document.save(output);
+            return output.toByteArray();
+        }
+    }
+
+    private Map<String, PDField> fieldsByName(PDAcroForm acroForm) {
+        Map<String, PDField> fields = new HashMap<>();
+        for (PDField field : acroForm.getFieldTree()) {
+            fields.put(field.getFullyQualifiedName(), field);
+        }
+        return fields;
+    }
+
+    private float fontSizeFor(PDTextField field, String value) throws IOException {
+        PDAnnotationWidget widget = field.getWidgets().stream().findFirst()
+                .orElseThrow(() -> new DocumentException(422, "ACROFORM_WIDGET_NOT_FOUND", "La plantilla contiene un campo sin posición."));
+        float maxWidth = widget.getRectangle().getWidth() - HORIZONTAL_PADDING;
+        float maxHeight = widget.getRectangle().getHeight() - VERTICAL_PADDING;
+        float byWidth = maxWidth * 1000f / FONT.getStringWidth(value);
+        float byHeight = maxHeight * 1000f / FONT.getFontDescriptor().getCapHeight();
+        float size = Math.min(MAX_FONT_SIZE, Math.min(byWidth, byHeight));
+        if (size < MIN_FONT_SIZE) {
+            throw new DocumentException(422, "PDF_TEXT_TOO_LONG", "Uno de los datos no entra legiblemente en el campo de la plantilla.");
+        }
+        return size;
+    }
+
+    private String defaultAppearance(float fontSize) {
+        return "/Helv " + fontSize + " Tf 0 g";
+    }
+
+    private void drawPositionedField(PDDocument document, TemplateField field, Map<String, String> values) throws IOException {
+        String value = values.get(field.getFieldDefinition().getKey());
+        if (field.isRequired() && (value == null || value.isBlank())) {
+            throw new DocumentException(422, "TEMPLATE_FIELD_REQUIRED", "Falta un dato obligatorio para completar la plantilla.");
+        }
+        if (value == null || value.isBlank()) return;
+        PDRectangle box = new PDRectangle(field.getX(), field.getY(), field.getWidth(), field.getHeight());
+        float size = positionedFontSize(value, box, field);
+        PDPage page = document.getPage(field.getPageNumber() - 1);
+        float textWidth = FONT.getStringWidth(value) / 1000f * size;
+        float x = switch (field.getAlignment() == null ? TemplateFieldAlignment.LEFT : field.getAlignment()) {
+            case LEFT -> box.getLowerLeftX() + 2f;
+            case CENTER -> box.getLowerLeftX() + (box.getWidth() - textWidth) / 2f;
+            case RIGHT -> box.getUpperRightX() - textWidth - 2f;
+        };
+        try (PDPageContentStream content = new PDPageContentStream(document, page, PDPageContentStream.AppendMode.APPEND, true, true)) {
+            content.beginText();
+            content.setFont(FONT, size);
+            content.newLineAtOffset(x, box.getLowerLeftY() + (box.getHeight() - size) / 2f);
+            content.showText(value);
+            content.endText();
+        }
+    }
+
+    private float positionedFontSize(String value, PDRectangle box, TemplateField field) throws IOException {
+        float configuredMax = field.getMaxFontSize() == null ? MAX_FONT_SIZE : field.getMaxFontSize();
+        float configuredMin = field.getMinFontSize() == null ? MIN_FONT_SIZE : field.getMinFontSize();
+        float preferred = field.getFontSize() == null ? configuredMax : Math.min(field.getFontSize(), configuredMax);
+        float byWidth = (box.getWidth() - HORIZONTAL_PADDING) * 1000f / FONT.getStringWidth(value);
+        float byHeight = (box.getHeight() - VERTICAL_PADDING) * 1000f / FONT.getFontDescriptor().getCapHeight();
+        float size = Math.min(preferred, Math.min(byWidth, byHeight));
+        if (size < configuredMin) {
+            throw new DocumentException(422, "PDF_TEXT_TOO_LONG", "Uno de los datos no entra legiblemente en el campo de la plantilla.");
+        }
+        return size;
+    }
+}

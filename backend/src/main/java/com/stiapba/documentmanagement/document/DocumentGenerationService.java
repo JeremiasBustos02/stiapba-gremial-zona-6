@@ -7,6 +7,7 @@ import com.stiapba.documentmanagement.company.repository.CompanyRepository;
 import com.stiapba.documentmanagement.province.entity.Province;
 import com.stiapba.documentmanagement.province.repository.ProvinceRepository;
 import com.stiapba.documentmanagement.template.entity.TemplateVariant;
+import com.stiapba.documentmanagement.template.entity.TemplateFieldMode;
 import com.stiapba.documentmanagement.template.repository.TemplateVariantRepository;
 import com.stiapba.documentmanagement.template.storage.TemplateFileStorage;
 import com.stiapba.documentmanagement.user.entity.Role;
@@ -16,6 +17,9 @@ import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.time.format.TextStyle;
+import java.util.Map;
+import java.util.Locale;
 
 @Service
 public class DocumentGenerationService {
@@ -27,11 +31,12 @@ public class DocumentGenerationService {
     private final TemplateVariantRepository variantRepository;
     private final TemplateFileStorage fileStorage;
     private final DocumentGenerator generator;
+    private final PdfTemplateRenderer pdfTemplateRenderer;
 
     public DocumentGenerationService(ProvinceRepository provinceRepository, CompanyRepository companyRepository,
-                                     UserRepository userRepository, AgreementRepository agreementRepository,
-                                     TemplateVariantRepository variantRepository, TemplateFileStorage fileStorage,
-                                     DocumentGenerator generator) {
+                                      UserRepository userRepository, AgreementRepository agreementRepository,
+                                      TemplateVariantRepository variantRepository, TemplateFileStorage fileStorage,
+                                      DocumentGenerator generator, PdfTemplateRenderer pdfTemplateRenderer) {
         this.provinceRepository = provinceRepository;
         this.companyRepository = companyRepository;
         this.userRepository = userRepository;
@@ -39,6 +44,7 @@ public class DocumentGenerationService {
         this.variantRepository = variantRepository;
         this.fileStorage = fileStorage;
         this.generator = generator;
+        this.pdfTemplateRenderer = pdfTemplateRenderer;
     }
 
     @Transactional
@@ -64,6 +70,9 @@ public class DocumentGenerationService {
                 .orElseThrow(() -> notFound("TEMPLATE_VARIANT_NOT_FOUND", "No encontramos una variante activa de Permiso Gremial."));
         try {
             byte[] templateContent = fileStorage.load(variant.getFileKey());
+            if (variant.getFields().stream().anyMatch(field -> field.getMode() == TemplateFieldMode.ACROFORM)) {
+                return pdfTemplateRenderer.render(variant, logicalValues(province, company, delegate, agreement, request), templateContent);
+            }
             return generator.generate(new PermisoGremialData(province.getName(), request.issueDate(), company.getNombre(),
                     delegate.getNombre() + " " + delegate.getApellido() + " DNI " + delegate.getDni(),
                     request.permitDay(), agreement.getCodigo().trim()), templateContent);
@@ -72,6 +81,23 @@ public class DocumentGenerationService {
         } catch (IOException exception) {
             throw new DocumentException(422, "TEMPLATE_FILE_UNAVAILABLE", "No pudimos leer el archivo de la plantilla.");
         }
+    }
+
+    private Map<String, String> logicalValues(Province province, Company company, User delegate, Agreement agreement,
+                                              PermisoGremialRequest request) {
+        String delegateName = delegate.getNombre() + " " + delegate.getApellido();
+        String delegateDni = delegate.getDni();
+        return Map.of(
+                "province", province.getName(),
+                "company", company.getNombre(),
+                "delegate", delegateName + " DNI " + delegateDni,
+                "delegateDni", delegateDni,
+                "agreement", agreement.getCodigo().trim(),
+                "issueDay", Integer.toString(request.issueDate().getDayOfMonth()),
+                "issueMonth", request.issueDate().getMonth().getDisplayName(TextStyle.FULL, Locale.forLanguageTag("es-AR")),
+                "issueYear", String.format("%02d", request.issueDate().getYear() % 100),
+                "permitDay", Integer.toString(request.permitDay())
+        );
     }
 
     private DocumentException notFound(String code, String message) {

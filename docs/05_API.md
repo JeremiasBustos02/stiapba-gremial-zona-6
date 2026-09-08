@@ -902,6 +902,80 @@ PATCH /api/v1/templates/{templateId}/variants/{variantId}/deactivate
 
 # 39. Generación de documentos
 
+# 38.1 Campos posicionados de variante
+
+Estos endpoints permiten que un ADMIN configure campos sobre un PDF que no incluye AcroForm. Las coordenadas se expresan en puntos PDF, con origen en la esquina inferior izquierda. Los campos `ACROFORM` existentes no se modifican.
+
+## GET `/api/v1/field-definitions`
+
+### Acceso
+
+ADMIN.
+
+Devuelve las definiciones de datos disponibles para asociar a un campo posicionado.
+
+```json
+[
+  { "id": "uuid", "key": "delegateFullName" }
+]
+```
+
+## GET `/api/v1/templates/{templateId}/variants/{variantId}/file`
+
+### Acceso
+
+ADMIN.
+
+Devuelve el PDF base como `application/pdf` para usarlo en el editor visual.
+
+## GET `/api/v1/templates/{templateId}/variants/{variantId}/fields`
+
+### Acceso
+
+ADMIN.
+
+Lista los campos configurados de la variante, tanto `ACROFORM` como `POSITIONED`.
+
+## POST `/api/v1/templates/{templateId}/variants/{variantId}/fields`
+
+## PUT `/api/v1/templates/{templateId}/variants/{variantId}/fields/{fieldId}`
+
+### Acceso
+
+ADMIN.
+
+### Request
+
+```json
+{
+  "fieldDefinitionId": "uuid",
+  "required": true,
+  "displayOrder": 0,
+  "pageNumber": 1,
+  "x": 72,
+  "y": 640,
+  "width": 180,
+  "height": 18,
+  "fontSize": 12,
+  "minFontSize": 7,
+  "maxFontSize": 12,
+  "alignment": "LEFT",
+  "multiline": false
+}
+```
+
+El backend verifica que la página exista y que el rectángulo quede dentro de su `MediaBox`.
+
+## DELETE `/api/v1/templates/{templateId}/variants/{variantId}/fields/{fieldId}`
+
+### Acceso
+
+ADMIN.
+
+Elimina únicamente campos de modo `POSITIONED` y devuelve `204 No Content`.
+
+---
+
 Los endpoints de generación no implican persistencia del documento dentro del MVP.
 
 El backend recibe datos, genera el PDF y devuelve el resultado.

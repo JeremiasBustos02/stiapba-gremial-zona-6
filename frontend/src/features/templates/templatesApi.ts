@@ -1,5 +1,5 @@
-import { apiRequest } from '@/lib/api'
-import type { Template, TemplateForm, TemplateVariant } from './types'
+import { apiRequest, apiRequestBlob } from '@/lib/api'
+import type { FieldDefinition, PositionedFieldInput, Template, TemplateField, TemplateForm, TemplateVariant } from './types'
 
 export function getTemplates(search = '') {
   const params = new URLSearchParams()
@@ -48,3 +48,9 @@ export function replaceVariantFile(templateId: string, variantId: string, archiv
 export function setVariantActive(templateId: string, variantId: string, active: boolean) {
   return apiRequest<void>(`/templates/${templateId}/variants/${variantId}/${active ? 'activate' : 'deactivate'}`, { method: 'PATCH' })
 }
+export function getVariantPdf(templateId: string, variantId: string) { return apiRequestBlob(`/templates/${templateId}/variants/${variantId}/file`) }
+export function getTemplateFields(templateId: string, variantId: string) { return apiRequest<TemplateField[]>(`/templates/${templateId}/variants/${variantId}/fields`) }
+export function getFieldDefinitions() { return apiRequest<FieldDefinition[]>('/field-definitions?active=true') }
+export function createPositionedField(templateId: string, variantId: string, input: PositionedFieldInput) { return apiRequest<TemplateField>(`/templates/${templateId}/variants/${variantId}/fields`, { method: 'POST', body: JSON.stringify(input) }) }
+export function updatePositionedField(templateId: string, variantId: string, fieldId: string, input: PositionedFieldInput) { return apiRequest<TemplateField>(`/templates/${templateId}/variants/${variantId}/fields/${fieldId}`, { method: 'PUT', body: JSON.stringify(input) }) }
+export function deletePositionedField(templateId: string, variantId: string, fieldId: string) { return apiRequest<void>(`/templates/${templateId}/variants/${variantId}/fields/${fieldId}`, { method: 'DELETE' }) }
