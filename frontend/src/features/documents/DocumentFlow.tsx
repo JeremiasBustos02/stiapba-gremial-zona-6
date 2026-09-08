@@ -65,7 +65,7 @@ export function DocumentTemplateSelection({ onBack, onSelect }: { onBack: () => 
   const templatesQuery = useQuery({ queryKey: ['documents', 'templates'], queryFn: getDocumentTemplates })
   const templates = templatesQuery.data ?? []
   return <><PageIntro title="Seleccionar documento" description="Elegí el tipo de documento que necesitás generar." /><section className="mt-8 max-w-3xl space-y-3"><QueryState query={templatesQuery} emptyText="Todavía no hay tipos de documento activos para utilizar.">{templates.length === 0 ? null : templates.map((template) => {
-    const supported = template.nombre.trim().toLowerCase() === 'permiso gremial'
+    const supported = template.documentType === 'PERMISO_GREMIAL'
     return <button key={template.id} type="button" disabled={!supported} onClick={() => onSelect(template.id)} className="flex w-full items-center gap-4 rounded-2xl border border-blue-200 bg-white p-5 text-left shadow-sm hover:border-blue-500 disabled:cursor-not-allowed disabled:opacity-60"><span className="rounded-xl bg-blue-700 p-3 text-white"><FileText /></span><span className="flex-1"><strong className="text-lg">{template.nombre}</strong><span className="mt-1 block text-sm text-slate-600">{supported ? template.descripcion : 'Este tipo de documento todavía no está disponible.'}</span></span><ChevronRight className="text-blue-700" /></button>
   })}</QueryState></section><button type="button" onClick={onBack} className="mt-8 text-sm font-semibold text-slate-600 hover:text-slate-950">Cancelar</button></>
 }

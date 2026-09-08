@@ -4,8 +4,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.stiapba.documentmanagement.security.JwtAuthenticationFilter;
 import com.stiapba.documentmanagement.template.entity.Template;
 import com.stiapba.documentmanagement.template.entity.TemplateVariant;
+import com.stiapba.documentmanagement.template.entity.FieldDefinition;
+import com.stiapba.documentmanagement.template.repository.FieldDefinitionRepository;
 import com.stiapba.documentmanagement.template.repository.TemplateRepository;
 import com.stiapba.documentmanagement.template.repository.TemplateVariantRepository;
+import com.stiapba.documentmanagement.template.repository.TemplateFieldRepository;
 import com.stiapba.documentmanagement.user.entity.Role;
 import com.stiapba.documentmanagement.user.entity.User;
 import com.stiapba.documentmanagement.user.repository.UserRepository;
@@ -66,6 +69,8 @@ class TemplateIntegrationTest {
     @Autowired private UserRepository userRepository;
     @Autowired private TemplateRepository templateRepository;
     @Autowired private TemplateVariantRepository variantRepository;
+    @Autowired private TemplateFieldRepository fieldRepository;
+    @Autowired private FieldDefinitionRepository fieldDefinitionRepository;
     @Autowired private PasswordEncoder passwordEncoder;
 
     @DynamicPropertySource
@@ -75,6 +80,8 @@ class TemplateIntegrationTest {
 
     @BeforeEach
     void cleanDatabase() {
+        fieldRepository.deleteAll();
+        fieldRepository.flush();
         variantRepository.deleteAll();
         templateRepository.deleteAll();
         userRepository.deleteAll();
@@ -160,6 +167,31 @@ class TemplateIntegrationTest {
                         .param("nombre", "Corrupta").cookie(session.authCookie(), session.csrfCookie()).header("X-XSRF-TOKEN", session.csrfToken()))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_PDF"));
         assertThat(storedFileCount()).isEqualTo(before);
+    }
+
+    @Test
+    void createsAndListsAcroformMappingsWithInitializedFieldDefinitions() throws Exception {
+        User admin = saveUser("30000204", Role.ADMIN, ADMIN_PASSWORD);
+        MockMvcSession session = authenticate(admin.getDni(), ADMIN_PASSWORD);
+        Template template = templateRepository.saveAndFlush(new Template("Permiso Gremial", "Descripción"));
+        byte[] pdf = Files.readAllBytes(Path.of("..", "docs", "pdf-templates", "Permiso-Gremial-Bruna-ACROFORM.pdf"));
+        MvcResult variantResult = mockMvc.perform(multipart("/api/v1/templates/{templateId}/variants", template.getId())
+                        .file(new MockMultipartFile("archivoPdf", "bruna.pdf", "application/pdf", pdf)).param("nombre", "AcroForm")
+                        .cookie(session.authCookie(), session.csrfCookie()).header("X-XSRF-TOKEN", session.csrfToken()))
+                .andExpect(status().isCreated()).andReturn();
+        String variantId = objectMapper.readTree(variantResult.getResponse().getContentAsString()).get("id").asText();
+        FieldDefinition company = fieldDefinitionRepository.findByKey("company").orElseThrow();
+
+        mockMvc.perform(post("/api/v1/templates/{templateId}/variants/{variantId}/fields/acroform", template.getId(), variantId)
+                        .cookie(session.authCookie(), session.csrfCookie()).header("X-XSRF-TOKEN", session.csrfToken())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"fieldDefinitionId\":\"" + company.getId() + "\",\"acroFieldName\":\"Empresa\",\"required\":true,\"displayOrder\":1}"))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.fieldKey").value("company"))
+                .andExpect(jsonPath("$.acroFieldName").value("Empresa"));
+
+        mockMvc.perform(get("/api/v1/templates/{templateId}/variants/{variantId}/fields", template.getId(), variantId)
+                        .cookie(session.authCookie()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$[0].fieldKey").value("company"))
+                .andExpect(jsonPath("$[0].acroFieldName").value("Empresa"));
     }
 
     private long storedFileCount() throws Exception {

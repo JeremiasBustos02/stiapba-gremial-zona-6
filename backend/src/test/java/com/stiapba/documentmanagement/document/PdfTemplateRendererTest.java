@@ -9,19 +9,26 @@ import com.stiapba.documentmanagement.template.entity.TemplateVariant;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
+import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.interactive.form.PDAcroForm;
 import org.apache.pdfbox.pdmodel.interactive.form.PDField;
 import org.apache.pdfbox.pdmodel.interactive.form.PDTextField;
+import org.apache.pdfbox.text.TextPosition;
+import org.apache.pdfbox.cos.COSName;
+import org.apache.pdfbox.cos.COSDictionary;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.within;
 
 class PdfTemplateRendererTest {
     private static final Path ACROFORM_TEMPLATE = Path.of("..", "docs", "pdf-templates", "Permiso-Gremial-Bruna-ACROFORM.pdf");
@@ -76,9 +83,58 @@ class PdfTemplateRendererTest {
 
         assertGeneratedValues(generated, values);
         assertThat(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(ACROFORM_TEMPLATE))).isEqualTo(sourceHash);
-        assertThat(fieldAppearance(generated, "Empresa")).isEqualTo("/Helv 12.0 Tf 0 g");
-        assertThat(fieldAppearance(generated, "Direccion")).isEqualTo("/Helv 12.0 Tf 0 g");
+        try (PDDocument document = Loader.loadPDF(generated)) {
+            assertThat(document.getDocumentCatalog().getAcroForm().getFields()).isEmpty();
+        }
         writeValidationPdf("permiso-gremial-acroform-short.pdf", generated);
+    }
+
+    @Test
+    void removesDecorationFromMappedAndUnmappedWidgetsBeforeFlattening() throws Exception {
+        byte[] source = Files.readAllBytes(ACROFORM_TEMPLATE);
+        try (PDDocument document = Loader.loadPDF(source)) {
+            PDTextField company = (PDTextField) findField(document.getDocumentCatalog().getAcroForm(), "Empresa");
+            PDTextField address = (PDTextField) findField(document.getDocumentCatalog().getAcroForm(), "Direccion");
+            assertThat(company.getWidgets()).singleElement().satisfies(widget -> {
+                assertThat(widget.getCOSObject().containsKey(COSName.MK)).isTrue();
+                COSDictionary appearance = (COSDictionary) widget.getCOSObject().getDictionaryObject(COSName.MK);
+                assertThat(appearance.containsKey(COSName.BC)).isTrue();
+                assertThat(appearance.containsKey(COSName.BG)).isTrue();
+            });
+            assertThat(address.getWidgets()).singleElement().satisfies(widget -> {
+                assertThat(widget.getCOSObject().containsKey(COSName.MK)).isTrue();
+                COSDictionary appearance = (COSDictionary) widget.getCOSObject().getDictionaryObject(COSName.MK);
+                assertThat(appearance.containsKey(COSName.BC)).isTrue();
+                assertThat(appearance.containsKey(COSName.BG)).isTrue();
+            });
+        }
+
+        byte[] generated = renderer.render(configuredVariant(), shortValues(), source);
+
+        try (PDDocument document = Loader.loadPDF(generated)) {
+            assertThat(document.getDocumentCatalog().getAcroForm().getFields()).isEmpty();
+            assertThat(document.getPages()).allSatisfy(page -> assertThat(page.getAnnotations())
+                    .noneMatch(annotation -> annotation instanceof org.apache.pdfbox.pdmodel.interactive.annotation.PDAnnotationWidget));
+            assertThat(new PDFTextStripper().getText(document)).contains("INFRIBA");
+        }
+    }
+
+    @Test
+    void centersMappedAcroFormTextBeforeFlattening() throws Exception {
+        byte[] source = Files.readAllBytes(ACROFORM_TEMPLATE);
+        float fieldCenter;
+        try (PDDocument document = Loader.loadPDF(source)) {
+            PDTextField company = (PDTextField) findField(document.getDocumentCatalog().getAcroForm(), "Empresa");
+            PDRectangle rect = company.getWidgets().getFirst().getRectangle();
+            fieldCenter = (rect.getLowerLeftX() + rect.getUpperRightX()) / 2f;
+        }
+
+        byte[] generated = renderer.render(configuredVariant(), shortValues(), source);
+
+        try (PDDocument document = Loader.loadPDF(generated)) {
+            List<TextPosition> companyText = textPositions(document, "INFRIBA");
+            assertThat(textCenter(companyText)).isCloseTo(fieldCenter, within(1f));
+        }
     }
 
     @Test
@@ -109,7 +165,13 @@ class PdfTemplateRendererTest {
         byte[] generated = renderer.render(configuredVariant(), values, Files.readAllBytes(ACROFORM_TEMPLATE));
 
         assertGeneratedValues(generated, values);
-        assertThat(fontSize(fieldAppearance(generated, "Empresa"))).isBetween(7f, 12f);
+        try (PDDocument document = Loader.loadPDF(generated)) {
+            List<TextPosition> companyText = textPositions(document, values.get("company"));
+            assertThat(companyText).extracting(TextPosition::getFontSizeInPt).allSatisfy(size ->
+                    assertThat(size).isBetween(7f, 12f));
+            assertThat(companyText).extracting(TextPosition::getFontSizeInPt).allSatisfy(size ->
+                    assertThat(size).isLessThan(12f));
+        }
         writeValidationPdf("permiso-gremial-acroform-company-shrink.pdf", generated);
     }
 
@@ -162,6 +224,23 @@ class PdfTemplateRendererTest {
         }
     }
 
+    @Test
+    void processesAcroformAndPositionedFieldsInTheSameVariant() throws Exception {
+        TemplateVariant variant = configuredVariant();
+        TemplateField positioned = new TemplateField(variant, new FieldDefinition("delegateDni"), TemplateFieldMode.POSITIONED,
+                null, true, 9);
+        positioned.updatePositioned(positioned.getFieldDefinition(), true, 9, 1, 72, 360, 100, 18,
+                12, 7, 12, TemplateFieldAlignment.LEFT, false);
+        variant.addField(positioned);
+
+        byte[] generated = renderer.render(variant, shortValuesWithDelegateDni(), Files.readAllBytes(ACROFORM_TEMPLATE));
+
+        try (PDDocument document = Loader.loadPDF(generated)) {
+            assertThat(document.getDocumentCatalog().getAcroForm().getFields()).isEmpty();
+            assertThat(new PDFTextStripper().getText(document)).contains("40123456");
+        }
+    }
+
     private TemplateVariant configuredVariant() {
         TemplateVariant variant = new TemplateVariant(new Template("Permiso Gremial", "Prueba"), "Bruna AcroForm", "template.pdf");
         addField(variant, "province", "Provincia", true, 1);
@@ -194,12 +273,17 @@ class PdfTemplateRendererTest {
         );
     }
 
+    private Map<String, String> shortValuesWithDelegateDni() {
+        Map<String, String> values = new LinkedHashMap<>(shortValues());
+        values.put("delegateDni", "40123456");
+        return values;
+    }
+
     private void assertGeneratedValues(byte[] generated, Map<String, String> values) throws Exception {
         try (PDDocument document = Loader.loadPDF(generated)) {
-            PDAcroForm form = document.getDocumentCatalog().getAcroForm();
-            assertThat(findField(form, "Provincia").getValueAsString()).isEqualTo(values.get("province"));
-            assertThat(findField(form, "Empresa").getValueAsString()).isEqualTo(values.get("company"));
-            assertThat(findField(form, "Nombre delegado y dni").getValueAsString()).isEqualTo(values.get("delegate"));
+            assertThat(document.getDocumentCatalog().getAcroForm().getFields()).isEmpty();
+            String text = new PDFTextStripper().getText(document);
+            assertThat(text).contains(values.get("province"), values.get("company"), values.get("delegate"));
         }
     }
 
@@ -227,6 +311,24 @@ class PdfTemplateRendererTest {
         return Float.parseFloat(appearance.split(" ")[1]);
     }
 
+    private List<TextPosition> textPositions(PDDocument document, String expectedText) throws IOException {
+        PositionCapturingTextStripper stripper = new PositionCapturingTextStripper();
+        stripper.getText(document);
+        StringBuilder captured = new StringBuilder();
+        for (TextPosition position : stripper.positions) {
+            captured.append(position.getUnicode());
+        }
+        int start = captured.indexOf(expectedText);
+        assertThat(start).isGreaterThanOrEqualTo(0);
+        return stripper.positions.subList(start, start + expectedText.length());
+    }
+
+    private float textCenter(List<TextPosition> positions) {
+        TextPosition first = positions.getFirst();
+        TextPosition last = positions.getLast();
+        return (first.getXDirAdj() + last.getXDirAdj() + last.getWidthDirAdj()) / 2f;
+    }
+
     private void writeValidationPdf(String name, byte[] content) throws Exception {
         Path directory = Path.of("target", "acroform-validation");
         Files.createDirectories(directory);
@@ -236,5 +338,18 @@ class PdfTemplateRendererTest {
     @FunctionalInterface
     private interface ThrowingRunnable {
         void run() throws Exception;
+    }
+
+    private static final class PositionCapturingTextStripper extends PDFTextStripper {
+        private final List<TextPosition> positions = new java.util.ArrayList<>();
+
+        private PositionCapturingTextStripper() throws IOException {
+        }
+
+        @Override
+        protected void processTextPosition(TextPosition text) {
+            positions.add(text);
+            super.processTextPosition(text);
+        }
     }
 }

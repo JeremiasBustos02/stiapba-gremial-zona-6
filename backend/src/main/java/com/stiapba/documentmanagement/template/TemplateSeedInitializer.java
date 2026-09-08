@@ -92,7 +92,9 @@ public class TemplateSeedInitializer implements ApplicationRunner {
         String fileKey = fileStorage.store(loadSeedContent());
         try {
             Template template = templateRepository.saveAndFlush(new Template("Permiso Gremial", "Permiso gremial estándar"));
-            variantRepository.saveAndFlush(new TemplateVariant(template, "Bruna", fileKey));
+            TemplateVariant variant = new TemplateVariant(template, "Bruna", fileKey);
+            variant.markLegacyPositioned();
+            variantRepository.saveAndFlush(variant);
             logger.info("Se provisionó la plantilla inicial Permiso Gremial / Bruna.");
             return template;
         } catch (RuntimeException exception) {
@@ -143,7 +145,9 @@ public class TemplateSeedInitializer implements ApplicationRunner {
         String fileKey = fileStorage.store(loadSeedContent());
         try {
             if (variant == null) {
-                variantRepository.saveAndFlush(new TemplateVariant(template, "Bruna", fileKey));
+                TemplateVariant created = new TemplateVariant(template, "Bruna", fileKey);
+                created.markLegacyPositioned();
+                variantRepository.saveAndFlush(created);
                 logger.info("Se provisionó la variante inicial Bruna.");
             } else {
                 variant.updateFileKey(fileKey);

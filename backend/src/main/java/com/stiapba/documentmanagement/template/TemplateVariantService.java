@@ -4,6 +4,7 @@ import com.stiapba.documentmanagement.template.TemplateDtos.TemplateVariantRespo
 import com.stiapba.documentmanagement.template.entity.Template;
 import com.stiapba.documentmanagement.template.entity.TemplateVariant;
 import com.stiapba.documentmanagement.template.repository.TemplateVariantRepository;
+import com.stiapba.documentmanagement.template.repository.TemplateFieldRepository;
 import com.stiapba.documentmanagement.template.storage.PdfUploadValidator;
 import com.stiapba.documentmanagement.template.storage.TemplateFileStorage;
 import jakarta.transaction.Transactional;
@@ -20,13 +21,15 @@ import java.util.UUID;
 public class TemplateVariantService {
     private final TemplateService templateService;
     private final TemplateVariantRepository variantRepository;
+    private final TemplateFieldRepository fieldRepository;
     private final TemplateFileStorage fileStorage;
     private final PdfUploadValidator pdfUploadValidator;
 
-    public TemplateVariantService(TemplateService templateService, TemplateVariantRepository variantRepository,
+    public TemplateVariantService(TemplateService templateService, TemplateVariantRepository variantRepository, TemplateFieldRepository fieldRepository,
                                   TemplateFileStorage fileStorage, PdfUploadValidator pdfUploadValidator) {
         this.templateService = templateService;
         this.variantRepository = variantRepository;
+        this.fieldRepository = fieldRepository;
         this.fileStorage = fileStorage;
         this.pdfUploadValidator = pdfUploadValidator;
     }
@@ -82,6 +85,7 @@ public class TemplateVariantService {
         try {
             variant.updateFileKey(newFileKey);
             TemplateVariant saved = variantRepository.saveAndFlush(variant);
+            fieldRepository.deleteByTemplateVariant_Id(variantId);
             try {
                 fileStorage.delete(oldFileKey);
             } catch (IOException | RuntimeException exception) {
@@ -152,7 +156,7 @@ public class TemplateVariantService {
     }
 
     private TemplateVariantResponse toResponse(TemplateVariant variant) {
-        return new TemplateVariantResponse(variant.getId(), variant.getTemplate().getId(), variant.getNombre(), variant.isActive(),
+        return new TemplateVariantResponse(variant.getId(), variant.getTemplate().getId(), variant.getNombre(), variant.isActive(), variant.isLegacyPositioned(),
                 variant.getCreatedAt(), variant.getUpdatedAt());
     }
 }

@@ -34,6 +34,9 @@ public class TemplateVariant extends AuditableEntity {
     @Column(nullable = false)
     private boolean active = true;
 
+    @Column(name = "legacy_positioned", nullable = false)
+    private boolean legacyPositioned;
+
     @OneToMany(mappedBy = "templateVariant")
     private final List<TemplateField> fields = new ArrayList<>();
 
@@ -62,6 +65,10 @@ public class TemplateVariant extends AuditableEntity {
         return active;
     }
 
+    public boolean isLegacyPositioned() {
+        return legacyPositioned;
+    }
+
     public List<TemplateField> getFields() {
         return fields.stream().sorted(Comparator.comparingInt(TemplateField::getDisplayOrder)).toList();
     }
@@ -76,6 +83,10 @@ public class TemplateVariant extends AuditableEntity {
 
     public void updateFileKey(String fileKey) {
         this.fileKey = fileKey;
+    }
+
+    public void markLegacyPositioned() {
+        this.legacyPositioned = true;
     }
 
     public void activate() {

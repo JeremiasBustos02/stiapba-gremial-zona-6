@@ -7,7 +7,7 @@ import com.stiapba.documentmanagement.company.repository.CompanyRepository;
 import com.stiapba.documentmanagement.province.entity.Province;
 import com.stiapba.documentmanagement.province.repository.ProvinceRepository;
 import com.stiapba.documentmanagement.template.entity.TemplateVariant;
-import com.stiapba.documentmanagement.template.entity.TemplateFieldMode;
+import com.stiapba.documentmanagement.template.entity.DocumentType;
 import com.stiapba.documentmanagement.template.repository.TemplateVariantRepository;
 import com.stiapba.documentmanagement.template.storage.TemplateFileStorage;
 import com.stiapba.documentmanagement.user.entity.Role;
@@ -23,7 +23,6 @@ import java.util.Locale;
 
 @Service
 public class DocumentGenerationService {
-    private static final String PERMISO_GREMIAL_TEMPLATE = "Permiso Gremial";
     private final ProvinceRepository provinceRepository;
     private final CompanyRepository companyRepository;
     private final UserRepository userRepository;
@@ -65,13 +64,18 @@ public class DocumentGenerationService {
             throw new DocumentException(422, "AGREEMENT_CODE_REQUIRED", "El convenio seleccionado no tiene código para imprimir.");
         }
         TemplateVariant variant = variantRepository.findById(request.variantId())
-                .filter(value -> value.isActive() && value.getTemplate().isActive()
-                        && PERMISO_GREMIAL_TEMPLATE.equals(value.getTemplate().getNombre()))
+                .filter(value -> value.isActive() && value.getTemplate().isActive())
                 .orElseThrow(() -> notFound("TEMPLATE_VARIANT_NOT_FOUND", "No encontramos una variante activa de Permiso Gremial."));
+        if (variant.getTemplate().getDocumentType() != DocumentType.PERMISO_GREMIAL) {
+            throw new DocumentException(422, "TEMPLATE_DOCUMENT_TYPE_UNSUPPORTED", "La plantilla seleccionada no corresponde a Permiso Gremial.");
+        }
         try {
             byte[] templateContent = fileStorage.load(variant.getFileKey());
-            if (variant.getFields().stream().anyMatch(field -> field.getMode() == TemplateFieldMode.ACROFORM)) {
+            if (!variant.getFields().isEmpty()) {
                 return pdfTemplateRenderer.render(variant, logicalValues(province, company, delegate, agreement, request), templateContent);
+            }
+            if (!variant.isLegacyPositioned()) {
+                throw new DocumentException(422, "TEMPLATE_FIELDS_NOT_CONFIGURED", "La variante no tiene campos configurados para generar el documento.");
             }
             return generator.generate(new PermisoGremialData(province.getName(), request.issueDate(), company.getNombre(),
                     delegate.getNombre() + " " + delegate.getApellido() + " DNI " + delegate.getDni(),

@@ -63,6 +63,18 @@ class DocumentGenerationServiceTest {
     }
 
     @Test
+    void rejectsUnconfiguredNewVariantWithoutUsingLegacyRenderer() throws Exception {
+        stubProvince();
+        stubCompany();
+        stubDelegate();
+        stubAgreement();
+        when(variantRepository.findById(request.variantId())).thenReturn(Optional.of(new TemplateVariant(new Template("Otra", "Descripción"), "Nueva", "template.pdf")));
+        when(fileStorage.load("template.pdf")).thenReturn(new byte[]{1});
+
+        assertCode("TEMPLATE_FIELDS_NOT_CONFIGURED");
+    }
+
+    @Test
     void rejectsMissingProvince() {
         when(provinceRepository.findById(request.provinceId())).thenReturn(Optional.empty());
         assertCode("PROVINCE_NOT_FOUND");
@@ -102,7 +114,9 @@ class DocumentGenerationServiceTest {
         stubAgreement();
         when(variantRepository.findById(request.variantId())).thenReturn(Optional.empty());
         assertCode("TEMPLATE_VARIANT_NOT_FOUND");
-        when(variantRepository.findById(request.variantId())).thenReturn(Optional.of(new TemplateVariant(new Template("Permiso Gremial", "Descripción"), "Bruna", "template.pdf")));
+        TemplateVariant variant = new TemplateVariant(new Template("Permiso Gremial", "Descripción"), "Bruna", "template.pdf");
+        variant.markLegacyPositioned();
+        when(variantRepository.findById(request.variantId())).thenReturn(Optional.of(variant));
         when(fileStorage.load("template.pdf")).thenThrow(new IOException("missing"));
         assertCode("TEMPLATE_FILE_UNAVAILABLE");
     }
@@ -142,7 +156,9 @@ class DocumentGenerationServiceTest {
         stubCompany();
         stubDelegate();
         stubAgreement();
-        when(variantRepository.findById(request.variantId())).thenReturn(Optional.of(new TemplateVariant(new Template("Permiso Gremial", "Descripción"), "Bruna", "template.pdf")));
+        TemplateVariant variant = new TemplateVariant(new Template("Permiso Gremial", "Descripción"), "Bruna", "template.pdf");
+        variant.markLegacyPositioned();
+        when(variantRepository.findById(request.variantId())).thenReturn(Optional.of(variant));
         when(fileStorage.load("template.pdf")).thenReturn(new byte[]{1});
         when(generator.generate(any(), any())).thenReturn(new byte[]{2});
     }

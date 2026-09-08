@@ -15,6 +15,8 @@ import org.apache.pdfbox.pdmodel.interactive.annotation.PDAnnotationWidget;
 import org.apache.pdfbox.pdmodel.interactive.form.PDAcroForm;
 import org.apache.pdfbox.pdmodel.interactive.form.PDField;
 import org.apache.pdfbox.pdmodel.interactive.form.PDTextField;
+import org.apache.pdfbox.pdmodel.interactive.form.PDVariableText;
+import org.apache.pdfbox.cos.COSName;
 import org.springframework.stereotype.Component;
 
 import java.io.ByteArrayOutputStream;
@@ -39,6 +41,7 @@ public class PdfTemplateRenderer {
             }
             Map<String, PDField> fieldsByName = acroForm == null ? Map.of() : fieldsByName(acroForm);
             if (acroForm != null) {
+                normalizeWidgets(acroForm);
                 for (PDField field : fieldsByName.values()) {
                     if (field instanceof PDTextField textField) {
                         textField.setDefaultAppearance(defaultAppearance(MAX_FONT_SIZE));
@@ -66,6 +69,7 @@ public class PdfTemplateRenderer {
                     throw new DocumentException(422, "ACROFORM_FIELD_TYPE_UNSUPPORTED", "La plantilla contiene un tipo de campo no compatible.");
                 }
                 textField.setDefaultAppearance(defaultAppearance(fontSizeFor(textField, value)));
+                textField.setQ(PDVariableText.QUADDING_CENTERED);
                 textField.setValue(value);
             }
             if (acroForm != null) {
@@ -76,6 +80,9 @@ public class PdfTemplateRenderer {
                 if (templateField.getMode() == TemplateFieldMode.POSITIONED) {
                     drawPositionedField(document, templateField, logicalValues);
                 }
+            }
+            if (acroForm != null) {
+                acroForm.flatten();
             }
             document.save(output);
             return output.toByteArray();
@@ -106,6 +113,18 @@ public class PdfTemplateRenderer {
 
     private String defaultAppearance(float fontSize) {
         return "/Helv " + fontSize + " Tf 0 g";
+    }
+
+    private void normalizeWidgets(PDAcroForm acroForm) {
+        for (PDField field : acroForm.getFieldTree()) {
+            for (PDAnnotationWidget widget : field.getWidgets()) {
+            // Remove iLovePDF's widget decoration and cached appearance before PDFBox regenerates text only.
+                widget.getCOSObject().removeItem(COSName.MK);
+                widget.getCOSObject().removeItem(COSName.BS);
+                widget.getCOSObject().removeItem(COSName.BORDER);
+                widget.getCOSObject().removeItem(COSName.AP);
+            }
+        }
     }
 
     private void drawPositionedField(PDDocument document, TemplateField field, Map<String, String> values) throws IOException {

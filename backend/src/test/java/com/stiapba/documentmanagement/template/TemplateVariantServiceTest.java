@@ -3,6 +3,7 @@ package com.stiapba.documentmanagement.template;
 import com.stiapba.documentmanagement.template.entity.Template;
 import com.stiapba.documentmanagement.template.entity.TemplateVariant;
 import com.stiapba.documentmanagement.template.repository.TemplateVariantRepository;
+import com.stiapba.documentmanagement.template.repository.TemplateFieldRepository;
 import com.stiapba.documentmanagement.template.storage.PdfUploadValidator;
 import com.stiapba.documentmanagement.template.storage.TemplateFileStorage;
 import org.junit.jupiter.api.Test;
@@ -25,6 +26,7 @@ import static org.mockito.Mockito.when;
 class TemplateVariantServiceTest {
     @Mock private TemplateService templateService;
     @Mock private TemplateVariantRepository variantRepository;
+    @Mock private TemplateFieldRepository fieldRepository;
     @Mock private TemplateFileStorage fileStorage;
     @Mock private PdfUploadValidator pdfUploadValidator;
 
@@ -44,7 +46,7 @@ class TemplateVariantServiceTest {
         when(variantRepository.saveAndFlush(variant)).thenReturn(variant);
         doThrow(new IOException("storage unavailable")).when(fileStorage).delete("templates/old.pdf");
 
-        TemplateVariantService service = new TemplateVariantService(templateService, variantRepository, fileStorage, pdfUploadValidator);
+        TemplateVariantService service = new TemplateVariantService(templateService, variantRepository, fieldRepository, fileStorage, pdfUploadValidator);
 
         assertThatThrownBy(() -> service.replaceFile(templateId, variantId,
                 new MockMultipartFile("archivoPdf", "new.pdf", "application/pdf", "content".getBytes())))

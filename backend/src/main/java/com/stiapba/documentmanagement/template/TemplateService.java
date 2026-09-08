@@ -3,6 +3,7 @@ package com.stiapba.documentmanagement.template;
 import com.stiapba.documentmanagement.template.TemplateDtos.TemplateRequest;
 import com.stiapba.documentmanagement.template.TemplateDtos.TemplateResponse;
 import com.stiapba.documentmanagement.template.entity.Template;
+import com.stiapba.documentmanagement.template.entity.DocumentType;
 import com.stiapba.documentmanagement.template.repository.TemplateRepository;
 import jakarta.transaction.Transactional;
 import org.springframework.data.domain.Sort;
@@ -46,13 +47,15 @@ public class TemplateService {
 
     @Transactional
     public TemplateResponse create(TemplateRequest request) {
-        return toResponse(templateRepository.save(new Template(request.nombre().trim(), request.descripcion().trim())));
+        return toResponse(templateRepository.save(new Template(request.nombre().trim(), request.descripcion().trim(),
+                request.documentType() == null ? DocumentType.PERMISO_GREMIAL : request.documentType())));
     }
 
     @Transactional
     public TemplateResponse update(UUID id, TemplateRequest request) {
         Template template = findById(id);
-        template.update(request.nombre().trim(), request.descripcion().trim());
+        template.update(request.nombre().trim(), request.descripcion().trim(),
+                request.documentType() == null ? template.getDocumentType() : request.documentType());
         return toResponse(templateRepository.save(template));
     }
 
@@ -71,7 +74,7 @@ public class TemplateService {
     }
 
     TemplateResponse toResponse(Template template) {
-        return new TemplateResponse(template.getId(), template.getNombre(), template.getDescripcion(), template.isActive(),
+        return new TemplateResponse(template.getId(), template.getNombre(), template.getDescripcion(), template.getDocumentType(), template.isActive(),
                 template.getCreatedAt(), template.getUpdatedAt());
     }
 
