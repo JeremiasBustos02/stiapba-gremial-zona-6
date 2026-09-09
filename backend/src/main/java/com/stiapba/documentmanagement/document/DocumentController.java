@@ -9,6 +9,11 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+
+import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/documents")
@@ -25,5 +30,10 @@ public class DocumentController {
                 .contentType(MediaType.APPLICATION_PDF)
                 .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.inline().filename("permiso-gremial.pdf").build().toString())
                 .body(documentGenerationService.generatePermisoGremial(request));
+    }
+
+    @GetMapping("/permiso-gremial/variants/{variantId}/manual-fields")
+    public List<DocumentGenerationService.ManualFieldResponse> manualFields(@PathVariable UUID variantId) {
+        return documentGenerationService.manualFields(variantId);
     }
 }

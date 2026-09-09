@@ -13,7 +13,9 @@ export type PermisoGremialRequest = {
   permitDay: number
   agreementId: string
   variantId: string
+  manualValues: Record<string, string>
 }
+export type ManualField = { id: string; label: string; type: 'TEXT' | 'DATE' | 'NUMBER'; required: boolean }
 
 export const getProvinces = () => apiRequest<Province[]>('/provinces')
 export const getDocumentCompanies = () => apiRequest<Company[]>('/companies?active=true')
@@ -21,6 +23,7 @@ export const getDelegates = () => apiRequest<Delegate[]>('/delegates')
 export const getDocumentAgreements = () => apiRequest<Agreement[]>('/agreements?active=true')
 export const getDocumentTemplates = () => apiRequest<Template[]>('/templates?active=true')
 export const getDocumentVariants = (templateId: string) => apiRequest<TemplateVariant[]>(`/templates/${templateId}/variants?active=true`)
+export const getManualFields = (variantId: string) => apiRequest<ManualField[]>(`/documents/permiso-gremial/variants/${variantId}/manual-fields`)
 
 export function generatePermisoGremial(data: PermisoGremialRequest) {
   return apiRequestBlob('/documents/permiso-gremial/generate', {

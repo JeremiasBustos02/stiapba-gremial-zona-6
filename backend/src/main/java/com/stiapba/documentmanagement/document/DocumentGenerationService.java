@@ -8,6 +8,10 @@ import com.stiapba.documentmanagement.province.entity.Province;
 import com.stiapba.documentmanagement.province.repository.ProvinceRepository;
 import com.stiapba.documentmanagement.template.entity.TemplateVariant;
 import com.stiapba.documentmanagement.template.entity.DocumentType;
+import com.stiapba.documentmanagement.template.entity.FieldDefinition;
+import com.stiapba.documentmanagement.template.entity.FieldSourceType;
+import com.stiapba.documentmanagement.template.entity.FieldType;
+import com.stiapba.documentmanagement.template.entity.TemplateField;
 import com.stiapba.documentmanagement.template.repository.TemplateVariantRepository;
 import com.stiapba.documentmanagement.template.storage.TemplateFileStorage;
 import com.stiapba.documentmanagement.user.entity.Role;
@@ -19,7 +23,11 @@ import org.springframework.stereotype.Service;
 import java.io.IOException;
 import java.time.format.TextStyle;
 import java.util.Map;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
+import java.util.UUID;
 
 @Service
 public class DocumentGenerationService {
@@ -72,7 +80,9 @@ public class DocumentGenerationService {
         try {
             byte[] templateContent = fileStorage.load(variant.getFileKey());
             if (!variant.getFields().isEmpty()) {
-                return pdfTemplateRenderer.render(variant, logicalValues(province, company, delegate, agreement, request), templateContent);
+                Map<String, String> values = new HashMap<>(logicalValues(province, company, delegate, agreement, request));
+                addManualValues(variant, request.manualValues(), values);
+                return pdfTemplateRenderer.render(variant, values, templateContent);
             }
             if (!variant.isLegacyPositioned()) {
                 throw new DocumentException(422, "TEMPLATE_FIELDS_NOT_CONFIGURED", "La variante no tiene campos configurados para generar el documento.");
@@ -102,6 +112,52 @@ public class DocumentGenerationService {
                 "issueYear", String.format("%02d", request.issueDate().getYear() % 100),
                 "permitDay", Integer.toString(request.permitDay())
         );
+    }
+
+    @Transactional
+    public List<ManualFieldResponse> manualFields(UUID variantId) {
+        TemplateVariant variant = variantRepository.findById(variantId)
+                .filter(value -> value.isActive() && value.getTemplate().isActive()
+                        && value.getTemplate().getDocumentType() == DocumentType.PERMISO_GREMIAL)
+                .orElseThrow(() -> notFound("TEMPLATE_VARIANT_NOT_FOUND", "No encontramos una variante activa de Permiso Gremial."));
+        return variant.getFields().stream()
+                .filter(field -> field.getFieldDefinition().getSourceType() == FieldSourceType.MANUAL)
+                .collect(java.util.stream.Collectors.toMap(field -> field.getFieldDefinition().getId(), this::manualFieldResponse,
+                        (first, second) -> new ManualFieldResponse(first.id(), first.label(), first.type(), first.required() || second.required()), LinkedHashMap::new))
+                .values().stream().toList();
+    }
+
+    private void addManualValues(TemplateVariant variant, Map<UUID, String> requestedValues, Map<String, String> values) {
+        Map<UUID, String> submitted = requestedValues == null ? Map.of() : requestedValues;
+        for (TemplateField field : variant.getFields()) {
+            FieldDefinition definition = field.getFieldDefinition();
+            if (definition.getSourceType() != FieldSourceType.MANUAL) continue;
+            String value = submitted.get(definition.getId());
+            if (field.isRequired() && (value == null || value.isBlank())) {
+                throw new DocumentException(422, "TEMPLATE_FIELD_REQUIRED", "Falta un dato obligatorio para completar la plantilla.");
+            }
+            if (value != null && !value.isBlank()) {
+                validateManualValue(definition.getType(), value);
+                values.put(definition.getKey(), value.trim());
+            }
+        }
+    }
+
+    private void validateManualValue(FieldType type, String value) {
+        try {
+            if (type == FieldType.DATE) java.time.LocalDate.parse(value);
+            if (type == FieldType.NUMBER) new java.math.BigDecimal(value);
+        } catch (RuntimeException exception) {
+            throw new DocumentException(400, "MANUAL_FIELD_VALUE_INVALID", "Uno de los datos ingresados no tiene el formato esperado.");
+        }
+    }
+
+    private ManualFieldResponse manualFieldResponse(TemplateField field) {
+        FieldDefinition definition = field.getFieldDefinition();
+        return new ManualFieldResponse(definition.getId(), definition.getLabel(), definition.getType(), field.isRequired());
+    }
+
+    public record ManualFieldResponse(UUID id, String label, FieldType type, boolean required) {
     }
 
     private DocumentException notFound(String code, String message) {

@@ -3,6 +3,7 @@
 const API_BASE_URL = (import.meta.env.VITE_API_URL ?? '/api/v1').replace(/\/$/, '')
 
 type ApiErrorBody = {
+  code?: string
   message?: string
   errors?: Record<string, string>
 }
@@ -19,11 +20,13 @@ export function setUnauthorizedHandler(handler?: () => void) {
 
 export class ApiError extends Error {
   readonly status: number
+  readonly code?: string
   readonly fields: Record<string, string>
 
   constructor(status: number, body: ApiErrorBody) {
     super(body.message ?? 'No pudimos completar la operación.')
     this.status = status
+    this.code = body.code
     this.fields = body.errors ?? {}
   }
 }

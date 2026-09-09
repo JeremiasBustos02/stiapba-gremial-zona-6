@@ -1,5 +1,5 @@
 import { apiRequest, apiRequestBlob } from '@/lib/api'
-import type { AcroformField, AcroformFieldInput, FieldDefinition, PositionedFieldInput, Template, TemplateField, TemplateForm, TemplateVariant } from './types'
+import type { AcroformField, AcroformFieldInput, FieldConfiguration, FieldDefinition, FieldDefinitionInput, PositionedFieldInput, Template, TemplateField, TemplateForm, TemplateVariant } from './types'
 
 export function getTemplates(search = '') {
   const params = new URLSearchParams()
@@ -52,7 +52,9 @@ export function getVariantPdf(templateId: string, variantId: string) { return ap
 export function getTemplateFields(templateId: string, variantId: string) { return apiRequest<TemplateField[]>(`/templates/${templateId}/variants/${variantId}/fields`) }
 export function getAcroformFields(templateId: string, variantId: string) { return apiRequest<AcroformField[]>(`/templates/${templateId}/variants/${variantId}/fields/acroform`) }
 export function getFieldDefinitions() { return apiRequest<FieldDefinition[]>('/field-definitions?active=true') }
+export function createFieldDefinition(input: FieldDefinitionInput) { return apiRequest<FieldDefinition>('/field-definitions', { method: 'POST', body: JSON.stringify(input) }) }
 export function createPositionedField(templateId: string, variantId: string, input: PositionedFieldInput) { return apiRequest<TemplateField>(`/templates/${templateId}/variants/${variantId}/fields`, { method: 'POST', body: JSON.stringify(input) }) }
 export function createAcroformField(templateId: string, variantId: string, input: AcroformFieldInput) { return apiRequest<TemplateField>(`/templates/${templateId}/variants/${variantId}/fields/acroform`, { method: 'POST', body: JSON.stringify(input) }) }
 export function updatePositionedField(templateId: string, variantId: string, fieldId: string, input: PositionedFieldInput) { return apiRequest<TemplateField>(`/templates/${templateId}/variants/${variantId}/fields/${fieldId}`, { method: 'PUT', body: JSON.stringify(input) }) }
 export function deletePositionedField(templateId: string, variantId: string, fieldId: string) { return apiRequest<void>(`/templates/${templateId}/variants/${variantId}/fields/${fieldId}`, { method: 'DELETE' }) }
+export function replaceTemplateFields(templateId: string, variantId: string, fields: FieldConfiguration[]) { return apiRequest<TemplateField[]>(`/templates/${templateId}/variants/${variantId}/fields`, { method: 'PUT', body: JSON.stringify({ fields }) }) }

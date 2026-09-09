@@ -3,6 +3,7 @@ package com.stiapba.documentmanagement.template;
 import com.stiapba.documentmanagement.template.entity.FieldDefinition;
 import com.stiapba.documentmanagement.template.entity.TemplateField;
 import com.stiapba.documentmanagement.template.entity.TemplateFieldAlignment;
+import com.stiapba.documentmanagement.template.entity.TemplateFieldMode;
 import com.stiapba.documentmanagement.template.entity.TemplateVariant;
 import com.stiapba.documentmanagement.template.repository.FieldDefinitionRepository;
 import com.stiapba.documentmanagement.template.repository.TemplateFieldRepository;
@@ -19,7 +20,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -41,10 +44,6 @@ public class TemplateFieldService {
     public List<TemplateFieldResponse> list(UUID templateId, UUID variantId) {
         findVariant(templateId, variantId);
         return fieldRepository.findByTemplateVariant_IdOrderByDisplayOrderAsc(variantId).stream().map(this::response).toList();
-    }
-
-    public List<FieldDefinitionResponse> definitions() {
-        return definitionRepository.findAll().stream().map(definition -> new FieldDefinitionResponse(definition.getId(), definition.getKey())).toList();
     }
 
     @Transactional(readOnly = true)
@@ -115,6 +114,40 @@ public class TemplateFieldService {
         fieldRepository.delete(field);
     }
 
+    @Transactional
+    public List<TemplateFieldResponse> replaceAll(UUID templateId, UUID variantId, FieldsConfigurationRequest request) {
+        TemplateVariant variant = findVariant(templateId, variantId);
+        List<ConfiguredField> configuredFields = request.fields() == null ? List.of() : request.fields();
+        List<TemplateField> fields = new ArrayList<>();
+        Set<String> acroformNames = new HashSet<>();
+        for (int index = 0; index < configuredFields.size(); index++) {
+            ConfiguredField configured = configuredFields.get(index);
+            TemplateFieldMode mode = mode(configured.mode());
+            FieldDefinition definition = definition(configured.fieldDefinitionId());
+            int displayOrder = configured.displayOrder() == null ? index : configured.displayOrder();
+            if (mode == TemplateFieldMode.ACROFORM) {
+                validateAcroformField(variant, configured.acroFieldName());
+                if (!acroformNames.add(configured.acroFieldName())) {
+                    throw new TemplateException(400, "ACROFORM_FIELD_DUPLICATED", "Un campo del documento solo puede configurarse una vez.");
+                }
+                fields.add(new TemplateField(variant, definition, mode, configured.acroFieldName(), configured.required(), displayOrder));
+                continue;
+            }
+            PositionedFieldRequest positioned = new PositionedFieldRequest(definition.getId(), configured.required(), displayOrder,
+                    required(configured.pageNumber(), "La página es obligatoria."), required(configured.x(), "La posición horizontal es obligatoria."),
+                    required(configured.y(), "La posición vertical es obligatoria."), required(configured.width(), "El ancho es obligatorio."),
+                    required(configured.height(), "El alto es obligatorio."), required(configured.fontSize(), "El tamaño de fuente es obligatorio."),
+                    required(configured.minFontSize(), "El tamaño mínimo de fuente es obligatorio."), required(configured.maxFontSize(), "El tamaño máximo de fuente es obligatorio."),
+                    alignment(configured.alignment()), Boolean.TRUE.equals(configured.multiline()));
+            TemplateField field = new TemplateField(variant, definition, mode, null, configured.required(), displayOrder);
+            apply(field, variant, positioned);
+            fields.add(field);
+        }
+        fieldRepository.deleteByTemplateVariant_Id(variantId);
+        fieldRepository.flush();
+        return fieldRepository.saveAll(fields).stream().map(this::response).toList();
+    }
+
     private void apply(TemplateField field, TemplateVariant variant, PositionedFieldRequest request) {
         validateRectangle(variant, request);
         if (request.alignment() == null || request.minFontSize() > request.fontSize() || request.fontSize() > request.maxFontSize()) {
@@ -123,6 +156,32 @@ public class TemplateFieldService {
         field.updatePositioned(definition(request.fieldDefinitionId()), request.required(), request.displayOrder(), request.pageNumber(),
                 request.x(), request.y(), request.width(), request.height(), request.fontSize(), request.minFontSize(),
                 request.maxFontSize(), request.alignment(), request.multiline());
+    }
+
+    private TemplateFieldMode mode(String value) {
+        try {
+            return TemplateFieldMode.valueOf(value);
+        } catch (IllegalArgumentException | NullPointerException exception) {
+            throw new TemplateException(400, "TEMPLATE_FIELD_MODE_INVALID", "El tipo de campo no es válido.");
+        }
+    }
+
+    private TemplateFieldAlignment alignment(String value) {
+        try {
+            return TemplateFieldAlignment.valueOf(value);
+        } catch (IllegalArgumentException | NullPointerException exception) {
+            throw new TemplateException(400, "POSITIONED_FIELD_INVALID", "La alineación del campo no es válida.");
+        }
+    }
+
+    private int required(Integer value, String message) {
+        if (value == null) throw new TemplateException(400, "POSITIONED_FIELD_INVALID", message);
+        return value;
+    }
+
+    private float required(Float value, String message) {
+        if (value == null) throw new TemplateException(400, "POSITIONED_FIELD_INVALID", message);
+        return value;
     }
 
     private void validateRectangle(TemplateVariant variant, PositionedFieldRequest request) {
@@ -188,13 +247,16 @@ public class TemplateFieldService {
     }
 
     private TemplateFieldResponse response(TemplateField field) {
-        return new TemplateFieldResponse(field.getId(), field.getFieldDefinition().getId(), field.getFieldDefinition().getKey(), field.getMode().name(), field.getAcroFieldName(), field.isRequired(), field.getDisplayOrder(), field.getPageNumber(), field.getX(), field.getY(), field.getWidth(), field.getHeight(), field.getFontSize(), field.getMinFontSize(), field.getMaxFontSize(), field.getAlignment() == null ? null : field.getAlignment().name(), field.getMultiline());
+        return new TemplateFieldResponse(field.getId(), field.getFieldDefinition().getId(), field.getFieldDefinition().getKey(), field.getFieldDefinition().getLabel(), field.getMode().name(), field.getAcroFieldName(), field.isRequired(), field.getDisplayOrder(), field.getPageNumber(), field.getX(), field.getY(), field.getWidth(), field.getHeight(), field.getFontSize(), field.getMinFontSize(), field.getMaxFontSize(), field.getAlignment() == null ? null : field.getAlignment().name(), field.getMultiline());
     }
 
     public record PositionedFieldRequest(UUID fieldDefinitionId, boolean required, int displayOrder, int pageNumber, float x, float y, float width, float height, float fontSize, float minFontSize, float maxFontSize, TemplateFieldAlignment alignment, boolean multiline) {}
     public record AcroformFieldRequest(UUID fieldDefinitionId, String acroFieldName, boolean required, int displayOrder) {}
+    public record FieldsConfigurationRequest(List<ConfiguredField> fields) {}
+    public record ConfiguredField(UUID fieldDefinitionId, String mode, String acroFieldName, boolean required, Integer displayOrder,
+                                  Integer pageNumber, Float x, Float y, Float width, Float height, Float fontSize,
+                                  Float minFontSize, Float maxFontSize, String alignment, Boolean multiline) {}
     public record AcroformFieldResponse(String acroFieldName, String displayName, String partialName, String alternateFieldName,
                                         String mappingName, int pageNumber, Float x, Float y, Float width, Float height) {}
-    public record TemplateFieldResponse(UUID id, UUID fieldDefinitionId, String fieldKey, String mode, String acroFieldName, boolean required, int displayOrder, Integer pageNumber, Float x, Float y, Float width, Float height, Float fontSize, Float minFontSize, Float maxFontSize, String alignment, Boolean multiline) {}
-    public record FieldDefinitionResponse(UUID id, String key) {}
+    public record TemplateFieldResponse(UUID id, UUID fieldDefinitionId, String fieldKey, String fieldLabel, String mode, String acroFieldName, boolean required, int displayOrder, Integer pageNumber, Float x, Float y, Float width, Float height, Float fontSize, Float minFontSize, Float maxFontSize, String alignment, Boolean multiline) {}
 }
