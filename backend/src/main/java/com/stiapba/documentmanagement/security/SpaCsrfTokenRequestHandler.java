@@ -17,7 +17,8 @@ public final class SpaCsrfTokenRequestHandler extends CsrfTokenRequestAttributeH
 
     @Override
     public void handle(HttpServletRequest request, HttpServletResponse response, Supplier<CsrfToken> deferredCsrfToken) {
-        if ("GET".equals(request.getMethod()) && HEALTH_PATH.equals(request.getRequestURI())) {
+        if (("GET".equals(request.getMethod()) || "HEAD".equals(request.getMethod()))
+                && HEALTH_PATH.equals(request.getRequestURI())) {
             return;
         }
         xor.handle(request, response, deferredCsrfToken);

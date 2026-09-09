@@ -40,7 +40,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return "GET".equals(request.getMethod()) && HEALTH_PATH.equals(request.getRequestURI());
+        return ("GET".equals(request.getMethod()) || "HEAD".equals(request.getMethod()))
+                && HEALTH_PATH.equals(request.getRequestURI());
     }
 
     @Override

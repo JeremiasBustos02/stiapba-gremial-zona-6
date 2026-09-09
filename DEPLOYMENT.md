@@ -32,7 +32,7 @@ Supabase Storage requiere acceso path-style para este flujo; la aplicación lo a
 
 | Variable | Valor |
 | --- | --- |
-| `VITE_API_URL` | URL HTTPS del backend terminada en `/api/v1`, por ejemplo `https://<api>.onrender.com/api/v1`. |
+| `VITE_API_URL` | Ruta same-origin `/api/v1`. No configurar aquí la URL absoluta de Render. |
 
 Vite solo incorpora variables con prefijo `VITE_` al bundle. No definir allí secretos, contraseñas, JWT ni credenciales S3.
 
@@ -89,11 +89,11 @@ Con `TEMPLATE_SEED_ENABLED=false`, el primer ADMIN debe crear `Permiso Gremial` 
 
 ## Cookies, CSRF y CORS
 
-Vercel y Render usan sitios distintos. En producción deben usarse `AUTH_COOKIE_SECURE=true` y `AUTH_COOKIE_SAME_SITE=None`; ambos servicios deben estar detrás de HTTPS. `FRONTEND_URL` se registra como el único origen CORS permitido, con `allowCredentials=true`. No se usa `*` ni se permite un origen adicional por defecto.
+El navegador consume `/api/v1` en el mismo origen de Vercel y un rewrite nativo reenvía esas requests a Render. En esta primera etapa se mantienen `AUTH_COOKIE_SECURE=true` y `AUTH_COOKIE_SAME_SITE=None` para aislar el cambio del proxy; ambos servicios deben estar detrás de HTTPS. `FRONTEND_URL` se registra como el único origen CORS permitido, con `allowCredentials=true`. No se usa `*` ni se permite un origen adicional por defecto.
 
-La cookie JWT sigue siendo `HttpOnly`; no se mueve a `localStorage` ni `sessionStorage`. CSRF permanece habilitado con double-submit: antes de cada operación que modifica estado, el frontend solicita `GET /api/v1/auth/csrf` con credenciales y envía el token recibido en `X-XSRF-TOKEN`. Esto es necesario porque JavaScript servido desde Vercel no puede leer cookies alojadas en Render. Login conserva la excepción CSRF existente.
+La cookie JWT sigue siendo `HttpOnly`; no se mueve a `localStorage` ni `sessionStorage`. Como `Domain` se omite, el navegador almacena las cookies reenviadas como host-only del dominio de Vercel. CSRF permanece habilitado con double-submit: antes de cada operación que modifica estado, el frontend solicita `GET /api/v1/auth/csrf` con credenciales y envía el token recibido en `X-XSRF-TOKEN`. Login conserva la excepción CSRF existente.
 
-Algunos navegadores o configuraciones de privacidad bloquean cookies de terceros. Debe realizarse una prueba real en los navegadores objetivo antes de M16. Si se bloquean, la alternativa a evaluar es un dominio propio compartido o un proxy same-origin, no almacenar el JWT en el navegador.
+El rewrite evita depender de cookies de terceros en navegadores móviles. Debe verificarse en producción que Vercel preserve ambas cabeceras `Set-Cookie`, uploads multipart y respuestas PDF, y que las requests al origen externo terminen antes del timeout de proxy de 120 segundos.
 
 ## Render
 
@@ -128,7 +128,7 @@ npm ci
 npm run build
 ```
 
-El artefacto publicado es `frontend/dist`. `frontend/vercel.json` redirige las rutas al `index.html` para que React Router funcione al refrescar URLs internas. Definir `VITE_API_URL` antes del build; las variables de Vite se incorporan de forma estática y requieren un nuevo deploy cuando cambian.
+El artefacto publicado es `frontend/dist`. `frontend/vercel.json` reenvía `/api/v1/:path*` al mismo path de Render mediante un rewrite externo sin caching; esta regla debe permanecer antes del fallback a `index.html`. Configurar `VITE_API_URL=/api/v1` antes del build. Las variables de Vite se incorporan de forma estática y requieren un nuevo deploy cuando cambian.
 
 ## Operación y recuperación
 
@@ -144,4 +144,4 @@ El artefacto publicado es `frontend/dist`. `frontend/vercel.json` redirige las r
 2. Crear el bucket privado y las credenciales S3 en Supabase.
 3. Confirmar el arranque de Render, Flyway y la creación idempotente del seed.
 4. Probar login, cambio de contraseña, CRUD de variantes, generación, descarga e impresión desde un celular.
-5. Verificar desde Vercel que el preflight CORS permite solo `FRONTEND_URL`, las cookies llevan `Secure; SameSite=None` y las mutaciones incluyen `X-XSRF-TOKEN`.
+5. Verificar desde Vercel que las requests usan `/api/v1`, las cookies host-only llevan `Secure; SameSite=None`, las mutaciones incluyen `X-XSRF-TOKEN` y los PDFs y uploads atraviesan el rewrite correctamente.

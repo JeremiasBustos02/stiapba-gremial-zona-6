@@ -30,6 +30,7 @@ import java.util.Date;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.head;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
@@ -93,6 +94,28 @@ class AuthIntegrationTest {
     }
 
     @Test
+    void exposesHeadHealthWithoutAuthenticationJwtParsingOrCookies() throws Exception {
+        mockMvc.perform(head("/api/v1/health")
+                        .cookie(new MockCookie(JwtAuthenticationFilter.AUTH_COOKIE, "malformed-token")))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().string(""))
+                .andExpect(cookie().doesNotExist("JSESSIONID"))
+                .andExpect(cookie().doesNotExist(JwtAuthenticationFilter.AUTH_COOKIE))
+                .andExpect(cookie().doesNotExist("XSRF-TOKEN"));
+    }
+
+    @Test
+    void doesNotExposeOtherHealthMethods() throws Exception {
+        String csrfToken = "csrf-token-for-health-test";
+
+        mockMvc.perform(post("/api/v1/health")
+                        .cookie(new MockCookie("XSRF-TOKEN", csrfToken))
+                        .header("X-XSRF-TOKEN", csrfToken))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("SESSION_INVALID"));
+    }
+
+    @Test
     void keepsOtherApiEndpointsProtected() throws Exception {
         mockMvc.perform(get("/api/v1/auth/me"))
                 .andExpect(status().isUnauthorized());
@@ -144,6 +167,12 @@ class AuthIntegrationTest {
                         .string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "https://documentos.example.vercel.app"))
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
                         .string(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true"));
+        mockMvc.perform(options("/api/v1/health")
+                        .header(HttpHeaders.ORIGIN, "https://documentos.example.vercel.app")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "HEAD"))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
+                        .string(HttpHeaders.ACCESS_CONTROL_ALLOW_METHODS, "GET,HEAD,POST,PUT,PATCH,DELETE,OPTIONS"));
     }
 
     @Test

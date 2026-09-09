@@ -31,6 +31,22 @@ class JwtAuthenticationFilterTest {
     }
 
     @Test
+    void doesNotParseMalformedTokenOrReadUserRepositoryForHeadHealthRequest() throws Exception {
+        JwtService jwtService = mock(JwtService.class);
+        var userRepository = mock(com.stiapba.documentmanagement.user.repository.UserRepository.class);
+        JwtAuthenticationFilter filter = new JwtAuthenticationFilter(jwtService, userRepository);
+        MockHttpServletRequest request = new MockHttpServletRequest("HEAD", "/api/v1/health");
+        request.setCookies(new MockCookie(JwtAuthenticationFilter.AUTH_COOKIE, "malformed-token"));
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        FilterChain chain = mock(FilterChain.class);
+
+        filter.doFilter(request, response, chain);
+
+        verifyNoInteractions(jwtService, userRepository);
+        verify(chain).doFilter(request, response);
+    }
+
+    @Test
     void treatsMissingAuthCookieAsUnauthenticatedWithoutParsingAToken() throws Exception {
         JwtService jwtService = mock(JwtService.class);
         var userRepository = mock(com.stiapba.documentmanagement.user.repository.UserRepository.class);

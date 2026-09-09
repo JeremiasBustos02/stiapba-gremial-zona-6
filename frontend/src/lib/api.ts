@@ -1,6 +1,14 @@
 /// <reference types="vite/client" />
 
-const API_BASE_URL = (import.meta.env.VITE_API_URL ?? '/api/v1').replace(/\/$/, '')
+export function resolveApiBaseUrl(configuredUrl?: string) {
+  const url = (configuredUrl ?? '/api/v1').replace(/\/$/, '')
+  if (!url.startsWith('/') || url.startsWith('//')) {
+    throw new Error('VITE_API_URL debe ser una ruta relativa al mismo origen.')
+  }
+  return url
+}
+
+const API_BASE_URL = resolveApiBaseUrl(import.meta.env.VITE_API_URL)
 
 type ApiErrorBody = {
   code?: string

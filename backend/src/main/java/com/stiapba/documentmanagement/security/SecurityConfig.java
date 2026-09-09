@@ -78,6 +78,7 @@ public class SecurityConfig {
                                 "ACCESS_DENIED", "No tenés permisos para realizar esta acción.")))
                 .authorizeHttpRequests(authorize -> authorize
                           .requestMatchers(HttpMethod.GET, "/api/v1/health").permitAll()
+                          .requestMatchers(HttpMethod.HEAD, "/api/v1/health").permitAll()
                           .requestMatchers("/api/v1/auth/login").permitAll()
                          .requestMatchers("/api/v1/users/**").hasRole("ADMIN")
                          .requestMatchers(HttpMethod.POST, "/api/v1/companies", "/api/v1/agreements").hasRole("ADMIN")
@@ -111,7 +112,7 @@ public class SecurityConfig {
     CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(List.of(frontendUrl));
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        configuration.setAllowedMethods(List.of("GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of(HttpHeaders.CONTENT_TYPE, "X-XSRF-TOKEN"));
         configuration.setAllowCredentials(true);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
