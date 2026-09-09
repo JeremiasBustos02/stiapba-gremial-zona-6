@@ -71,7 +71,7 @@ class TemplateSeedInitializerTest {
         TemplateFileStorage storage = mock(TemplateFileStorage.class);
         Template template = new Template("Permiso Gremial", "Permiso gremial estándar");
         TemplateVariant variant = new TemplateVariant(template, "Bruna", "templates/valid.pdf");
-        byte[] source = java.nio.file.Files.readAllBytes(Path.of("..", "docs", "pdf-templates", "Permiso-Gremial-Bruna.pdf"));
+        byte[] source = java.nio.file.Files.readAllBytes(Path.of("..", "docs", "pdf-templates", "Permiso Gremial Bruna.pdf"));
         when(templateRepository.findByNombre("Permiso Gremial")).thenReturn(Optional.of(template));
         when(variantRepository.findFirstByTemplate_IdAndNombre(isNull(), eq("Bruna"))).thenReturn(Optional.of(variant));
         when(storage.load("templates/valid.pdf")).thenReturn(source);
@@ -92,7 +92,7 @@ class TemplateSeedInitializerTest {
         TemplateFileStorage storage = mock(TemplateFileStorage.class);
         Template template = new Template("Permiso Gremial", "Permiso gremial estándar");
         TemplateVariant positioned = new TemplateVariant(template, "Bruna", "templates/positioned.pdf");
-        byte[] positionedContent = java.nio.file.Files.readAllBytes(Path.of("..", "docs", "pdf-templates", "Permiso-Gremial-Bruna.pdf"));
+        byte[] positionedContent = java.nio.file.Files.readAllBytes(Path.of("..", "docs", "pdf-templates", "Permiso Gremial Bruna.pdf"));
 
         when(templateRepository.findByNombre("Permiso Gremial")).thenReturn(Optional.of(template));
         when(variantRepository.findFirstByTemplate_IdAndNombre(isNull(), eq("Bruna"))).thenReturn(Optional.of(positioned));
@@ -103,7 +103,7 @@ class TemplateSeedInitializerTest {
         when(definitionRepository.findByKey(any())).thenAnswer(invocation -> Optional.of(new FieldDefinition(invocation.getArgument(0))));
 
         initializer(templateRepository, variantRepository, definitionRepository, fieldRepository, storage,
-                "../docs/pdf-templates/Permiso-Gremial-Bruna-ACROFORM.pdf").run(new DefaultApplicationArguments());
+                "../docs/pdf-templates/Permiso Gremial Bruna.pdf").run(new DefaultApplicationArguments());
 
         verify(fieldRepository, times(8)).save(any());
     }
@@ -112,13 +112,13 @@ class TemplateSeedInitializerTest {
                                                  TemplateFileStorage storage) {
         return new TemplateSeedInitializer(templateRepository, variantRepository, mock(FieldDefinitionRepository.class),
                 mock(TemplateFieldRepository.class), storage, new PdfUploadValidator(10_485_760),
-                "../docs/pdf-templates/Permiso-Gremial-Bruna.pdf", "", true);
+                "../docs/pdf-templates/Permiso Gremial Bruna.pdf", "", true);
     }
 
     private TemplateSeedInitializer initializer(TemplateRepository templateRepository, TemplateVariantRepository variantRepository,
                                                  FieldDefinitionRepository definitionRepository, TemplateFieldRepository fieldRepository,
                                                  TemplateFileStorage storage, String acroformSeedFile) {
         return new TemplateSeedInitializer(templateRepository, variantRepository, definitionRepository, fieldRepository,
-                storage, new PdfUploadValidator(10_485_760), "../docs/pdf-templates/Permiso-Gremial-Bruna.pdf", acroformSeedFile, true);
+                storage, new PdfUploadValidator(10_485_760), "../docs/pdf-templates/Permiso Gremial Bruna.pdf", acroformSeedFile, true);
     }
 }

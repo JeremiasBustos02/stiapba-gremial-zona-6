@@ -129,8 +129,8 @@ public class TemplateSeedInitializer implements ApplicationRunner {
         addAcroformField(variant, "issueMonth", "Mes", 3);
         addAcroformField(variant, "issueYear", "Año", 4);
         addAcroformField(variant, "company", "Empresa", 5);
-        addAcroformField(variant, "delegate", "Nombre delegado y dni", 6);
-        addAcroformField(variant, "permitDay", "Dia de permiso", 7);
+        addAcroformField(variant, "delegate", "Delegado y DNI", 6);
+        addAcroformField(variant, "permitDay", "Dia permiso", 7);
         addAcroformField(variant, "agreement", "Convenio", 8);
     }
 

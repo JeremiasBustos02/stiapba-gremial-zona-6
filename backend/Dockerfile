@@ -11,8 +11,7 @@ WORKDIR /app
 RUN addgroup -S spring && adduser -S spring -G spring
 
 COPY --from=build /workspace/backend/target/document-management-0.0.1-SNAPSHOT.jar /app/app.jar
-COPY docs/pdf-templates/Permiso-Gremial-Bruna.pdf /app/seed/Permiso-Gremial-Bruna.pdf
-COPY docs/pdf-templates/Permiso-Gremial-Bruna-ACROFORM.pdf /app/seed/Permiso-Gremial-Bruna-ACROFORM.pdf
+COPY ["docs/pdf-templates/Permiso Gremial Bruna.pdf", "/app/seed/Permiso Gremial Bruna.pdf"]
 
 USER spring
 ENV SPRING_PROFILES_ACTIVE=prod

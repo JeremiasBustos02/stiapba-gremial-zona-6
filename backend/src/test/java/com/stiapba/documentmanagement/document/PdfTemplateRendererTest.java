@@ -8,6 +8,7 @@ import com.stiapba.documentmanagement.template.entity.TemplateFieldMode;
 import com.stiapba.documentmanagement.template.entity.TemplateVariant;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.interactive.form.PDAcroForm;
@@ -18,6 +19,7 @@ import org.apache.pdfbox.cos.COSName;
 import org.apache.pdfbox.cos.COSDictionary;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -31,8 +33,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
 
 class PdfTemplateRendererTest {
-    private static final Path ACROFORM_TEMPLATE = Path.of("..", "docs", "pdf-templates", "Permiso-Gremial-Bruna-ACROFORM.pdf");
-    private static final Path POSITIONED_TEMPLATE = Path.of("..", "docs", "pdf-templates", "Permiso-Gremial-Bruna.pdf");
+    private static final Path ACROFORM_TEMPLATE = Path.of("..", "docs", "pdf-templates", "Permiso Gremial Bruna.pdf");
     private final PdfTemplateRenderer renderer = new PdfTemplateRenderer();
 
     @Test
@@ -42,10 +43,10 @@ class PdfTemplateRendererTest {
 
             assertThat(form).isNotNull();
             assertThat(form.getFieldTree()).extracting(PDField::getFullyQualifiedName).containsExactly(
-                    "Provincia", "Dia fecha", "Mes", "Año", "Empresa", "Dia de permiso", "Convenio",
-                    "Direccion", "Nombre delegado y dni");
+                    "Provincia", "Dia fecha", "Mes", "Año", "Empresa", "Direccion", "Delegado y DNI",
+                    "Dia permiso", "Convenio");
             assertThat(findField(form, "Provincia")).isInstanceOf(PDTextField.class);
-            PDTextField delegateField = (PDTextField) findField(form, "Nombre delegado y dni");
+            PDTextField delegateField = (PDTextField) findField(form, "Delegado y DNI");
             assertThat(delegateField.getDefaultAppearance()).isEqualTo("/Helvetica 12 Tf 0 g");
             assertThat(delegateField.isMultiline()).isFalse();
             assertThat(delegateField.getFieldFlags()).isZero();
@@ -67,8 +68,8 @@ class PdfTemplateRendererTest {
                 "issueMonth", "Mes",
                 "issueYear", "Año",
                 "company", "Empresa",
-                "delegate", "Nombre delegado y dni",
-                "permitDay", "Dia de permiso",
+                "delegate", "Delegado y DNI",
+                "permitDay", "Dia permiso",
                 "agreement", "Convenio"
         )).hasSize(8);
     }
@@ -205,7 +206,7 @@ class PdfTemplateRendererTest {
     @Test
     void rejectsPdfWithoutAcroForm() throws Exception {
         assertDocumentCode("ACROFORM_NOT_FOUND", () -> renderer.render(configuredVariant(), shortValues(),
-                Files.readAllBytes(POSITIONED_TEMPLATE)));
+                positionedTemplate()));
     }
 
     @Test
@@ -217,7 +218,7 @@ class PdfTemplateRendererTest {
                 12, 7, 12, TemplateFieldAlignment.LEFT, false);
         variant.addField(field);
 
-        byte[] generated = renderer.render(variant, Map.of("company", "INFRIBA"), Files.readAllBytes(POSITIONED_TEMPLATE));
+        byte[] generated = renderer.render(variant, Map.of("company", "INFRIBA"), positionedTemplate());
 
         try (PDDocument document = Loader.loadPDF(generated)) {
             assertThat(new PDFTextStripper().getText(document)).contains("INFRIBA");
@@ -248,10 +249,18 @@ class PdfTemplateRendererTest {
         addField(variant, "issueMonth", "Mes", true, 3);
         addField(variant, "issueYear", "Año", true, 4);
         addField(variant, "company", "Empresa", true, 5);
-        addField(variant, "delegate", "Nombre delegado y dni", true, 6);
-        addField(variant, "permitDay", "Dia de permiso", true, 7);
+        addField(variant, "delegate", "Delegado y DNI", true, 6);
+        addField(variant, "permitDay", "Dia permiso", true, 7);
         addField(variant, "agreement", "Convenio", true, 8);
         return variant;
+    }
+
+    private byte[] positionedTemplate() throws IOException {
+        try (PDDocument document = new PDDocument(); ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            document.addPage(new PDPage(PDRectangle.A4));
+            document.save(output);
+            return output.toByteArray();
+        }
     }
 
     private void addField(TemplateVariant variant, String key, String acroFieldName, boolean required, int displayOrder) {

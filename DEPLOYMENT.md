@@ -62,9 +62,9 @@ Vite solo incorpora variables con prefijo `VITE_` al bundle. No definir allí se
 | `TEMPLATE_STORAGE_TYPE` | `s3`. |
 | `TEMPLATE_MAX_FILE_SIZE` | Límite multipart, por ejemplo `10MB`. |
 | `TEMPLATE_MAX_FILE_SIZE_BYTES` | El mismo límite en bytes, por ejemplo `10485760`. |
-| `TEMPLATE_SEED_ENABLED` | `true` para crear la variante Bruna y Bruna AcroForm; `false` para provisionarlas manualmente mediante ADMIN. |
-| `TEMPLATE_SEED_FILE` | Opcional con Docker: por defecto `/app/seed/Permiso-Gremial-Bruna.pdf`. |
-| `TEMPLATE_ACROFORM_SEED_FILE` | Opcional con Docker: por defecto `/app/seed/Permiso-Gremial-Bruna-ACROFORM.pdf`. |
+| `TEMPLATE_SEED_ENABLED` | `true` para crear la variante Bruna; `false` para provisionarla manualmente mediante ADMIN. |
+| `TEMPLATE_SEED_FILE` | Opcional con Docker: por defecto `/app/seed/Permiso Gremial Bruna.pdf`. |
+| `TEMPLATE_ACROFORM_SEED_FILE` | Opcional. No hay un PDF AcroForm empaquetado por defecto; configurarlo solo con una ruta a un archivo existente. |
 | `S3_ENDPOINT` | Endpoint S3-compatible de Supabase Storage. |
 | `S3_REGION` | Región del proyecto Supabase. |
 | `S3_ACCESS_KEY` | Access key S3 de Supabase, secreto. |
@@ -81,9 +81,9 @@ En producción Hikari usa un máximo de `3` conexiones y mantiene `1` inactiva p
 
 ## Seed Bruna
 
-El Dockerfile copia ambas plantillas Bruna a `/app/seed/` durante el build con el repositorio como contexto. Los archivos empaquetados son inmutables y reproducibles; el destino siempre se escribe mediante el `TemplateFileStorage` activo, incluido S3.
+El Dockerfile copia únicamente `Permiso Gremial Bruna.pdf` a `/app/seed/` durante el build con el repositorio como contexto. El archivo empaquetado es inmutable y reproducible; el destino siempre se escribe mediante el `TemplateFileStorage` activo, incluido S3.
 
-Con `TEMPLATE_SEED_ENABLED=true`, el seed es idempotente: crea `Permiso Gremial / Bruna` y, si se configuró `TEMPLATE_ACROFORM_SEED_FILE`, `Permiso Gremial / Bruna AcroForm` con sus mappings persistidos. El archivo origen nunca se modifica.
+Con `TEMPLATE_SEED_ENABLED=true`, el seed es idempotente: crea `Permiso Gremial / Bruna`. Si se configura explícitamente `TEMPLATE_ACROFORM_SEED_FILE` con un archivo existente, también crea `Permiso Gremial / Bruna AcroForm` con sus mappings persistidos. El archivo origen nunca se modifica.
 
 Con `TEMPLATE_SEED_ENABLED=false`, el primer ADMIN debe crear `Permiso Gremial` y cargar la variante Bruna mediante la interfaz. No establecer ese valor en un despliegue vacío salvo que se siga ese procedimiento.
 

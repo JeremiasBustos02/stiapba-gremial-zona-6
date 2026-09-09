@@ -15,7 +15,7 @@ class PermisoGremialGeneratorTest {
 
     @Test
     void generatesReadablePdfWithoutChangingSourceTemplate() throws Exception {
-        Path source = Path.of("..", "docs", "pdf-templates", "Permiso-Gremial-Bruna.pdf");
+        Path source = Path.of("..", "docs", "pdf-templates", "Permiso Gremial Bruna.pdf");
         byte[] sourceContent = Files.readAllBytes(source);
         byte[] sourceHash = MessageDigest.getInstance("SHA-256").digest(sourceContent);
 

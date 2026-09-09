@@ -112,7 +112,7 @@ class TemplateIntegrationTest {
         mockMvc.perform(patch("/api/v1/templates/{id}/activate", templateId).cookie(adminSession.authCookie(), adminSession.csrfCookie())
                         .header("X-XSRF-TOKEN", adminSession.csrfToken())).andExpect(status().isNoContent());
 
-        byte[] pdf = Files.readAllBytes(Path.of("..", "docs", "pdf-templates", "Permiso-Gremial-Bruna.pdf"));
+        byte[] pdf = Files.readAllBytes(Path.of("..", "docs", "pdf-templates", "Permiso Gremial Bruna.pdf"));
         MockMultipartFile upload = new MockMultipartFile("archivoPdf", "../../unsafe.pdf", "application/pdf", pdf);
         MvcResult variantResult = mockMvc.perform(multipart("/api/v1/templates/{templateId}/variants", templateId)
                         .file(upload).param("nombre", "Bruna")
@@ -174,7 +174,7 @@ class TemplateIntegrationTest {
         User admin = saveUser("30000204", Role.ADMIN, ADMIN_PASSWORD);
         MockMvcSession session = authenticate(admin.getDni(), ADMIN_PASSWORD);
         Template template = templateRepository.saveAndFlush(new Template("Permiso Gremial", "Descripción"));
-        byte[] pdf = Files.readAllBytes(Path.of("..", "docs", "pdf-templates", "Permiso-Gremial-Bruna-ACROFORM.pdf"));
+        byte[] pdf = Files.readAllBytes(Path.of("..", "docs", "pdf-templates", "Permiso Gremial Bruna.pdf"));
         MvcResult variantResult = mockMvc.perform(multipart("/api/v1/templates/{templateId}/variants", template.getId())
                         .file(new MockMultipartFile("archivoPdf", "bruna.pdf", "application/pdf", pdf)).param("nombre", "AcroForm")
                         .cookie(session.authCookie(), session.csrfCookie()).header("X-XSRF-TOKEN", session.csrfToken()))

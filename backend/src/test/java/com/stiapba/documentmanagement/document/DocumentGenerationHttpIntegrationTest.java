@@ -85,7 +85,7 @@ class DocumentGenerationHttpIntegrationTest {
         Template template = templateRepository.findByNombre("Permiso Gremial").orElseThrow();
         TemplateVariant variant = variantRepository.findFirstByTemplate_IdAndNombre(template.getId(), "Bruna").orElseThrow();
         String originalFileKey = variant.getFileKey();
-        Path source = Path.of("..", "docs", "pdf-templates", "Permiso-Gremial-Bruna.pdf");
+        Path source = Path.of("..", "docs", "pdf-templates", "Permiso Gremial Bruna.pdf");
         byte[] sourceHash = MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(source));
 
         ResponseEntity<LoginResponse> login = restTemplate.postForEntity("/api/v1/auth/login",
