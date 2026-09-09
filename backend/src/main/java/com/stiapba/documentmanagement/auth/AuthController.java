@@ -11,6 +11,8 @@ import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.web.csrf.CsrfToken;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -21,6 +23,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/auth")
 public class AuthController {
+
+    private static final Logger logger = LoggerFactory.getLogger(AuthController.class);
 
     private final AuthService authService;
     private final JwtService jwtService;
@@ -42,6 +46,8 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
         AuthService.LoginResult result = authService.login(request);
+        logger.info("AUTH_TOKEN issued path=/ secure={} sameSite={} maxAgeSeconds={} domain=host-only",
+                secureCookies, sameSite, jwtService.expiration().toSeconds());
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, authCookie(result.token(), jwtService.expiration().toSeconds()).toString())
                 .body(new LoginResponse(result.user()));

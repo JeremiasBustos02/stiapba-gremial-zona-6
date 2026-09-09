@@ -80,7 +80,7 @@ async function apiResponse(path: string, requestOptions: ApiRequestOptions): Pro
       // The status still provides a useful fallback message.
     }
     const error = new ApiError(response.status, body)
-    if (response.status === 401 && notifyUnauthorized) unauthorizedHandler?.()
+    if (response.status === 401 && error.code === 'SESSION_INVALID' && notifyUnauthorized) unauthorizedHandler?.()
     throw error
   }
 

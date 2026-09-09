@@ -117,6 +117,45 @@ class DocumentGenerationHttpIntegrationTest {
         }
     }
 
+    @Test
+    void authenticatedUsersCanLoadEveryNewDocumentResource() {
+        User admin = activeUser("Admin", "Catalog", "91000002", Role.ADMIN, "admin-password");
+        User delegate = activeUser("Delegate", "Catalog", "92000002", Role.DELEGADO, "delegate-password");
+        adminId = userRepository.saveAndFlush(admin).getId();
+        delegateId = userRepository.saveAndFlush(delegate).getId();
+        agreementId = agreementRepository.saveAndFlush(new Agreement("CCT2", "Convenio de catálogo")).getId();
+        companyId = companyRepository.saveAndFlush(new Company("Empresa de catálogo")).getId();
+
+        Template template = templateRepository.findByNombre("Permiso Gremial").orElseThrow();
+        TemplateVariant variant = variantRepository.findFirstByTemplate_IdAndNombre(template.getId(), "Bruna").orElseThrow();
+
+        assertNewDocumentResources("91000002", "admin-password", template.getId(), variant.getId());
+        assertNewDocumentResources("92000002", "delegate-password", template.getId(), variant.getId());
+    }
+
+    private void assertNewDocumentResources(String dni, String password, UUID templateId, UUID variantId) {
+        ResponseEntity<LoginResponse> login = restTemplate.postForEntity("/api/v1/auth/login",
+                new LoginRequest(dni, password), LoginResponse.class);
+        assertThat(login.getStatusCode()).isEqualTo(HttpStatus.OK);
+        String authCookie = cookie(login.getHeaders(), "AUTH_TOKEN");
+
+        assertGetOk("/api/v1/auth/me", authCookie);
+        assertGetOk("/api/v1/templates?active=true", authCookie);
+        assertGetOk("/api/v1/templates/" + templateId + "/variants?active=true", authCookie);
+        assertGetOk("/api/v1/provinces", authCookie);
+        assertGetOk("/api/v1/companies?active=true", authCookie);
+        assertGetOk("/api/v1/delegates", authCookie);
+        assertGetOk("/api/v1/agreements?active=true", authCookie);
+        assertGetOk("/api/v1/documents/permiso-gremial/variants/" + variantId + "/manual-fields", authCookie);
+        assertGetOk("/api/v1/auth/me", authCookie);
+    }
+
+    private void assertGetOk(String path, String authCookie) {
+        ResponseEntity<Void> response = restTemplate.exchange(path, HttpMethod.GET,
+                new HttpEntity<>(headers(authCookie, null)), Void.class);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
+
     private User activeUser(String nombre, String apellido, String dni, Role role, String password) {
         User user = new User(nombre, apellido, dni, passwordEncoder.encode(password), role);
         user.completeFirstLogin();

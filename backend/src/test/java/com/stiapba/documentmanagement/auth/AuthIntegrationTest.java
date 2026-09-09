@@ -111,6 +111,13 @@ class AuthIntegrationTest {
                 .andReturn();
 
         assertThat(result.getResponse().getCookie(JwtAuthenticationFilter.AUTH_COOKIE)).isNotNull();
+        String authSetCookie = result.getResponse().getHeaders(HttpHeaders.SET_COOKIE).stream()
+                .filter(value -> value.startsWith(JwtAuthenticationFilter.AUTH_COOKIE + "="))
+                .findFirst()
+                .orElseThrow();
+        assertThat(authSetCookie)
+                .contains("Path=/", "HttpOnly", "SameSite=Lax", "Max-Age=3600")
+                .doesNotContain("Domain=");
     }
 
     @Test

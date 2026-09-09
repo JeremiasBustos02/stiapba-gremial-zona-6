@@ -8,6 +8,8 @@ import com.stiapba.documentmanagement.province.entity.Province;
 import com.stiapba.documentmanagement.province.repository.ProvinceRepository;
 import com.stiapba.documentmanagement.template.entity.Template;
 import com.stiapba.documentmanagement.template.entity.FieldDefinition;
+import com.stiapba.documentmanagement.template.entity.FieldSourceType;
+import com.stiapba.documentmanagement.template.entity.FieldType;
 import com.stiapba.documentmanagement.template.entity.TemplateField;
 import com.stiapba.documentmanagement.template.entity.TemplateFieldMode;
 import com.stiapba.documentmanagement.template.entity.TemplateVariant;
@@ -135,7 +137,8 @@ class DocumentGenerationServiceTest {
         stubDelegate();
         stubAgreement();
         TemplateVariant variant = new TemplateVariant(new Template("Permiso Gremial", "Descripción"), "Bruna AcroForm", "template.pdf");
-        variant.addField(new TemplateField(variant, new FieldDefinition("delegate"), TemplateFieldMode.ACROFORM,
+        variant.addField(new TemplateField(variant,
+                new FieldDefinition("delegate", "Delegado", FieldType.TEXT, FieldSourceType.DELEGATE, true), TemplateFieldMode.ACROFORM,
                 "Nombre delegado y dni", true, 1));
         when(variantRepository.findById(request.variantId())).thenReturn(Optional.of(variant));
         when(fileStorage.load("template.pdf")).thenReturn(new byte[]{1});
