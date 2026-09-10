@@ -25,7 +25,7 @@ import {
   UserRound,
   Users,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Navigate, useLocation, useMatch, useNavigate } from "react-router";
 import { UserManagementPage } from "@/features/users/UserManagementPage";
 import { CatalogManagementPage } from "@/features/catalog/CatalogManagementPage";
@@ -48,16 +48,8 @@ import type {
   CompanyForm,
 } from "@/features/catalog/types";
 import { TemplateManagementPage } from "@/features/templates/TemplateManagementPage";
-import { PositionedFieldEditor } from "@/features/templates/PositionedFieldEditor";
 import { getVariants } from "@/features/templates/templatesApi";
-import {
-  DocumentTemplateSelection,
-  DocumentVariantSelection,
-  initialDocumentForm,
-  PdfPreview,
-  PermisoGremialForm,
-  type DocumentFormValues,
-} from "@/features/documents/DocumentFlow";
+import type { DocumentFormValues } from "@/features/documents/DocumentFlow";
 import { getDocumentVariants } from "@/features/documents/documentsApi";
 import {
   clearDocumentDraft,
@@ -78,6 +70,44 @@ import {
   logout,
   type AuthUser,
 } from "@/features/auth/authApi";
+
+const PositionedFieldEditor = lazy(
+  () =>
+    import("@/features/templates/PositionedFieldEditor").then((module) => ({
+      default: module.PositionedFieldEditor,
+    })),
+);
+const DocumentTemplateSelection = lazy(() =>
+  import("@/features/documents/DocumentFlow").then((module) => ({
+    default: module.DocumentTemplateSelection,
+  })),
+);
+const DocumentVariantSelection = lazy(() =>
+  import("@/features/documents/DocumentFlow").then((module) => ({
+    default: module.DocumentVariantSelection,
+  })),
+);
+const PermisoGremialForm = lazy(() =>
+  import("@/features/documents/DocumentFlow").then((module) => ({
+    default: module.PermisoGremialForm,
+  })),
+);
+const PdfPreview = lazy(() =>
+  import("@/features/documents/DocumentFlow").then((module) => ({
+    default: module.PdfPreview,
+  })),
+);
+
+const initialDocumentForm: DocumentFormValues = {
+  provinceId: "",
+  issueDate: new Date().toISOString().slice(0, 10),
+  companyId: "",
+  delegateId: "",
+  permitDay: "",
+  agreementId: "",
+  variantId: "",
+  manualValues: {},
+};
 
 const queryClient = new QueryClient({
   defaultOptions: { mutations: { gcTime: 0 } },
@@ -148,10 +178,10 @@ function App() {
     {screen !== "positioned-editor" && <SecondaryNavigation screen={screen} onNavigate={go} />}
     {["admin", "users", "companies", "agreements", "templates"].includes(screen) && <AdminModuleNavigation screen={screen} onNavigate={go} />}
     {screen === "home" && <HomePage user={currentUser} onNavigate={go} />}
-    {screen === "new-document" && <DocumentTemplateSelection onBack={() => navigate("/")} onSelect={(id) => { const form = { ...documentForm, variantId: "", manualValues: {} }; saveDraft(id, form); navigate(`/documentos/nuevo/${id}/variante`); }} />}
-    {screen === "variants" && <DocumentVariantSelection templateId={templateId} onBack={() => navigate("/documentos/nuevo")} onSelect={(variantId) => { if (!templateId) return; const form = { ...documentForm, variantId, manualValues: {} }; saveDraft(templateId, form); navigate(`/documentos/nuevo/${templateId}/formulario`); }} />}
-    {screen === "form" && templateId && <PermisoGremialForm value={documentForm} onChange={(form) => saveDraft(templateId, form)} onBack={() => navigate(`/documentos/nuevo/${templateId}/variante`)} onGenerated={(pdf) => { setGeneratedPdf(pdf); navigate(`/documentos/nuevo/${templateId}/vista-previa`); }} />}
-    {screen === "preview" && <PdfPreview pdf={generatedPdf} onEdit={() => navigate(routeForScreen("form", templateId))} onHome={() => { clearDocumentDraft(); navigate("/"); }} />}
+     {screen === "new-document" && <Suspense fallback={<LazyLoadingState />}><DocumentTemplateSelection onBack={() => navigate("/")} onSelect={(id) => { const form = { ...documentForm, variantId: "", manualValues: {} }; saveDraft(id, form); navigate(`/documentos/nuevo/${id}/variante`); }} /></Suspense>}
+     {screen === "variants" && <Suspense fallback={<LazyLoadingState />}><DocumentVariantSelection templateId={templateId} onBack={() => navigate("/documentos/nuevo")} onSelect={(variantId) => { if (!templateId) return; const form = { ...documentForm, variantId, manualValues: {} }; saveDraft(templateId, form); navigate(`/documentos/nuevo/${templateId}/formulario`); }} /></Suspense>}
+     {screen === "form" && templateId && <Suspense fallback={<LazyLoadingState />}><PermisoGremialForm value={documentForm} onChange={(form) => saveDraft(templateId, form)} onBack={() => navigate(`/documentos/nuevo/${templateId}/variante`)} onGenerated={(pdf) => { setGeneratedPdf(pdf); navigate(`/documentos/nuevo/${templateId}/vista-previa`); }} /></Suspense>}
+     {screen === "preview" && <Suspense fallback={<LazyLoadingState />}><PdfPreview pdf={generatedPdf} onEdit={() => navigate(routeForScreen("form", templateId))} onHome={() => { clearDocumentDraft(); navigate("/"); }} /></Suspense>}
     {screen === "profile" && <ProfilePage user={currentUser} onLogout={() => logoutMutation.mutate()} />}
     {screen === "admin" && <AdminPage onNavigate={go} />}
     {["users", "companies", "agreements", "templates", "positioned-editor"].includes(screen) && adminContent}
@@ -168,7 +198,23 @@ function FieldEditorRoute() {
   if (variantsQuery.isPending) return <p className="py-10 text-center text-sm text-slate-500">Cargando variante...</p>;
   const variant = variantsQuery.data?.find((item) => item.id === variantId);
   if (!variant) return <Navigate to={`/admin/plantillas/${templateId}`} replace />;
-  return <PositionedFieldEditor templateId={templateId} variant={variant} onBack={() => navigate(`/admin/plantillas/${templateId}`)} />;
+  return (
+    <Suspense fallback={<LazyLoadingState />}>
+      <PositionedFieldEditor
+        templateId={templateId}
+        variant={variant}
+        onBack={() => navigate(`/admin/plantillas/${templateId}`)}
+      />
+    </Suspense>
+  );
+}
+
+function LazyLoadingState() {
+  return (
+    <p className="flex items-center justify-center gap-2 py-10 text-sm text-slate-500">
+      <LoaderCircle className="animate-spin" size={18} /> Cargando...
+    </p>
+  );
 }
 
 const screenParents: Partial<Record<Screen, Screen>> = {

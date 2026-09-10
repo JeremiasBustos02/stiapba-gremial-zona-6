@@ -187,6 +187,15 @@ class PdfTemplateRendererTest {
     }
 
     @Test
+    void rejectsUnsupportedUnicodeInAcroformText() throws Exception {
+        Map<String, String> values = new LinkedHashMap<>(shortValues());
+        values.put("company", "Empresa ✓");
+
+        assertThatThrownBy(() -> renderer.render(configuredVariant(), values, Files.readAllBytes(ACROFORM_TEMPLATE)))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void appliesExplicitLeftAndRightAlignmentWhileNullKeepsTheCenteredFallback() throws Exception {
         byte[] source = Files.readAllBytes(ACROFORM_TEMPLATE);
         PDRectangle rectangle;
@@ -273,6 +282,19 @@ class PdfTemplateRendererTest {
         try (PDDocument document = Loader.loadPDF(generated)) {
             assertThat(new PDFTextStripper().getText(document)).contains("INFRIBA");
         }
+    }
+
+    @Test
+    void rejectsUnsupportedUnicodeInPositionedText() throws Exception {
+        TemplateVariant variant = new TemplateVariant(new Template("Permiso Gremial", "Prueba"), "Bruna", "template.pdf");
+        TemplateField field = new TemplateField(variant, new FieldDefinition("company"), TemplateFieldMode.POSITIONED,
+                null, true, 1);
+        field.updatePositioned(field.getFieldDefinition(), true, 1, 1, 72, 640, 180, 18,
+                12, 7, 12, TemplateFieldAlignment.LEFT, false);
+        variant.addField(field);
+
+        assertThatThrownBy(() -> renderer.render(variant, Map.of("company", "Empresa ✓"), positionedTemplate()))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test

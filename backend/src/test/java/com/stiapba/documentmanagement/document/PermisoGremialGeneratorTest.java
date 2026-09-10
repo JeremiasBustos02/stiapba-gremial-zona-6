@@ -10,6 +10,7 @@ import java.security.MessageDigest;
 import java.time.LocalDate;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class PermisoGremialGeneratorTest {
 
@@ -28,5 +29,15 @@ class PermisoGremialGeneratorTest {
             assertThat(document.getNumberOfPages()).isEqualTo(1);
         }
         assertThat(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(source))).isEqualTo(sourceHash);
+    }
+
+    @Test
+    void rejectsUnicodeOutsideStandard14Encoding() throws Exception {
+        Path source = Path.of("..", "docs", "pdf-templates", "Permiso Gremial Bruna.pdf");
+
+        assertThatThrownBy(() -> new PermisoGremialGenerator().generate(new PermisoGremialData(
+                "Buenos Aires", LocalDate.of(2026, 8, 18), "Empresa ✓",
+                "Ana Pérez DNI 40123456", 21, "CCT-123"), Files.readAllBytes(source)))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 }
