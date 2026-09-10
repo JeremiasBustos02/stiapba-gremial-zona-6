@@ -94,6 +94,7 @@ function ManualFieldInput({ field, value, error, onChange }: { field: ManualFiel
 
 export function PdfPreview({ pdf, onEdit, onHome }: { pdf: Blob | null; onEdit: () => void; onHome: () => void }) {
   const host = useRef<HTMLDivElement>(null)
+  const printCleanup = useRef<(() => void) | null>(null)
   const [fitWidth, setFitWidth] = useState(0)
   const [zoom, setZoom] = useState(1)
   const [pageCount, setPageCount] = useState(0)
@@ -109,11 +110,40 @@ export function PdfPreview({ pdf, onEdit, onHome }: { pdf: Blob | null; onEdit: 
     return () => observer.disconnect()
   }, [])
   useEffect(() => { setZoom(1); setPageCount(0); setPreviewError('') }, [pdf])
+  useEffect(() => () => printCleanup.current?.(), [])
 
   const pageWidth = Math.floor(fitWidth * zoom)
   const changeZoom = (amount: number) => setZoom((current) => Math.min(2.5, Math.max(0.5, Number((current + amount).toFixed(2)))))
   const download = () => { if (!pdf) return; const downloadUrl = URL.createObjectURL(pdf); const link = document.createElement('a'); link.href = downloadUrl; link.download = 'permiso-gremial.pdf'; document.body.appendChild(link); link.click(); link.remove(); window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 0) }
-  const print = () => { if (!pdf) return; const printUrl = URL.createObjectURL(pdf); const frame = document.createElement('iframe'); frame.style.display = 'none'; frame.src = printUrl; frame.onload = () => frame.contentWindow?.print(); document.body.appendChild(frame); window.setTimeout(() => { frame.remove(); URL.revokeObjectURL(printUrl) }, 1_000) }
+  const print = () => {
+    if (!pdf) return
+    printCleanup.current?.()
+    const printUrl = URL.createObjectURL(pdf)
+    const frame = document.createElement('iframe')
+    let cleanupTimer: number | undefined
+    let cleaned = false
+    const cleanup = () => {
+      if (cleaned) return
+      cleaned = true
+      if (cleanupTimer !== undefined) window.clearTimeout(cleanupTimer)
+      frame.onload = null
+      frame.onerror = null
+      frame.contentWindow?.removeEventListener('afterprint', cleanup)
+      frame.remove()
+      URL.revokeObjectURL(printUrl)
+      if (printCleanup.current === cleanup) printCleanup.current = null
+    }
+    printCleanup.current = cleanup
+    frame.style.display = 'none'
+    frame.onload = () => {
+      frame.contentWindow?.addEventListener('afterprint', cleanup, { once: true })
+      frame.contentWindow?.print()
+      cleanupTimer = window.setTimeout(cleanup, 1_000)
+    }
+    frame.onerror = cleanup
+    frame.src = printUrl
+    document.body.appendChild(frame)
+  }
 
   return <><PageIntro context="Documento generado" title="Vista previa" description="Revisá el documento antes de finalizar." />{previewError ? <p role="alert" className="mt-5 max-w-3xl rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">{previewError}</p> : <section ref={host} className="mt-5 max-w-3xl min-w-0 overflow-auto overscroll-contain rounded-2xl border border-slate-300 bg-slate-200 p-2 sm:mt-7 sm:p-4" style={{ maxHeight: 'min(62dvh, 720px)', touchAction: 'pan-x pan-y' }}><div className="mx-auto w-max"><Document file={pdf} loading={<p className="p-8 text-center text-sm text-slate-600">Cargando vista previa...</p>} error={<p className="p-8 text-center text-sm text-rose-800">No pudimos visualizar el PDF generado.</p>} onLoadSuccess={({ numPages }) => { setPageCount(numPages); setPreviewError('') }} onLoadError={() => setPreviewError('No pudimos visualizar el PDF generado.')}>{Array.from({ length: pageCount }, (_, index) => <Page key={index + 1} pageNumber={index + 1} width={pageWidth || undefined} renderTextLayer={false} className="mb-3 last:mb-0 shadow-lg" />)}</Document></div></section>}<section className="mt-3 max-w-3xl rounded-xl border border-slate-200 bg-white p-3"><div className="flex flex-wrap items-center justify-between gap-2"><div className="flex items-center gap-1"><button type="button" onClick={() => changeZoom(-0.25)} disabled={zoom <= 0.5} aria-label="Alejar" className="grid h-11 w-11 place-items-center rounded-lg text-slate-700 hover:bg-slate-100 disabled:opacity-40"><ZoomOut size={19} /></button><span className="min-w-14 text-center text-sm font-semibold tabular-nums">{Math.round(zoom * 100)}%</span><button type="button" onClick={() => changeZoom(0.25)} disabled={zoom >= 2.5} aria-label="Acercar" className="grid h-11 w-11 place-items-center rounded-lg text-slate-700 hover:bg-slate-100 disabled:opacity-40"><ZoomIn size={19} /></button><button type="button" onClick={() => setZoom(1)} disabled={zoom === 1} className="min-h-11 rounded-lg px-3 text-sm font-semibold text-blue-700 hover:bg-blue-50">Ajustar</button></div><span className="px-2 text-xs text-slate-500">{pageCount ? `${pageCount} ${pageCount === 1 ? 'página' : 'páginas'}` : 'Preparando vista previa...'}</span></div><div className="mt-3 grid gap-2 border-t border-slate-200 pt-3 sm:flex sm:flex-wrap"><button type="button" onClick={download} disabled={!pdf} className="min-h-12 flex items-center justify-center gap-2 rounded-xl bg-blue-700 px-5 py-3 font-semibold text-white hover:bg-blue-800 disabled:opacity-50"><Download size={19} /> Descargar PDF</button><button type="button" onClick={onEdit} className="min-h-12 rounded-xl border border-slate-300 px-5 py-3 font-semibold text-slate-700 hover:bg-slate-50">Editar documento</button><button type="button" onClick={print} disabled={!pdf} className="min-h-12 flex items-center justify-center gap-2 rounded-xl border border-blue-200 px-5 py-3 font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-50"><Printer size={19} /> Imprimir</button><div className="hidden h-8 border-l border-slate-200 sm:block" /><button type="button" onClick={onHome} className="min-h-12 rounded-xl px-5 py-3 font-semibold text-slate-600 hover:bg-slate-100">Finalizar y volver al inicio</button></div></section></>
 }
