@@ -2,9 +2,6 @@ spring:
   application:
     name: document-management
 
-  profiles:
-    active: ${SPRING_PROFILES_ACTIVE:dev}
-
   mail:
     host: ${SPRING_MAIL_HOST:}
     port: ${SPRING_MAIL_PORT:587}
@@ -46,7 +43,8 @@ app:
       expiration-seconds: ${JWT_EXPIRATION_SECONDS}
     cookie:
       secure: true
-      same-site: ${AUTH_COOKIE_SAME_SITE:None}
+      same-site: ${AUTH_COOKIE_SAME_SITE:Lax}
+
   template:
     storage-type: ${TEMPLATE_STORAGE_TYPE:s3}
     max-file-size-bytes: ${TEMPLATE_MAX_FILE_SIZE_BYTES:10485760}
