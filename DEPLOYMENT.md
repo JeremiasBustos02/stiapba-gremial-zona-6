@@ -5,7 +5,7 @@
 ```text
 React + Vite (Vercel)
         |
-        | HTTPS + cookies cross-site
+        | HTTPS + rewrite same-origin /api/v1
         v
 Spring Boot (Render Docker)
         |
@@ -53,7 +53,7 @@ Vite solo incorpora variables con prefijo `VITE_` al bundle. No definir allí se
 | `JWT_SECRET` | Secreto Base64 de al menos 32 bytes aleatorios, único por entorno. |
 | `JWT_EXPIRATION_SECONDS` | Duración positiva del JWT, por ejemplo `3600`. |
 | `AUTH_COOKIE_SECURE` | `true`. El perfil `prod` fuerza Secure igualmente. |
-| `AUTH_COOKIE_SAME_SITE` | `None` para Vercel y Render en sitios distintos. Requiere HTTPS. |
+| `AUTH_COOKIE_SAME_SITE` | El valor actual por defecto en producción es `None` y requiere HTTPS. Con el rewrite same-origin, `Lax` también es compatible y puede preferirse al configurar el entorno. |
 | `FRONTEND_URL` | Origen exacto de Vercel, por ejemplo `https://<app>.vercel.app`, sin barra final. |
 | `INITIAL_ADMIN_DNI` | DNI del ADMIN inicial, solo mientras aún no exista uno. |
 | `INITIAL_ADMIN_PASSWORD` | Contraseña temporal inicial, secreto de 10 a 72 caracteres. |
@@ -89,7 +89,7 @@ Con `TEMPLATE_SEED_ENABLED=false`, el primer ADMIN debe crear `Permiso Gremial` 
 
 ## Cookies, CSRF y CORS
 
-El navegador consume `/api/v1` en el mismo origen de Vercel y un rewrite nativo reenvía esas requests a Render. En esta primera etapa se mantienen `AUTH_COOKIE_SECURE=true` y `AUTH_COOKIE_SAME_SITE=None` para aislar el cambio del proxy; ambos servicios deben estar detrás de HTTPS. `FRONTEND_URL` se registra como el único origen CORS permitido, con `allowCredentials=true`. No se usa `*` ni se permite un origen adicional por defecto.
+El navegador consume `/api/v1` en el mismo origen de Vercel y un rewrite nativo reenvía esas requests a Render. En producción se usa `AUTH_COOKIE_SECURE=true` y un `AUTH_COOKIE_SAME_SITE` compatible con ese acceso same-origin. El valor actual por defecto es `None`; `Lax` también es compatible con el proxy y puede preferirse al configurar el entorno. Ambos servicios deben estar detrás de HTTPS. `FRONTEND_URL` se registra como el único origen CORS permitido, con `allowCredentials=true`. No se usa `*` ni se permite un origen adicional por defecto.
 
 La cookie JWT sigue siendo `HttpOnly`; no se mueve a `localStorage` ni `sessionStorage`. Como `Domain` se omite, el navegador almacena las cookies reenviadas como host-only del dominio de Vercel. CSRF permanece habilitado con double-submit: antes de cada operación que modifica estado, el frontend solicita `GET /api/v1/auth/csrf` con credenciales y envía el token recibido en `X-XSRF-TOKEN`. Login conserva la excepción CSRF existente.
 
@@ -144,4 +144,4 @@ El artefacto publicado es `frontend/dist`. `frontend/vercel.json` reenvía `/api
 2. Crear el bucket privado y las credenciales S3 en Supabase.
 3. Confirmar el arranque de Render, Flyway y la creación idempotente del seed.
 4. Probar login, cambio de contraseña, CRUD de variantes, generación, descarga e impresión desde un celular.
-5. Verificar desde Vercel que las requests usan `/api/v1`, las cookies host-only llevan `Secure; SameSite=None`, las mutaciones incluyen `X-XSRF-TOKEN` y los PDFs y uploads atraviesan el rewrite correctamente.
+5. Verificar desde Vercel que las requests usan `/api/v1`, las cookies host-only llevan `Secure` y un `SameSite` compatible con el rewrite, las mutaciones incluyen `X-XSRF-TOKEN` y los PDFs y uploads atraviesan el rewrite correctamente.

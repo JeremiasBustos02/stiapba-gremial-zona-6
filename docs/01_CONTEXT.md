@@ -185,7 +185,7 @@ Por ejemplo, en el futuro podrían existir:
 
 Cada tipo de documento podrá requerir información diferente.
 
-La arquitectura deberá permitir incorporar nuevos tipos de documentos progresivamente, aunque cada tipo nuevo requerirá soporte de desarrollo hasta que exista un futuro sistema de campos dinámicos.
+La arquitectura permite configurar campos logicos reutilizables por variante mediante `FieldDefinition` y `TemplateField`, con modos `ACROFORM`, `POSITIONED` e hibrido. Un tipo de documento nuevo puede seguir requiriendo soporte de desarrollo para su formulario y generador especificos.
 
 ---
 
@@ -319,7 +319,7 @@ Las siguientes funcionalidades **no forman parte de la primera versión**:
 * Integración con Google Drive.
 * Almacenamiento de PDFs en la nube.
 * Historial persistente de documentos generados.
-* Gestión avanzada de borradores.
+* Borradores persistentes en el backend o historial de documentos. El formulario actual solo tiene recuperacion local limitada; ver `DECISIONS.md`.
 * Envío mediante WhatsApp.
 * Notificaciones.
 * Estadísticas.

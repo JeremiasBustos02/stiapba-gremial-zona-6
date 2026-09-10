@@ -907,14 +907,13 @@ Como mínimo:
 
 ---
 
-# 50. Uso de shadcn/ui
+# 50. Componentes de interfaz
 
-Se utilizarán componentes de shadcn/ui cuando resulten apropiados.
+Se utilizaran componentes React y estilos Tailwind cuando resulten apropiados. Se priorizaran componentes semanticos y reutilizables antes que incorporar otra libreria de UI.
 
-Ejemplos:
+Patrones habituales:
 
 ```text
-Button
 Card
 Input
 Select
@@ -927,9 +926,7 @@ Form
 Toast/Sonner
 ```
 
-No deberá utilizarse shadcn/ui únicamente por utilizarlo.
-
-La elección dependerá del patrón de UX.
+La eleccion dependera del patron de UX y de la accesibilidad requerida.
 
 ---
 
@@ -996,7 +993,7 @@ Durante la implementación visual no deberá:
 * Incorporar historial.
 * Incorporar SMTP.
 * Incorporar Google Drive.
-* Administrar o cargar Templates y TemplateVariants desde la UI.
+* Incorporar funcionalidades fuera del alcance aprobado.
 * Añadir animaciones complejas.
 * Cambiar la identidad visual sin motivo.
 * Reemplazar mobile navigation por otra solución sin justificarlo.

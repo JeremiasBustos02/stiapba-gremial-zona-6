@@ -1,6 +1,6 @@
 # Requisitos del Sistema
 
-Los wireframes son referencia visual. Si representan historial, borradores, envío por correo, numeración u otra funcionalidad fuera del MVP, prevalecen `01_CONTEXT.md` y este documento.
+Los wireframes son referencia visual. Si representan historial, borradores persistentes, envío por correo, numeración u otra funcionalidad fuera del MVP, prevalecen `01_CONTEXT.md` y este documento. El formulario sí cuenta con recuperacion local limitada.
 
 ## 1. Propósito
 
@@ -220,7 +220,7 @@ La interfaz no deberá asumir que este será siempre el único tipo disponible.
 
 Los usuarios autenticados podrán consultar los tipos de documentos activos. Un `ADMIN` podrá crear, consultar, editar, activar y desactivar plantillas. Los registros iniciales podrán provisionarse mediante seed, migración o configuración del backend.
 
-Crear una plantilla no habilita automáticamente la generación de un nuevo tipo de documento: los formularios y generadores de tipos nuevos requieren soporte de desarrollo mientras no exista un sistema de campos dinámicos.
+Crear una plantilla no habilita automáticamente la generación de un nuevo tipo de documento. El sistema actual permite administrar `FieldDefinition` y `TemplateField` para configurar campos reutilizables sobre variantes, pero los formularios y generadores específicos de nuevos tipos todavía requieren soporte de desarrollo.
 
 ---
 
@@ -665,7 +665,7 @@ No deberán implementarse como parte del MVP:
 * Google Drive.
 * Almacenamiento cloud de documentos.
 * Historial persistente de PDFs.
-* Borradores persistentes.
+* Borradores persistentes en servidor o historial de documentos. Se admite un draft local limitado para recuperar el formulario.
 * WhatsApp.
 * Estadísticas.
 * Notificaciones.

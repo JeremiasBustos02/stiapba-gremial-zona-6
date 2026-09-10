@@ -25,6 +25,8 @@ Este documento complementa:
 * `06_ARCHITECTURE.md`
 * `07_UI_UX.md`
 
+El roadmap conserva el orden historico de implementacion. El sistema ya supero esos milestones; para el comportamiento actual prevalecen `README.md`, `DEPLOYMENT.md` y la documentacion tecnica especifica enlazada desde el README.
+
 ---
 
 # 2. Principios del roadmap
@@ -128,10 +130,8 @@ Inicializar:
 * TypeScript.
 * Vite.
 * Tailwind CSS.
-* shadcn/ui.
 * React Router.
 * TanStack Query.
-* React Hook Form.
 * Zod.
 
 ## Backend
@@ -401,7 +401,7 @@ Los Templates y TemplateVariants iniciales se provisionan mediante seed, migraci
 
 Los archivos se almacenan fuera de PostgreSQL mediante `TemplateFileStorage`; PostgreSQL conserva `fileKey`. `LocalTemplateFileStorage` será la primera implementación y deberá usar almacenamiento persistente en producción. Los uploads deben validar PDF, tamaño y nombres/rutas seguras. Google Drive queda fuera del MVP.
 
-Crear un Template no habilita automáticamente nuevos tipos generables: cada tipo nuevo requiere soporte de desarrollo hasta que exista un sistema de campos dinámicos.
+Crear un Template no habilita automáticamente nuevos tipos generables: hoy se pueden configurar `FieldDefinition` y `TemplateField`, pero cada tipo nuevo todavía requiere soporte de desarrollo para su formulario y generador.
 
 ## Commit sugerido
 
@@ -487,7 +487,6 @@ Implementar visualmente la aplicación utilizando datos mock.
 * Seguir wireframes.
 * Mobile First.
 * Responsive.
-* shadcn/ui.
 * Estados loading/error/empty.
 * Sin conexión real todavía.
 

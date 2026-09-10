@@ -24,6 +24,8 @@ El MVP estará compuesto inicialmente por las siguientes entidades:
 * Provincia
 * Plantilla
 * TemplateVariant
+* FieldDefinition
+* TemplateField
 
 El proceso de generación de PDF utilizará estas entidades, pero **no persistirá todavía un historial de documentos generados**.
 
@@ -753,9 +755,9 @@ Esta estructura no deberá implementarse anticipadamente en el MVP.
 
 ---
 
-# 21. Evolución futura: campos dinámicos
+# 21. Campos configurables actuales
 
-En una versión futura podría ser necesario que cada Plantilla defina sus propios campos de manera configurable.
+El sistema actual permite que ADMIN administre definiciones logicas y las reutilice en variantes de plantillas mediante `FieldDefinition` y `TemplateField`.
 
 Ejemplo:
 
@@ -771,18 +773,14 @@ Acta
 - Participantes
 ```
 
-Esto podría introducir entidades como:
+El modelo persistente actual utiliza:
 
 ```text
+FieldDefinition
 TemplateField
-DocumentFieldValue
 ```
 
-Sin embargo, el MVP **no implementará formularios dinámicos**.
-
-La primera plantilla tendrá un formulario específico y tipado para Permiso Gremial.
-
-Esto evita sobreingeniería prematura.
+La configuracion de campos no convierte automaticamente cualquier plantilla en un nuevo flujo de negocio. Permiso Gremial mantiene su formulario y generador especificos, mientras que los campos configurables resuelven la asociacion logica y el render sobre variantes ACROFORM/POSITIONED.
 
 ---
 

@@ -40,7 +40,7 @@ El sistema seguirá una arquitectura cliente-servidor.
 ┌────────────────────────────┐
 │         Frontend           │
 │ React + TypeScript         │
-│ Tailwind + shadcn/ui       │
+│ Tailwind CSS               │
 └─────────────┬──────────────┘
               │ REST API
               ▼
@@ -70,17 +70,16 @@ En el MVP no existirán todavía:
 
 ## 3.1. Tecnologías
 
-Se utilizará:
+El frontend actual utiliza:
 
 * React.
 * TypeScript.
 * Vite.
 * Tailwind CSS.
-* shadcn/ui.
 * React Router.
 * TanStack Query.
-* React Hook Form.
 * Zod.
+* Vitest.
 
 ---
 
@@ -196,7 +195,7 @@ Se utilizará una estructura modular por dominio.
 
 ```text
 backend/
-└── src/main/java/com/example/documentos/
+└── src/main/java/com/stiapba/documentmanagement/
     ├── auth/
     ├── user/
     ├── company/
@@ -296,17 +295,11 @@ La contraseña deberá almacenarse usando BCrypt.
 
 ## 8.2. Estrategia recomendada
 
-Para el MVP se recomienda utilizar autenticación basada en JWT.
+La implementacion actual utiliza autenticación basada en JWT:
 
-Sin embargo, se evitará almacenar el token de acceso en `localStorage` si existe una alternativa segura y práctica.
-
-La estrategia preferida será:
-
-* JWT almacenado en cookie HttpOnly, Secure en producción y con SameSite adecuado.
-
-Si durante el despliegue esta estrategia genera complejidad innecesaria por dominios separados, se reevaluará explícitamente.
-
-No se tomará la decisión de usar `localStorage` por defecto.
+* JWT en cookie HttpOnly, Secure en producción y con SameSite compatible con el rewrite same-origin.
+* CSRF double-submit mediante cookie y header.
+* `sessionVersion` para invalidar sesiones tras cambios de contraseña.
 
 ---
 
@@ -446,9 +439,9 @@ La ruta física no deberá exponerse al frontend.
 
 # 15. Abstracción de almacenamiento de plantillas
 
-Aunque inicialmente se utilice almacenamiento local, el backend deberá evitar acoplar directamente la generación de PDF a una ruta física concreta.
+El backend evita acoplar directamente la generación de PDF a una ruta física concreta mediante una abstraccion de storage.
 
-Se recomienda una interfaz conceptual:
+La interfaz actual es:
 
 ```text
 TemplateFileStorage
@@ -461,16 +454,7 @@ LocalTemplateFileStorage
 S3TemplateFileStorage
 ```
 
-En el futuro podría agregarse:
-
-```text
-GoogleDriveTemplateFileStorage
-CloudTemplateFileStorage
-```
-
-sin modificar la lógica principal de generación.
-
-Google Drive no se implementará en el MVP.
+La implementacion local es `LocalTemplateFileStorage`; produccion utiliza `S3TemplateFileStorage` contra Supabase Storage. Google Drive no forma parte del sistema.
 
 ---
 
@@ -506,21 +490,11 @@ PDFBox
 
 ---
 
-# 17. Formularios específicos vs dinámicos
+# 17. Campos configurables y formularios
 
-El MVP utilizará un formulario específico para Permiso Gremial.
+El sistema actual administra `FieldDefinition` y `TemplateField`. Permite asociar campos logicos reutilizables a variantes en modo `ACROFORM`, `POSITIONED` o hibrido, con editor visual, coordenadas, alineacion, multilinea y shrink-to-fit.
 
-No se implementará un motor de formularios dinámicos.
-
-Razones:
-
-* Solo existe un tipo de documento inicialmente.
-* Reduce complejidad.
-* Permite tipado fuerte.
-* Facilita validaciones.
-* Evita sobreingeniería.
-
-Cuando existan varios documentos con campos significativamente diferentes, se reevaluará esta decisión.
+La configuracion de campos no reemplaza los formularios y generadores de negocio: Permiso Gremial mantiene un flujo tipado y un generador especifico. Un tipo nuevo requiere soporte de desarrollo aunque pueda reutilizar el modelo de campos.
 
 ---
 
@@ -662,7 +636,6 @@ Orientada a experiencia de usuario.
 
 Con:
 
-* React Hook Form.
 * Zod.
 
 ## Backend
@@ -947,12 +920,7 @@ No se registrarán:
 
 # 37. Salud del servicio
 
-Se podrá utilizar Spring Boot Actuator para health checks si resulta útil durante deploy.
-
-En caso de utilizarlo:
-
-* No deberán exponerse endpoints sensibles innecesariamente.
-* Se limitará a información operativa básica.
+El backend expone un endpoint propio de health check en `/api/v1/health`. Es publico, no consulta dependencias externas y responde informacion operativa minima.
 
 ---
 
@@ -1012,9 +980,9 @@ Solo se añadirá otra solución si aparece una necesidad concreta.
 
 La implementación seguirá los wireframes definidos.
 
-Se utilizará shadcn/ui como base de componentes.
+Se utilizaran componentes React y estilos Tailwind de acuerdo con los patrones existentes.
 
-Se evitará:
+Se evitara:
 
 * Duplicar componentes existentes.
 * Crear estilos globales innecesarios.
@@ -1061,7 +1029,7 @@ Se utilizarán:
 * Mensajes de error identificables.
 * Contraste apropiado.
 
-shadcn/ui no deberá asumirse como garantía automática de accesibilidad; cada composición deberá revisarse.
+Las librerias de componentes no se asumen como garantia automatica de accesibilidad; cada composicion debera revisarse.
 
 ---
 
@@ -1291,10 +1259,8 @@ React
 TypeScript
 Vite
 Tailwind CSS
-shadcn/ui
 React Router
 TanStack Query
-React Hook Form
 Zod
 ```
 

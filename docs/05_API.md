@@ -791,7 +791,7 @@ ADMIN.
 }
 ```
 
-Crear un Template no habilita automáticamente la generación de un nuevo tipo de documento. Los formularios y generadores de tipos distintos de Permiso Gremial requieren soporte de desarrollo mientras no exista un sistema de campos dinámicos.
+Crear un Template no habilita automáticamente la generación de un nuevo tipo de documento. Aunque ADMIN puede configurar `FieldDefinition` y `TemplateField` para variantes, los formularios y generadores de tipos distintos de Permiso Gremial requieren soporte de desarrollo.
 
 ---
 
