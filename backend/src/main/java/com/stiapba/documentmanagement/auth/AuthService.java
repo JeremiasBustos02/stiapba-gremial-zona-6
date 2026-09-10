@@ -62,8 +62,7 @@ public class AuthService {
 
     @Transactional
     public void logout(UserPrincipal principal) {
-        User user = requireActiveUser(principal);
-        user.invalidateSessions();
+        // JWTs are shared across a user's devices. Logout is scoped to the browser cookie.
     }
 
     private void updatePassword(User user, ChangePasswordRequest request, boolean rejectCurrentPassword) {

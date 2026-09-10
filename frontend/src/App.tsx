@@ -26,6 +26,7 @@ import {
   Users,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { Navigate, useLocation, useNavigate, useParams } from "react-router";
 import { UserManagementPage } from "@/features/users/UserManagementPage";
 import { CatalogManagementPage } from "@/features/catalog/CatalogManagementPage";
 import {
@@ -48,7 +49,7 @@ import type {
 } from "@/features/catalog/types";
 import { TemplateManagementPage } from "@/features/templates/TemplateManagementPage";
 import { PositionedFieldEditor } from "@/features/templates/PositionedFieldEditor";
-import type { TemplateVariant } from "@/features/templates/types";
+import { getVariants } from "@/features/templates/templatesApi";
 import {
   DocumentTemplateSelection,
   DocumentVariantSelection,
@@ -57,11 +58,18 @@ import {
   PermisoGremialForm,
   type DocumentFormValues,
 } from "@/features/documents/DocumentFlow";
+import { getDocumentVariants } from "@/features/documents/documentsApi";
+import {
+  clearDocumentDraft,
+  readDocumentDraft,
+  saveDocumentDraft,
+} from "@/features/documents/documentDraft";
 import {
   shouldShowStartupLoading,
   StartupLoadingScreen,
 } from "@/components/StartupLoadingScreen";
 import { ApiError, setUnauthorizedHandler } from "@/lib/api";
+import { isAdminPath, routeForScreen, screenForPath, type Screen } from "@/navigation";
 import {
   changeFirstLoginPassword,
   changePassword,
@@ -75,22 +83,6 @@ const queryClient = new QueryClient({
   defaultOptions: { mutations: { gcTime: 0 } },
 });
 
-type Screen =
-  | "login"
-  | "first-login"
-  | "home"
-  | "new-document"
-  | "variants"
-  | "form"
-  | "edit"
-  | "preview"
-  | "profile"
-  | "admin"
-  | "users"
-  | "companies"
-  | "agreements"
-  | "templates"
-  | "positioned-editor";
 type FormData = {
   province: string;
   issueDate: string;
@@ -115,252 +107,66 @@ const delegates = [
   { value: "mariana", name: "Mariana Lopez", dni: "39.884.117" },
 ];
 
+function documentTemplateId(pathname: string) {
+  return pathname.match(/^\/documentos\/nuevo\/([^/]+)\/(?:variante|formulario|vista-previa)$/)?.[1] ?? null;
+}
+
 function App() {
   const queryClient = useQueryClient();
-  const [screen, setScreen] = useState<Screen>("home");
-  const [documentForm, setDocumentForm] =
-    useState<DocumentFormValues>(initialDocumentForm);
-  const [editForm, setEditForm] = useState<DocumentFormValues | null>(null);
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(
-    null,
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [draft] = useState(readDocumentDraft);
+  const screen = screenForPath(location.pathname);
+  const templateId = documentTemplateId(location.pathname);
+  const [documentForm, setDocumentForm] = useState<DocumentFormValues>(
+    draft?.templateId === templateId ? draft.form : initialDocumentForm,
   );
-  const [configuredVariant, setConfiguredVariant] = useState<{
-    templateId: string;
-    variant: TemplateVariant;
-  } | null>(null);
   const [generatedPdf, setGeneratedPdf] = useState<Blob | null>(null);
   const [sessionExpired, setSessionExpired] = useState(false);
   const [startupComplete, setStartupComplete] = useState(false);
-  const sessionQuery = useQuery({
-    queryKey: ["auth", "me"],
-    queryFn: getCurrentUser,
-    retry: false,
-  });
-  const loginMutation = useMutation({
-    mutationFn: ({ dni, password }: { dni: string; password: string }) =>
-      login(dni, password),
-    onSuccess: ({ user }) => {
-      queryClient.setQueryData(["auth", "me"], user);
-      setSessionExpired(false);
-      setScreen("home");
-    },
-  });
-  const logoutMutation = useMutation({
-    mutationFn: logout,
-    onSuccess: () => {
-      queryClient.clear();
-      setDocumentForm(initialDocumentForm);
-      setEditForm(null);
-      setSelectedTemplateId(null);
-      setGeneratedPdf(null);
-      setSessionExpired(false);
-      setScreen("login");
-    },
-  });
-
-  useEffect(() => {
-    setUnauthorizedHandler(() => {
-      queryClient.clear();
-      setDocumentForm(initialDocumentForm);
-      setEditForm(null);
-      setSelectedTemplateId(null);
-      setGeneratedPdf(null);
-      setSessionExpired(true);
-      setScreen("login");
-    });
-    return () => setUnauthorizedHandler();
-  }, [queryClient]);
-
-  const go = (next: Screen) => setScreen(next);
+  const sessionQuery = useQuery({ queryKey: ["auth", "me"], queryFn: getCurrentUser, retry: false });
+  const clearSession = (expired = false) => { queryClient.clear(); clearDocumentDraft(); setDocumentForm(initialDocumentForm); setGeneratedPdf(null); setSessionExpired(expired); navigate("/", { replace: true }); };
+  const loginMutation = useMutation({ mutationFn: ({ dni, password }: { dni: string; password: string }) => login(dni, password), onSuccess: ({ user }) => { queryClient.setQueryData(["auth", "me"], user); setSessionExpired(false); navigate("/"); } });
+  const logoutMutation = useMutation({ mutationFn: logout, onSuccess: () => clearSession() });
+  useEffect(() => { setUnauthorizedHandler(() => clearSession(true)); return () => setUnauthorizedHandler(); }, [queryClient]);
+  const go = (next: Screen) => navigate(routeForScreen(next, templateId ?? draft?.templateId ?? null));
   const currentUser = sessionQuery.data;
+  const documentVariantsQuery = useQuery({
+    queryKey: ["documents", "variants", templateId],
+    queryFn: () => getDocumentVariants(templateId!),
+    enabled: Boolean(currentUser && templateId && ["form", "preview"].includes(screen)),
+  });
+  if (shouldShowStartupLoading({ isPending: sessionQuery.isPending, isSuccess: sessionQuery.isSuccess, startupComplete })) return <StartupLoadingScreen completed={sessionQuery.isSuccess} onComplete={() => setStartupComplete(true)} />;
+  if (!currentUser) return <LoginPage error={loginMutation.error} pending={loginMutation.isPending} sessionExpired={sessionExpired} onSubmit={(dni, password) => loginMutation.mutate({ dni, password })} />;
+  if (currentUser.firstLogin) return <FirstLoginPage onSaved={async () => { await queryClient.invalidateQueries({ queryKey: ["auth", "me"] }); navigate("/"); }} />;
+  if (currentUser.role !== "ADMIN" && isAdminPath(location.pathname)) return <Navigate to="/" replace />;
+  if ((screen === "form" || screen === "preview") && templateId && documentVariantsQuery.isSuccess && !documentVariantsQuery.data.some((variant) => variant.id === documentForm.variantId)) return <Navigate to={`/documentos/nuevo/${templateId}/variante`} replace />;
+  if (screen === "preview" && !generatedPdf) return <Navigate to={routeForScreen("form", templateId)} replace />;
+  const saveDraft = (nextTemplateId: string, form: DocumentFormValues) => { setDocumentForm(form); saveDocumentDraft({ templateId: nextTemplateId, form }); };
+  const adminContent = screen === "users" ? <UserManagementPage /> : screen === "companies" ? <CatalogManagementPage<Company, CompanyForm> kind="companies" title="Empresas" description="Administrá las empresas disponibles para completar documentos." emptyForm={{ nombre: "", agreementId: "" }} getItems={getCompanies} createItem={createCompany} updateItem={updateCompany} setActive={setCompanyActive} /> : screen === "agreements" ? <CatalogManagementPage<Agreement, AgreementForm> kind="agreements" title="Convenios" description="Administrá los convenios disponibles para completar documentos." emptyForm={{ codigo: "", descripcion: "" }} getItems={getAgreements} createItem={createAgreement} updateItem={updateAgreement} setActive={setAgreementActive} /> : screen === "positioned-editor" ? <FieldEditorRoute /> : <TemplateManagementPage initialTemplateId={location.pathname.match(/^\/admin\/plantillas\/([^/]+)$/)?.[1]} onTemplateSelected={(id) => navigate(`/admin/plantillas/${id}`)} onDetailBack={() => navigate("/admin/plantillas")} onConfigureFields={(id, variant) => navigate(`/admin/plantillas/${id}/variantes/${variant.id}/campos`)} />;
+  return <AppLayout screen={screen} role={currentUser.role} onNavigate={go} onLogout={() => logoutMutation.mutate()}>
+    {screen !== "positioned-editor" && <SecondaryNavigation screen={screen} onNavigate={go} />}
+    {["admin", "users", "companies", "agreements", "templates"].includes(screen) && <AdminModuleNavigation screen={screen} onNavigate={go} />}
+    {screen === "home" && <HomePage user={currentUser} onNavigate={go} />}
+    {screen === "new-document" && <DocumentTemplateSelection onBack={() => navigate("/")} onSelect={(id) => { const form = { ...documentForm, variantId: "", manualValues: {} }; saveDraft(id, form); navigate(`/documentos/nuevo/${id}/variante`); }} />}
+    {screen === "variants" && <DocumentVariantSelection templateId={templateId} onBack={() => navigate("/documentos/nuevo")} onSelect={(variantId) => { if (!templateId) return; const form = { ...documentForm, variantId, manualValues: {} }; saveDraft(templateId, form); navigate(`/documentos/nuevo/${templateId}/formulario`); }} />}
+    {screen === "form" && templateId && <PermisoGremialForm value={documentForm} onChange={(form) => saveDraft(templateId, form)} onBack={() => navigate(`/documentos/nuevo/${templateId}/variante`)} onGenerated={(pdf) => { setGeneratedPdf(pdf); navigate(`/documentos/nuevo/${templateId}/vista-previa`); }} />}
+    {screen === "preview" && <PdfPreview pdf={generatedPdf} onEdit={() => navigate(routeForScreen("form", templateId))} onHome={() => { clearDocumentDraft(); navigate("/"); }} />}
+    {screen === "profile" && <ProfilePage user={currentUser} onLogout={() => logoutMutation.mutate()} />}
+    {screen === "admin" && <AdminPage onNavigate={go} />}
+    {["users", "companies", "agreements", "templates", "positioned-editor"].includes(screen) && adminContent}
+  </AppLayout>;
+}
 
-  if (
-    shouldShowStartupLoading({
-      isPending: sessionQuery.isPending,
-      isSuccess: sessionQuery.isSuccess,
-      startupComplete,
-    })
-  ) {
-    return (
-      <StartupLoadingScreen
-        completed={sessionQuery.isSuccess}
-        onComplete={() => setStartupComplete(true)}
-      />
-    );
-  }
-  if (!currentUser)
-    return (
-      <LoginPage
-        error={loginMutation.error}
-        pending={loginMutation.isPending}
-        sessionExpired={sessionExpired}
-        onSubmit={(dni, password) => loginMutation.mutate({ dni, password })}
-      />
-    );
-  if (currentUser.firstLogin)
-    return (
-      <FirstLoginPage
-        onSaved={async () => {
-          await queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
-          go("home");
-        }}
-      />
-    );
-  if (
-    currentUser.role !== "ADMIN" &&
-    [
-      "admin",
-      "users",
-      "companies",
-      "agreements",
-      "templates",
-      "positioned-editor",
-    ].includes(screen)
-  ) {
-    return (
-      <AppLayout
-        screen="home"
-        role={currentUser.role}
-        onNavigate={go}
-        onLogout={() => logoutMutation.mutate()}
-      >
-        <HomePage user={currentUser} onNavigate={go} />
-      </AppLayout>
-    );
-  }
-
-  const adminContent =
-    screen === "users" ? (
-      <UserManagementPage />
-    ) : screen === "companies" ? (
-      <CatalogManagementPage<Company, CompanyForm>
-        kind="companies"
-        title="Empresas"
-        description="Administrá las empresas disponibles para completar documentos."
-        emptyForm={{ nombre: "", agreementId: "" }}
-        getItems={getCompanies}
-        createItem={createCompany}
-        updateItem={updateCompany}
-        setActive={setCompanyActive}
-      />
-    ) : screen === "agreements" ? (
-      <CatalogManagementPage<Agreement, AgreementForm>
-        kind="agreements"
-        title="Convenios"
-        description="Administrá los convenios disponibles para completar documentos."
-        emptyForm={{ codigo: "", descripcion: "" }}
-        getItems={getAgreements}
-        createItem={createAgreement}
-        updateItem={updateAgreement}
-        setActive={setAgreementActive}
-      />
-    ) : screen === "positioned-editor" && configuredVariant ? (
-      <PositionedFieldEditor
-        templateId={configuredVariant.templateId}
-        variant={configuredVariant.variant}
-        onBack={() => go("templates")}
-      />
-    ) : (
-      <TemplateManagementPage
-        initialTemplateId={configuredVariant?.templateId}
-        onConfigureFields={(templateId, variant) => {
-          setConfiguredVariant({ templateId, variant });
-          go("positioned-editor");
-        }}
-      />
-    );
-
-  return (
-    <AppLayout
-      screen={screen}
-      role={currentUser.role}
-      onNavigate={go}
-      onLogout={() => logoutMutation.mutate()}
-    >
-      {screen !== "positioned-editor" && (
-        <SecondaryNavigation screen={screen} onNavigate={go} />
-      )}
-      {["admin", "users", "companies", "agreements", "templates"].includes(
-        screen,
-      ) && <AdminModuleNavigation screen={screen} onNavigate={go} />}
-      {screen === "home" && <HomePage user={currentUser} onNavigate={go} />}
-      {screen === "new-document" && (
-        <DocumentTemplateSelection
-          onBack={() => go("home")}
-          onSelect={(templateId) => {
-            setSelectedTemplateId(templateId);
-            setDocumentForm({ ...documentForm, variantId: "" });
-            go("variants");
-          }}
-        />
-      )}
-      {screen === "variants" && (
-        <DocumentVariantSelection
-          templateId={selectedTemplateId}
-          onBack={() => go("new-document")}
-          onSelect={(variantId) => {
-            setDocumentForm({ ...documentForm, variantId });
-            go("form");
-          }}
-        />
-      )}
-      {screen === "form" && (
-        <PermisoGremialForm
-          value={documentForm}
-          onChange={setDocumentForm}
-          onBack={() => go("variants")}
-          onGenerated={(pdf) => {
-            setGeneratedPdf(pdf);
-            go("preview");
-          }}
-        />
-      )}
-      {screen === "edit" && editForm && (
-        <PermisoGremialForm
-          value={editForm}
-          onChange={setEditForm}
-          editing
-          onBack={() => {
-            setEditForm(null);
-            go("preview");
-          }}
-          onGenerated={(pdf) => {
-            setDocumentForm(editForm);
-            setEditForm(null);
-            setGeneratedPdf(pdf);
-            go("preview");
-          }}
-        />
-      )}
-      {screen === "preview" && (
-        <PdfPreview
-          pdf={generatedPdf}
-          onEdit={() => {
-            setEditForm({
-              ...documentForm,
-              manualValues: { ...documentForm.manualValues },
-            });
-            go("edit");
-          }}
-          onHome={() => go("home")}
-        />
-      )}
-      {screen === "profile" && (
-        <ProfilePage
-          user={currentUser}
-          onLogout={() => logoutMutation.mutate()}
-        />
-      )}
-      {screen === "admin" && <AdminPage onNavigate={go} />}
-      {[
-        "users",
-        "companies",
-        "agreements",
-        "templates",
-        "positioned-editor",
-      ].includes(screen) && adminContent}
-    </AppLayout>
-  );
+function FieldEditorRoute() {
+  const { templateId, variantId } = useParams<{ templateId: string; variantId: string }>();
+  const navigate = useNavigate();
+  const variantsQuery = useQuery({ queryKey: ["template-variants", templateId], queryFn: () => getVariants(templateId!), enabled: Boolean(templateId) });
+  if (!templateId || !variantId) return <Navigate to="/admin/plantillas" replace />;
+  if (variantsQuery.isPending) return <p className="py-10 text-center text-sm text-slate-500">Cargando variante...</p>;
+  const variant = variantsQuery.data?.find((item) => item.id === variantId);
+  if (!variant) return <Navigate to={`/admin/plantillas/${templateId}`} replace />;
+  return <PositionedFieldEditor templateId={templateId} variant={variant} onBack={() => navigate(`/admin/plantillas/${templateId}`)} />;
 }
 
 const screenParents: Partial<Record<Screen, Screen>> = {
@@ -373,7 +179,6 @@ const screenParents: Partial<Record<Screen, Screen>> = {
   "new-document": "home",
   variants: "new-document",
   form: "variants",
-  edit: "preview",
   preview: "form",
 };
 
@@ -388,7 +193,6 @@ const screenLabels: Partial<Record<Screen, string>> = {
   "new-document": "Nuevo documento",
   variants: "Versión del documento",
   form: "Permiso Gremial",
-  edit: "Editar documento",
   preview: "Vista previa",
 };
 

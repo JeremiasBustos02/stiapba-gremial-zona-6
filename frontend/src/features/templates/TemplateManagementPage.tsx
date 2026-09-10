@@ -60,9 +60,13 @@ type Confirmation = {
 export function TemplateManagementPage({
   onConfigureFields,
   initialTemplateId,
+  onTemplateSelected,
+  onDetailBack,
 }: {
   onConfigureFields: (templateId: string, variant: TemplateVariant) => void;
   initialTemplateId?: string;
+  onTemplateSelected?: (templateId: string) => void;
+  onDetailBack?: () => void;
 }) {
   const client = useQueryClient();
   const [search, setSearch] = useState("");
@@ -205,6 +209,7 @@ export function TemplateManagementPage({
     setSelected(template);
     setTemplateActions(false);
     setVariantActions(null);
+    onTemplateSelected?.(template.id);
   };
   const openTemplateEditor = (mode: "create" | "edit") => {
     setTemplateForm(
@@ -267,7 +272,10 @@ export function TemplateManagementPage({
               variantsQuery={variantsQuery}
               templateActions={templateActions}
               variantActions={variantActions}
-              onBack={() => setSelected(null)}
+               onBack={() => {
+                 setSelected(null);
+                 onDetailBack?.();
+               }}
               onToggleTemplate={() =>
                 setConfirmation({
                   title: `${selected.active ? "Desactivar" : "Activar"} plantilla`,

@@ -357,7 +357,7 @@ class AuthIntegrationTest {
     }
 
     @Test
-    void logoutInvalidatesPreviouslyIssuedToken() throws Exception {
+    void logoutOnlyClearsTheCurrentBrowserCookie() throws Exception {
         User user = saveUser("40123456", Role.DELEGADO, false);
         MvcResult login = login(user.getDni(), PASSWORD).andExpect(status().isOk()).andReturn();
         MockCookie authCookie = authCookie(login);
@@ -369,8 +369,19 @@ class AuthIntegrationTest {
                 .andExpect(status().isNoContent());
 
         mockMvc.perform(get("/api/v1/auth/me").cookie(authCookie))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value("SESSION_INVALID"));
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void allowsTwoActiveSessionsForTheSameAccount() throws Exception {
+        User user = saveUser("40123456", Role.DELEGADO, false);
+        MvcResult firstLogin = login(user.getDni(), PASSWORD).andReturn();
+        MvcResult secondLogin = login(user.getDni(), PASSWORD).andReturn();
+
+        mockMvc.perform(get("/api/v1/auth/me").cookie(authCookie(firstLogin)))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/v1/auth/me").cookie(authCookie(secondLogin)))
+                .andExpect(status().isOk());
     }
 
     @Test
