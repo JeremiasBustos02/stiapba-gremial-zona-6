@@ -68,8 +68,9 @@ public class PdfTemplateRenderer {
                 if (!(field instanceof PDTextField textField)) {
                     throw new DocumentException(422, "ACROFORM_FIELD_TYPE_UNSUPPORTED", "La plantilla contiene un tipo de campo no compatible.");
                 }
-                textField.setDefaultAppearance(defaultAppearance(fontSizeFor(textField, value)));
-                textField.setQ(PDVariableText.QUADDING_CENTERED);
+                textField.setDefaultAppearance(defaultAppearance(fontSizeFor(textField, value, templateField)));
+                textField.setQ(quadding(templateField.getAlignment()));
+                textField.setMultiline(Boolean.TRUE.equals(templateField.getMultiline()));
                 textField.setValue(value);
             }
             if (acroForm != null) {
@@ -97,18 +98,34 @@ public class PdfTemplateRenderer {
         return fields;
     }
 
-    private float fontSizeFor(PDTextField field, String value) throws IOException {
+    private float fontSizeFor(PDTextField field, String value, TemplateField templateField) throws IOException {
         PDAnnotationWidget widget = field.getWidgets().stream().findFirst()
                 .orElseThrow(() -> new DocumentException(422, "ACROFORM_WIDGET_NOT_FOUND", "La plantilla contiene un campo sin posición."));
         float maxWidth = widget.getRectangle().getWidth() - HORIZONTAL_PADDING;
         float maxHeight = widget.getRectangle().getHeight() - VERTICAL_PADDING;
-        float byWidth = maxWidth * 1000f / FONT.getStringWidth(value);
-        float byHeight = maxHeight * 1000f / FONT.getFontDescriptor().getCapHeight();
-        float size = Math.min(MAX_FONT_SIZE, Math.min(byWidth, byHeight));
-        if (size < MIN_FONT_SIZE) {
+        String[] lines = Boolean.TRUE.equals(templateField.getMultiline()) ? value.split("\\R", -1) : new String[] { value };
+        float widestLine = 0f;
+        for (String line : lines) {
+            widestLine = Math.max(widestLine, FONT.getStringWidth(line));
+        }
+        float byWidth = widestLine == 0f ? maxWidth : maxWidth * 1000f / widestLine;
+        float byHeight = maxHeight * 1000f / (FONT.getFontDescriptor().getCapHeight() * lines.length);
+        float max = templateField.getMaxFontSize() == null ? MAX_FONT_SIZE : templateField.getMaxFontSize();
+        float min = templateField.getMinFontSize() == null ? MIN_FONT_SIZE : templateField.getMinFontSize();
+        float preferred = templateField.getFontSize() == null ? max : Math.min(templateField.getFontSize(), max);
+        float size = Math.min(preferred, Math.min(byWidth, byHeight));
+        if (size < min) {
             throw new DocumentException(422, "PDF_TEXT_TOO_LONG", "Uno de los datos no entra legiblemente en el campo de la plantilla.");
         }
         return size;
+    }
+
+    private int quadding(TemplateFieldAlignment alignment) {
+        return switch (alignment == null ? TemplateFieldAlignment.CENTER : alignment) {
+            case LEFT -> PDVariableText.QUADDING_LEFT;
+            case CENTER -> PDVariableText.QUADDING_CENTERED;
+            case RIGHT -> PDVariableText.QUADDING_RIGHT;
+        };
     }
 
     private String defaultAppearance(float fontSize) {

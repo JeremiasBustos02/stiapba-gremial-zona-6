@@ -1,18 +1,22 @@
 @import "tailwindcss";
 
-[role="dialog"][aria-labelledby="temporary-password-title"] {
+[role="dialog"][aria-modal="true"] {
   z-index: 40;
 }
 
 @media (max-width: 639px) {
-  [role="dialog"][aria-labelledby="temporary-password-title"] {
+  [role="dialog"][aria-modal="true"] {
     padding: 1rem;
     padding-bottom: max(1rem, env(safe-area-inset-bottom));
   }
 
-  [role="dialog"][aria-labelledby="temporary-password-title"] > div {
+  [role="dialog"][aria-modal="true"] > :first-child {
     max-height: calc(100dvh - 2rem - env(safe-area-inset-bottom));
     overflow-y: auto;
+  }
+
+  .app-bottom-nav {
+    padding-bottom: env(safe-area-inset-bottom);
   }
 }
 
@@ -28,12 +32,17 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  overflow-x: hidden;
 }
 
 button,
 input,
 select {
   font: inherit;
+}
+
+button:not(:disabled) {
+  cursor: pointer;
 }
 
 * {

@@ -1,50 +1,849 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
-import { ApiError } from '@/lib/api'
-import { createTemplate, createVariant, getTemplateFields, getTemplates, getVariants, replaceVariantFile, setTemplateActive, setVariantActive, updateTemplate, updateVariant } from './templatesApi'
-import type { Template, TemplateForm, TemplateVariant, VariantForm } from './types'
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ChevronRight, MoreHorizontal } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import {
+  AdminConfirmation,
+  AdminEmptyState,
+  AdminHeader,
+  AdminNotice,
+  AdminOverlay,
+} from "@/features/admin/AdminOverlay";
+import { ApiError } from "@/lib/api";
+import {
+  createTemplate,
+  createVariant,
+  getTemplateFields,
+  getTemplates,
+  getVariants,
+  replaceVariantFile,
+  setTemplateActive,
+  setVariantActive,
+  updateTemplate,
+  updateVariant,
+} from "./templatesApi";
+import type {
+  Template,
+  TemplateForm,
+  TemplateVariant,
+  VariantForm,
+} from "./types";
 
-const emptyTemplate: TemplateForm = { nombre: '', descripcion: '', documentType: 'PERMISO_GREMIAL' }
-const emptyVariant: VariantForm = { nombre: '', archivoPdf: null }
-export const configureFieldsLabel = 'Configurar campos'
+const emptyTemplate: TemplateForm = {
+  nombre: "",
+  descripcion: "",
+  documentType: "PERMISO_GREMIAL",
+};
+const emptyVariant: VariantForm = { nombre: "", archivoPdf: null };
+export const configureFieldsLabel = "Configurar campos";
+const errorMessage = (error: unknown) =>
+  error instanceof ApiError
+    ? error.message
+    : "No pudimos completar la operacion. Intenta nuevamente.";
 
-function errorMessage(error: unknown) { return error instanceof ApiError ? error.message : 'No pudimos completar la operación. Intentá nuevamente.' }
-
-export function variantConfigurationStatus(variant: TemplateVariant, fieldCount: number | undefined) {
-  if (variant.legacyPositioned) return 'Configuración heredada'
-  if (fieldCount && fieldCount > 0) return 'Campos configurados'
-  return 'Campos sin configurar'
+export function variantConfigurationStatus(
+  variant: TemplateVariant,
+  fieldCount: number | undefined,
+) {
+  if (variant.legacyPositioned) return "Configuración heredada";
+  if (fieldCount && fieldCount > 0) return "Campos configurados";
+  return "Campos sin configurar";
 }
 
-export function TemplateManagementPage({ onConfigureFields }: { onConfigureFields: (templateId: string, variant: TemplateVariant) => void }) {
-  const client = useQueryClient()
-  const [search, setSearch] = useState('')
-  const [selected, setSelected] = useState<Template | null>(null)
-  const [templateForm, setTemplateForm] = useState<TemplateForm>(emptyTemplate)
-  const [editingTemplate, setEditingTemplate] = useState(false)
-  const [variantForm, setVariantForm] = useState<VariantForm>(emptyVariant)
-  const [editingVariant, setEditingVariant] = useState<TemplateVariant | null>(null)
-  const [feedback, setFeedback] = useState('')
-  const [configurationPrompt, setConfigurationPrompt] = useState<TemplateVariant | null>(null)
-  const templatesQuery = useQuery({ queryKey: ['templates', search], queryFn: () => getTemplates(search) })
-  const variantsQuery = useQuery({ queryKey: ['template-variants', selected?.id], queryFn: () => getVariants(selected!.id), enabled: selected !== null })
-  const refreshVariants = () => void client.invalidateQueries({ queryKey: ['template-variants', selected?.id] })
-  const templateMutation = useMutation({ mutationFn: () => editingTemplate && selected ? updateTemplate(selected.id, templateForm) : createTemplate(templateForm), onSuccess: (template) => { setFeedback(editingTemplate ? 'Plantilla actualizada correctamente.' : 'Plantilla creada correctamente.'); setTemplateForm(emptyTemplate); setEditingTemplate(false); setSelected(template); void client.invalidateQueries({ queryKey: ['templates'] }) } })
-  const templateActiveMutation = useMutation({ mutationFn: ({ id, active }: { id: string; active: boolean }) => setTemplateActive(id, active), onSuccess: (_, values) => { setFeedback(values.active ? 'Plantilla activada correctamente.' : 'Plantilla desactivada correctamente.'); void client.invalidateQueries({ queryKey: ['templates'] }) } })
-  const variantMutation = useMutation({ mutationFn: () => { if (!selected) throw new Error('No hay una plantilla seleccionada.'); if (editingVariant) return updateVariant(selected.id, editingVariant.id, variantForm.nombre); if (!variantForm.archivoPdf) throw new Error('Seleccioná un archivo PDF.'); return createVariant(selected.id, variantForm.nombre, variantForm.archivoPdf) }, onSuccess: (variant) => { const created = !editingVariant; setFeedback(created ? 'PDF cargado correctamente.' : 'Variante actualizada correctamente.'); setVariantForm(emptyVariant); setEditingVariant(null); refreshVariants(); if (created) setConfigurationPrompt(variant) } })
-  const replaceMutation = useMutation({ mutationFn: ({ variantId, file }: { variantId: string; file: File }) => replaceVariantFile(selected!.id, variantId, file), onSuccess: (variant) => { setFeedback('PDF cargado correctamente. Configurá nuevamente sus campos.'); refreshVariants(); setConfigurationPrompt(variant) } })
-  const variantActiveMutation = useMutation({ mutationFn: ({ id, active }: { id: string; active: boolean }) => setVariantActive(selected!.id, id, active), onSuccess: (_, values) => { setFeedback(values.active ? 'Variante activada correctamente.' : 'Variante desactivada correctamente.'); refreshVariants() } })
-  const mutationError = templateMutation.error ?? templateActiveMutation.error ?? variantMutation.error ?? replaceMutation.error ?? variantActiveMutation.error
-  const chooseTemplate = (template: Template) => { setSelected(template); setEditingTemplate(false); setEditingVariant(null); setVariantForm(emptyVariant) }
-  const editTemplate = (template: Template) => { setSelected(template); setEditingTemplate(true); setTemplateForm({ nombre: template.nombre, descripcion: template.descripcion, documentType: template.documentType }) }
-  const toggleTemplate = (template: Template) => { const action = template.active ? 'desactivar' : 'activar'; if (window.confirm(`¿Querés ${action} la plantilla ${template.nombre}?`)) templateActiveMutation.mutate({ id: template.id, active: !template.active }) }
-  const editVariant = (variant: TemplateVariant) => { setEditingVariant(variant); setVariantForm({ nombre: variant.nombre, archivoPdf: null }) }
-  const toggleVariant = (variant: TemplateVariant) => { const action = variant.active ? 'desactivar' : 'activar'; if (window.confirm(`¿Querés ${action} la variante ${variant.nombre}?`)) variantActiveMutation.mutate({ id: variant.id, active: !variant.active }) }
-  const replaceFile = (variant: TemplateVariant, file: File | null) => { if (file && window.confirm(`¿Querés reemplazar el PDF de ${variant.nombre}?`)) replaceMutation.mutate({ variantId: variant.id, file }) }
+type Confirmation = {
+  title: string;
+  message: string;
+  actionLabel: string;
+  destructive?: boolean;
+  onConfirm: () => void;
+};
 
-  return <main className="min-h-screen bg-[#f4f7fb] text-slate-900"><div className="mx-auto max-w-7xl px-4 py-6 sm:px-8 sm:py-10"><header className="mb-8 border-b border-slate-200 pb-6"><p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-700">Administración</p><h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">Plantillas</h1><p className="mt-2 max-w-2xl text-sm text-slate-600">Elegí una plantilla para administrar sus datos y las variantes PDF que le pertenecen.</p></header>{feedback && <p role="status" className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{feedback}</p>}{mutationError && <p role="alert" className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{errorMessage(mutationError)}</p>}<div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]"><section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6"><div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="text-lg font-semibold">Tipos de documento</h2><p className="text-sm text-slate-500">{templatesQuery.data?.length ?? 0} plantillas</p></div><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar plantilla" aria-label="Buscar plantilla" className="rounded-xl border border-slate-300 px-3 py-2 text-sm sm:w-56" /></div>{templatesQuery.isLoading && <p className="py-10 text-center text-sm text-slate-500">Cargando plantillas...</p>}{templatesQuery.isError && <p role="alert" className="rounded-xl bg-rose-50 p-4 text-sm text-rose-800">{errorMessage(templatesQuery.error)}</p>}{!templatesQuery.isLoading && templatesQuery.data?.length === 0 && <p className="rounded-xl bg-slate-50 px-4 py-10 text-center text-sm text-slate-600">Todavía no hay plantillas.</p>}<div className="space-y-3">{templatesQuery.data?.map((template) => <article key={template.id} className={`rounded-xl border p-4 ${selected?.id === template.id ? 'border-blue-400 bg-blue-50/40' : 'border-slate-200'}`}><button type="button" onClick={() => chooseTemplate(template)} className="w-full text-left"><div className="flex items-start justify-between gap-3"><div><h3 className="font-semibold">{template.nombre}</h3><p className="mt-1 text-sm text-slate-600">{template.descripcion}</p></div><Status active={template.active} /></div></button><div className="mt-4 grid grid-cols-2 gap-2"><button type="button" onClick={() => editTemplate(template)} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold">Editar</button><button type="button" onClick={() => toggleTemplate(template)} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold">{template.active ? 'Desactivar' : 'Activar'}</button></div></article>)}</div></section><section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6"><h2 className="text-lg font-semibold">{editingTemplate ? 'Editar plantilla' : 'Nueva plantilla'}</h2><form onSubmit={(event) => { event.preventDefault(); templateMutation.mutate() }} className="mt-5 space-y-4"><label className="block text-sm font-medium">Nombre<input required maxLength={200} value={templateForm.nombre} onChange={(event) => setTemplateForm({ ...templateForm, nombre: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5" /></label><label className="block text-sm font-medium">Descripción<textarea required maxLength={500} value={templateForm.descripcion} onChange={(event) => setTemplateForm({ ...templateForm, descripcion: event.target.value })} className="mt-1 min-h-24 w-full rounded-xl border border-slate-300 px-3 py-2.5" /></label><label className="block text-sm font-medium">Tipo de documento<select value={templateForm.documentType} onChange={(event) => setTemplateForm({ ...templateForm, documentType: event.target.value as TemplateForm['documentType'] })} className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5"><option value="PERMISO_GREMIAL">Permiso Gremial</option></select></label><div className="flex gap-3">{editingTemplate && <button type="button" onClick={() => { setEditingTemplate(false); setTemplateForm(emptyTemplate) }} className="flex-1 rounded-xl border border-slate-300 px-4 py-3 text-sm font-semibold">Cancelar</button>}<button disabled={templateMutation.isPending} className="flex-1 rounded-xl bg-blue-700 px-4 py-3 text-sm font-semibold text-white disabled:opacity-60">{templateMutation.isPending ? 'Guardando...' : editingTemplate ? 'Guardar cambios' : 'Crear plantilla'}</button></div></form>{selected && <div className="mt-8 border-t border-slate-200 pt-6"><h2 className="text-lg font-semibold">Nueva variante</h2><p className="mt-1 text-sm text-slate-500">Subí el PDF y después configurá los datos que debe completar.</p><form onSubmit={(event) => { event.preventDefault(); variantMutation.mutate() }} className="mt-4 space-y-3"><label className="block text-sm font-medium">Nombre de la variante<input required maxLength={200} value={variantForm.nombre} onChange={(event) => setVariantForm({ ...variantForm, nombre: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5" /></label>{!editingVariant && <label className="block text-sm font-medium">Archivo PDF<input required type="file" accept="application/pdf,.pdf" onChange={(event) => setVariantForm({ ...variantForm, archivoPdf: event.target.files?.[0] ?? null })} className="mt-1 block w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" /></label>}<div className="flex gap-3">{editingVariant && <button type="button" onClick={() => { setEditingVariant(null); setVariantForm(emptyVariant) }} className="flex-1 rounded-xl border border-slate-300 px-3 py-2.5 text-sm font-semibold">Cancelar</button>}<button disabled={variantMutation.isPending} className="flex-1 rounded-xl bg-blue-700 px-3 py-2.5 text-sm font-semibold text-white disabled:opacity-60">{variantMutation.isPending ? 'Guardando...' : editingVariant ? 'Guardar cambios' : 'Subir variante'}</button></div></form></div>}</section></div>{selected && <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6"><h2 className="text-lg font-semibold">Variantes de {selected.nombre}</h2><p className="mt-1 text-sm text-slate-500">Cada variante tiene su propio PDF y configuración de campos.</p>{variantsQuery.isLoading && <p className="py-8 text-center text-sm text-slate-500">Cargando variantes...</p>}{variantsQuery.isError && <p role="alert" className="mt-4 rounded-xl bg-rose-50 p-4 text-sm text-rose-800">{errorMessage(variantsQuery.error)}</p>}<div className="mt-5 grid gap-3 md:grid-cols-2">{variantsQuery.data?.map((variant) => <VariantCard key={variant.id} templateId={selected.id} variant={variant} onConfigure={() => onConfigureFields(selected.id, variant)} onEdit={() => editVariant(variant)} onToggle={() => toggleVariant(variant)} onReplace={replaceFile} />)}</div></section>}{configurationPrompt && selected && <ConfigurationPrompt variant={configurationPrompt} onConfigure={() => { onConfigureFields(selected.id, configurationPrompt); setConfigurationPrompt(null) }} onLater={() => setConfigurationPrompt(null)} />}</div></main>
+export function TemplateManagementPage({
+  onConfigureFields,
+  initialTemplateId,
+}: {
+  onConfigureFields: (templateId: string, variant: TemplateVariant) => void;
+  initialTemplateId?: string;
+}) {
+  const client = useQueryClient();
+  const [search, setSearch] = useState("");
+  const [selected, setSelected] = useState<Template | null>(null);
+  const [templateEditor, setTemplateEditor] = useState<
+    "create" | "edit" | null
+  >(null);
+  const [templateForm, setTemplateForm] = useState<TemplateForm>(emptyTemplate);
+  const [variantEditor, setVariantEditor] = useState<
+    "create" | TemplateVariant | null
+  >(null);
+  const [variantForm, setVariantForm] = useState<VariantForm>(emptyVariant);
+  const [templateActions, setTemplateActions] = useState(false);
+  const [variantActions, setVariantActions] = useState<string | null>(null);
+  const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
+  const [configurationPrompt, setConfigurationPrompt] =
+    useState<TemplateVariant | null>(null);
+  const [feedback, setFeedback] = useState("");
+  const appliedInitial = useRef(false);
+  const templatesQuery = useQuery({
+    queryKey: ["templates", search],
+    queryFn: () => getTemplates(search),
+  });
+  const variantsQuery = useQuery({
+    queryKey: ["template-variants", selected?.id],
+    queryFn: () => getVariants(selected!.id),
+    enabled: Boolean(selected),
+  });
+  const refreshTemplates = () =>
+    void client.invalidateQueries({ queryKey: ["templates"] });
+  const refreshVariants = () =>
+    void client.invalidateQueries({
+      queryKey: ["template-variants", selected?.id],
+    });
+
+  useEffect(() => {
+    if (!appliedInitial.current && initialTemplateId && templatesQuery.data) {
+      const initial = templatesQuery.data.find(
+        (template) => template.id === initialTemplateId,
+      );
+      if (initial) setSelected(initial);
+      appliedInitial.current = true;
+    }
+  }, [initialTemplateId, templatesQuery.data]);
+
+  const templateMutation = useMutation({
+    mutationFn: () =>
+      templateEditor === "edit" && selected
+        ? updateTemplate(selected.id, templateForm)
+        : createTemplate(templateForm),
+    onSuccess: (template) => {
+      setFeedback(
+        templateEditor === "edit"
+          ? "Plantilla actualizada correctamente."
+          : "Plantilla creada correctamente.",
+      );
+      setSelected(template);
+      setTemplateForm(emptyTemplate);
+      setTemplateEditor(null);
+      refreshTemplates();
+    },
+  });
+  const templateActiveMutation = useMutation({
+    mutationFn: ({ id, active }: { id: string; active: boolean }) =>
+      setTemplateActive(id, active),
+    onSuccess: (_, values) => {
+      if (selected?.id === values.id)
+        setSelected({ ...selected, active: values.active });
+      setConfirmation(null);
+      setFeedback(
+        values.active
+          ? "Plantilla activada correctamente."
+          : "Plantilla desactivada correctamente.",
+      );
+      refreshTemplates();
+    },
+  });
+  const variantMutation = useMutation({
+    mutationFn: () => {
+      if (!selected) throw new Error("No hay una plantilla seleccionada.");
+      if (variantEditor && variantEditor !== "create")
+        return updateVariant(selected.id, variantEditor.id, variantForm.nombre);
+      if (!variantForm.archivoPdf)
+        throw new Error("Selecciona un archivo PDF.");
+      return createVariant(
+        selected.id,
+        variantForm.nombre,
+        variantForm.archivoPdf,
+      );
+    },
+    onSuccess: (variant) => {
+      const created = variantEditor === "create";
+      setFeedback(
+        created
+          ? "PDF cargado correctamente."
+          : "Variante actualizada correctamente.",
+      );
+      setVariantForm(emptyVariant);
+      setVariantEditor(null);
+      refreshVariants();
+      if (created) setConfigurationPrompt(variant);
+    },
+  });
+  const replaceMutation = useMutation({
+    mutationFn: ({ variantId, file }: { variantId: string; file: File }) =>
+      replaceVariantFile(selected!.id, variantId, file),
+    onSuccess: (variant) => {
+      setConfirmation(null);
+      setFeedback(
+        "PDF reemplazado correctamente. Configura nuevamente sus campos.",
+      );
+      refreshVariants();
+      setConfigurationPrompt(variant);
+    },
+  });
+  const variantActiveMutation = useMutation({
+    mutationFn: ({ id, active }: { id: string; active: boolean }) =>
+      setVariantActive(selected!.id, id, active),
+    onSuccess: (_, values) => {
+      setConfirmation(null);
+      setFeedback(
+        values.active
+          ? "Variante activada correctamente."
+          : "Variante desactivada correctamente.",
+      );
+      refreshVariants();
+    },
+  });
+  const mutationError =
+    templateMutation.error ??
+    templateActiveMutation.error ??
+    variantMutation.error ??
+    replaceMutation.error ??
+    variantActiveMutation.error;
+  const pendingConfirmation =
+    templateActiveMutation.isPending ||
+    variantActiveMutation.isPending ||
+    replaceMutation.isPending;
+  const chooseTemplate = (template: Template) => {
+    setSelected(template);
+    setTemplateActions(false);
+    setVariantActions(null);
+  };
+  const openTemplateEditor = (mode: "create" | "edit") => {
+    setTemplateForm(
+      mode === "edit" && selected
+        ? {
+            nombre: selected.nombre,
+            descripcion: selected.descripcion,
+            documentType: selected.documentType,
+          }
+        : emptyTemplate,
+    );
+    setTemplateActions(false);
+    setTemplateEditor(mode);
+  };
+  const openVariantEditor = (variant: "create" | TemplateVariant) => {
+    setVariantActions(null);
+    setVariantForm(
+      variant === "create"
+        ? emptyVariant
+        : { nombre: variant.nombre, archivoPdf: null },
+    );
+    setVariantEditor(variant);
+  };
+  const requestReplace = (variant: TemplateVariant, file: File | null) => {
+    if (!file || replaceMutation.isPending) return;
+    setVariantActions(null);
+    setConfirmation({
+      title: "Reemplazar PDF",
+      message: `El PDF de ${variant.nombre} sera reemplazado y deberas configurar nuevamente sus campos.`,
+      actionLabel: "Reemplazar PDF",
+      onConfirm: () => replaceMutation.mutate({ variantId: variant.id, file }),
+    });
+  };
+
+  return (
+    <section className="max-w-6xl">
+      <div className="lg:grid lg:grid-cols-[20rem_minmax(0,1fr)] lg:gap-8">
+        <section className={selected ? "hidden lg:block" : ""}>
+          <AdminHeader
+            title="Plantillas"
+            description="Selecciona un tipo de documento para gestionar sus plantillas."
+            newLabel="Nueva plantilla"
+            onCreate={() => openTemplateEditor("create")}
+          />
+          <TemplateList
+            search={search}
+            onSearch={setSearch}
+            query={templatesQuery}
+            selectedId={selected?.id}
+            onSelect={chooseTemplate}
+            onCreate={() => openTemplateEditor("create")}
+          />
+        </section>
+        <section
+          className={`mt-5 lg:mt-0 ${selected ? "" : "hidden lg:block"}`}
+        >
+          {selected ? (
+            <TemplateDetail
+              template={selected}
+              variantsQuery={variantsQuery}
+              templateActions={templateActions}
+              variantActions={variantActions}
+              onBack={() => setSelected(null)}
+              onToggleTemplate={() =>
+                setConfirmation({
+                  title: `${selected.active ? "Desactivar" : "Activar"} plantilla`,
+                  message: `Quieres ${selected.active ? "desactivar" : "activar"} la plantilla ${selected.nombre}?`,
+                  actionLabel: selected.active
+                    ? "Desactivar plantilla"
+                    : "Activar plantilla",
+                  destructive: selected.active,
+                  onConfirm: () =>
+                    templateActiveMutation.mutate({
+                      id: selected.id,
+                      active: !selected.active,
+                    }),
+                })
+              }
+              onToggleTemplateActions={() =>
+                setTemplateActions(!templateActions)
+              }
+              onEditTemplate={() => openTemplateEditor("edit")}
+              onCreateVariant={() => openVariantEditor("create")}
+              onConfigure={(variant) => onConfigureFields(selected.id, variant)}
+              onVariantActions={setVariantActions}
+              onEditVariant={openVariantEditor}
+              onToggleVariant={(variant) =>
+                setConfirmation({
+                  title: `${variant.active ? "Desactivar" : "Activar"} variante`,
+                  message: `Quieres ${variant.active ? "desactivar" : "activar"} la variante ${variant.nombre}?`,
+                  actionLabel: variant.active
+                    ? "Desactivar variante"
+                    : "Activar variante",
+                  destructive: variant.active,
+                  onConfirm: () =>
+                    variantActiveMutation.mutate({
+                      id: variant.id,
+                      active: !variant.active,
+                    }),
+                })
+              }
+              onReplace={requestReplace}
+            />
+          ) : (
+            <div className="hidden lg:block pt-24 text-center text-sm text-slate-500">
+              Selecciona un tipo de documento para ver sus plantillas.
+            </div>
+          )}
+        </section>
+      </div>
+      {feedback && <AdminNotice kind="success">{feedback}</AdminNotice>}
+      {mutationError && (
+        <AdminNotice kind="error">{errorMessage(mutationError)}</AdminNotice>
+      )}
+      {templateEditor && (
+        <TemplateEditor
+          mode={templateEditor}
+          value={templateForm}
+          pending={templateMutation.isPending}
+          onChange={setTemplateForm}
+          onClose={() => setTemplateEditor(null)}
+          onSubmit={() => templateMutation.mutate()}
+        />
+      )}
+      {variantEditor && (
+        <VariantEditor
+          variant={variantEditor}
+          value={variantForm}
+          pending={variantMutation.isPending}
+          onChange={setVariantForm}
+          onClose={() => setVariantEditor(null)}
+          onSubmit={() => variantMutation.mutate()}
+        />
+      )}
+      {configurationPrompt && (
+        <AdminConfirmation
+          title="Configurar campos"
+          message={`El PDF de ${configurationPrompt.nombre} ya esta cargado. Configura los campos antes de usarlo.`}
+          actionLabel="Configurar campos"
+          pending={false}
+          onCancel={() => setConfigurationPrompt(null)}
+          onConfirm={() => {
+            const variant = configurationPrompt;
+            setConfigurationPrompt(null);
+            onConfigureFields(selected!.id, variant);
+          }}
+        />
+      )}
+      {confirmation && (
+        <AdminConfirmation
+          {...confirmation}
+          pending={pendingConfirmation}
+          onCancel={() => setConfirmation(null)}
+        />
+      )}
+    </section>
+  );
 }
 
-function Status({ active }: { active: boolean }) { return <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${active ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>{active ? 'Activa' : 'Inactiva'}</span> }
-function VariantCard({ templateId, variant, onConfigure, onEdit, onToggle, onReplace }: { templateId: string; variant: TemplateVariant; onConfigure: () => void; onEdit: () => void; onToggle: () => void; onReplace: (variant: TemplateVariant, file: File | null) => void }) { const fieldsQuery = useQuery({ queryKey: ['template-fields', variant.id], queryFn: () => getTemplateFields(templateId, variant.id) }); const status = variantConfigurationStatus(variant, fieldsQuery.data?.length); return <article className="rounded-xl border border-slate-200 p-4"><div className="flex items-start justify-between gap-3"><div><h3 className="font-semibold">{variant.nombre}</h3><p className={`mt-1 text-sm font-medium ${status === 'Campos sin configurar' ? 'text-amber-800' : 'text-slate-600'}`}>{fieldsQuery.isPending ? 'Verificando campos...' : status}</p></div><Status active={variant.active} /></div><div className="mt-4 grid grid-cols-2 gap-2"><button type="button" onClick={onConfigure} className="col-span-2 rounded-lg bg-blue-700 px-3 py-2 text-sm font-semibold text-white">{configureFieldsLabel}</button><button type="button" onClick={onEdit} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold">Editar</button><button type="button" onClick={onToggle} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold">{variant.active ? 'Desactivar' : 'Activar'}</button><label className="col-span-2 cursor-pointer rounded-lg border border-blue-200 px-3 py-2 text-center text-xs font-semibold text-blue-700">Cambiar PDF<input type="file" accept="application/pdf,.pdf" className="sr-only" onChange={(event) => onReplace(variant, event.target.files?.[0] ?? null)} /></label></div></article> }
-function ConfigurationPrompt({ variant, onConfigure, onLater }: { variant: TemplateVariant; onConfigure: () => void; onLater: () => void }) { return <div role="dialog" aria-modal="true" aria-labelledby="configuration-prompt-title" className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4"><section className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"><h2 id="configuration-prompt-title" className="text-xl font-bold">PDF cargado correctamente</h2><p className="mt-3 text-sm text-slate-600">Configurá los campos de {variant.nombre} para que pueda generar documentos.</p><div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end"><button type="button" onClick={onLater} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold">Hacerlo más tarde</button><button type="button" onClick={onConfigure} className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white">Configurar campos ahora</button></div></section></div> }
+function TemplateList({
+  search,
+  onSearch,
+  query,
+  selectedId,
+  onSelect,
+  onCreate,
+}: {
+  search: string;
+  onSearch: (value: string) => void;
+  query: ReturnType<typeof useQuery<Template[]>>;
+  selectedId?: string;
+  onSelect: (template: Template) => void;
+  onCreate: () => void;
+}) {
+  return (
+    <section className="mt-5 lg:mt-0">
+      <div className="flex flex-col gap-3 border-b border-slate-200 pb-4">
+        <div>
+          <div>
+            <h2 className="font-semibold">Tipos de documento</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              {query.data?.length ?? 0} tipos
+            </p>
+          </div>
+        </div>
+        <input
+          value={search}
+          onChange={(event) => onSearch(event.target.value)}
+          placeholder="Buscar tipo"
+          aria-label="Buscar tipo"
+          className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100"
+        />
+      </div>
+      {query.isLoading && (
+        <p className="py-10 text-center text-sm text-slate-500">
+          Cargando plantillas...
+        </p>
+      )}
+      {query.isError && (
+        <AdminNotice kind="error">
+          {errorMessage(query.error)}{" "}
+          <button
+            type="button"
+            onClick={() => void query.refetch()}
+            className="font-semibold underline"
+          >
+            Reintentar
+          </button>
+        </AdminNotice>
+      )}
+      {!query.isLoading && query.data?.length === 0 && (
+        <AdminEmptyState actionLabel="Crear plantilla" onAction={onCreate}>
+          Todavia no hay plantillas.
+        </AdminEmptyState>
+      )}
+      <div className="divide-y divide-slate-200">
+        {query.data?.map((template) => (
+          <button
+            key={template.id}
+            type="button"
+            onClick={() => onSelect(template)}
+            className={`flex min-h-20 w-full items-center gap-3 py-4 text-left ${selectedId === template.id ? "bg-blue-50 px-3 text-blue-950" : "hover:bg-slate-100"}`}
+          >
+            <span className="min-w-0 flex-1">
+              <strong className="block truncate">{template.nombre}</strong>
+              <span className="mt-1 block truncate text-sm text-slate-600">
+                {template.descripcion}
+              </span>
+            </span>
+            <ChevronRight className="shrink-0 text-slate-400" size={20} />
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function TemplateDetail({
+  template,
+  variantsQuery,
+  templateActions,
+  variantActions,
+  onBack,
+  onToggleTemplate,
+  onToggleTemplateActions,
+  onEditTemplate,
+  onCreateVariant,
+  onConfigure,
+  onVariantActions,
+  onEditVariant,
+  onToggleVariant,
+  onReplace,
+}: {
+  template: Template;
+  variantsQuery: ReturnType<typeof useQuery<TemplateVariant[]>>;
+  templateActions: boolean;
+  variantActions: string | null;
+  onBack: () => void;
+  onToggleTemplate: () => void;
+  onToggleTemplateActions: () => void;
+  onEditTemplate: () => void;
+  onCreateVariant: () => void;
+  onConfigure: (variant: TemplateVariant) => void;
+  onVariantActions: (id: string | null) => void;
+  onEditVariant: (variant: TemplateVariant) => void;
+  onToggleVariant: (variant: TemplateVariant) => void;
+  onReplace: (variant: TemplateVariant, file: File | null) => void;
+}) {
+  return (
+    <>
+      <header className="border-b border-slate-200 pb-4">
+        <button
+          type="button"
+          onClick={onBack}
+          className="mb-3 min-h-11 rounded-lg px-2 text-sm font-semibold text-blue-700 hover:bg-blue-50 lg:hidden"
+        >
+          Volver a plantillas
+        </button>
+        <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-700">
+          Detalle de plantilla
+        </p>
+        <div className="mt-1 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="truncate text-2xl font-bold tracking-tight sm:text-3xl">
+              {template.nombre}
+            </h1>
+            <p className="mt-1 text-sm text-slate-600">
+              {template.documentType === "PERMISO_GREMIAL"
+                ? "Permiso Gremial"
+                : template.documentType}
+            </p>
+          </div>
+          <Status active={template.active} />
+        </div>
+        <div className="relative mt-4 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={onToggleTemplateActions}
+            className="min-h-11 rounded-xl border border-slate-300 px-4 text-sm font-semibold hover:bg-slate-50"
+          >
+            Acciones
+          </button>
+          <button
+            type="button"
+            onClick={onCreateVariant}
+            className="min-h-11 rounded-xl bg-blue-700 px-4 text-sm font-semibold text-white hover:bg-blue-800"
+          >
+            + Nueva variante
+          </button>
+          {templateActions && (
+            <div className="absolute left-0 top-11 z-10 mt-2 w-52 rounded-xl border border-slate-200 bg-white p-1 shadow-lg">
+              <button
+                type="button"
+                onClick={onEditTemplate}
+                className="w-full rounded-lg px-3 py-2.5 text-left text-sm font-medium hover:bg-slate-100"
+              >
+                Editar plantilla
+              </button>
+              <button
+                type="button"
+                onClick={onToggleTemplate}
+                className={`w-full rounded-lg px-3 py-2.5 text-left text-sm font-medium hover:bg-slate-100 ${template.active ? "text-rose-700" : "text-emerald-700"}`}
+              >
+                {template.active ? "Desactivar plantilla" : "Activar plantilla"}
+              </button>
+            </div>
+          )}
+        </div>
+        <p className="mt-4 text-sm text-slate-600">
+          PDFs disponibles para esta plantilla.
+        </p>
+      </header>
+      <section className="mt-5">
+        <h2 className="text-lg font-semibold">Variantes</h2>
+        {variantsQuery.isLoading && (
+          <p className="py-10 text-center text-sm text-slate-500">
+            Cargando variantes...
+          </p>
+        )}
+        {variantsQuery.isError && (
+          <AdminNotice kind="error">
+            {errorMessage(variantsQuery.error)}{" "}
+            <button
+              type="button"
+              onClick={() => void variantsQuery.refetch()}
+              className="font-semibold underline"
+            >
+              Reintentar
+            </button>
+          </AdminNotice>
+        )}
+        {!variantsQuery.isLoading && variantsQuery.data?.length === 0 && (
+          <AdminEmptyState
+            actionLabel="Nueva variante"
+            onAction={onCreateVariant}
+          >
+            Todavia no hay PDFs para esta plantilla.
+          </AdminEmptyState>
+        )}
+        <div className="divide-y divide-slate-200">
+          {variantsQuery.data?.map((variant) => (
+            <VariantRow
+              key={variant.id}
+              templateId={template.id}
+              variant={variant}
+              actionsOpen={variantActions === variant.id}
+              onConfigure={() => onConfigure(variant)}
+              onActions={() =>
+                onVariantActions(
+                  variantActions === variant.id ? null : variant.id,
+                )
+              }
+              onEdit={() => onEditVariant(variant)}
+              onToggle={() => onToggleVariant(variant)}
+              onReplace={onReplace}
+            />
+          ))}
+        </div>
+      </section>
+    </>
+  );
+}
+
+function VariantRow({
+  templateId,
+  variant,
+  actionsOpen,
+  onConfigure,
+  onActions,
+  onEdit,
+  onToggle,
+  onReplace,
+}: {
+  templateId: string;
+  variant: TemplateVariant;
+  actionsOpen: boolean;
+  onConfigure: () => void;
+  onActions: () => void;
+  onEdit: () => void;
+  onToggle: () => void;
+  onReplace: (variant: TemplateVariant, file: File | null) => void;
+}) {
+  const fieldsQuery = useQuery({
+    queryKey: ["template-fields", variant.id],
+    queryFn: () => getTemplateFields(templateId, variant.id),
+  });
+  const status = fieldsQuery.isError
+    ? "No se pudo verificar la configuracion"
+    : fieldsQuery.isPending
+      ? "Verificando configuracion..."
+      : variantConfigurationStatus(variant, fieldsQuery.data?.length);
+  return (
+    <article className="relative py-4">
+      <div className="flex items-start gap-3">
+        <div className="min-w-0 flex-1">
+          <h3 className="truncate font-semibold">{variant.nombre}</h3>
+          <p
+            className={`mt-1 text-sm ${status === "Campos sin configurar" || fieldsQuery.isError ? "text-amber-800" : "text-slate-600"}`}
+          >
+            {status}
+          </p>
+          {fieldsQuery.isError && (
+            <button
+              type="button"
+              onClick={() => void fieldsQuery.refetch()}
+              className="mt-1 text-sm font-semibold text-blue-700 underline"
+            >
+              Reintentar
+            </button>
+          )}
+          <Status active={variant.active} />
+        </div>
+        <div className="flex shrink-0 gap-1">
+          <button
+            type="button"
+            onClick={onConfigure}
+            className="min-h-11 rounded-xl bg-blue-700 px-3 text-sm font-semibold text-white"
+          >
+            {configureFieldsLabel}
+          </button>
+          <button
+            type="button"
+            onClick={onActions}
+            aria-label={`Acciones para ${variant.nombre}`}
+            className="grid h-11 w-11 place-items-center rounded-lg text-slate-600 hover:bg-slate-100"
+          >
+            <MoreHorizontal size={20} />
+          </button>
+        </div>
+      </div>
+      {actionsOpen && (
+        <div className="absolute right-0 top-16 z-10 w-52 rounded-xl border border-slate-200 bg-white p-1 shadow-lg">
+          <button
+            type="button"
+            onClick={onEdit}
+            className="w-full rounded-lg px-3 py-2.5 text-left text-sm font-medium hover:bg-slate-100"
+          >
+            Editar variante
+          </button>
+          <label className="block cursor-pointer rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-slate-100">
+            Reemplazar PDF
+            <input
+              type="file"
+              accept="application/pdf,.pdf"
+              className="sr-only"
+              onChange={(event) =>
+                onReplace(variant, event.target.files?.[0] ?? null)
+              }
+            />
+          </label>
+          <button
+            type="button"
+            onClick={onToggle}
+            className={`w-full rounded-lg px-3 py-2.5 text-left text-sm font-medium hover:bg-slate-100 ${variant.active ? "text-rose-700" : "text-emerald-700"}`}
+          >
+            {variant.active ? "Desactivar variante" : "Activar variante"}
+          </button>
+        </div>
+      )}
+    </article>
+  );
+}
+
+function TemplateEditor({
+  mode,
+  value,
+  pending,
+  onChange,
+  onClose,
+  onSubmit,
+}: {
+  mode: "create" | "edit";
+  value: TemplateForm;
+  pending: boolean;
+  onChange: (value: TemplateForm) => void;
+  onClose: () => void;
+  onSubmit: () => void;
+}) {
+  return (
+    <AdminOverlay
+      title={mode === "create" ? "Nueva plantilla" : "Editar plantilla"}
+      onClose={onClose}
+    >
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          onSubmit();
+        }}
+        className="mt-5 space-y-4"
+      >
+        <label className="block text-sm font-semibold">
+          Nombre
+          <input
+            required
+            maxLength={200}
+            value={value.nombre}
+            onChange={(event) =>
+              onChange({ ...value, nombre: event.target.value })
+            }
+            className="mt-2 h-11 w-full rounded-xl border border-slate-300 px-3 outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100"
+          />
+        </label>
+        <label className="block text-sm font-semibold">
+          Descripcion
+          <textarea
+            required
+            maxLength={1000}
+            value={value.descripcion}
+            onChange={(event) =>
+              onChange({ ...value, descripcion: event.target.value })
+            }
+            className="mt-2 min-h-28 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100"
+          />
+        </label>
+        <p className="rounded-xl bg-slate-100 px-4 py-3 text-sm text-slate-600">
+          Tipo de documento: Permiso Gremial
+        </p>
+        <FormActions pending={pending} onClose={onClose} />
+      </form>
+    </AdminOverlay>
+  );
+}
+function VariantEditor({
+  variant,
+  value,
+  pending,
+  onChange,
+  onClose,
+  onSubmit,
+}: {
+  variant: "create" | TemplateVariant;
+  value: VariantForm;
+  pending: boolean;
+  onChange: (value: VariantForm) => void;
+  onClose: () => void;
+  onSubmit: () => void;
+}) {
+  const creating = variant === "create";
+  return (
+    <AdminOverlay
+      title={creating ? "Nueva variante" : "Editar variante"}
+      description={
+        creating ? "Carga un PDF para crear una nueva variante." : undefined
+      }
+      onClose={onClose}
+    >
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          onSubmit();
+        }}
+        className="mt-5 space-y-4"
+      >
+        <label className="block text-sm font-semibold">
+          Nombre
+          <input
+            required
+            maxLength={200}
+            value={value.nombre}
+            onChange={(event) =>
+              onChange({ ...value, nombre: event.target.value })
+            }
+            className="mt-2 h-11 w-full rounded-xl border border-slate-300 px-3 outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100"
+          />
+        </label>
+        {creating && (
+          <label className="block text-sm font-semibold">
+            Archivo PDF
+            <input
+              required
+              type="file"
+              accept="application/pdf,.pdf"
+              onChange={(event) =>
+                onChange({
+                  ...value,
+                  archivoPdf: event.target.files?.[0] ?? null,
+                })
+              }
+              className="mt-2 block w-full text-sm"
+            />
+          </label>
+        )}
+        <FormActions pending={pending} onClose={onClose} />
+      </form>
+    </AdminOverlay>
+  );
+}
+function FormActions({
+  pending,
+  onClose,
+}: {
+  pending: boolean;
+  onClose: () => void;
+}) {
+  return (
+    <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+      <button
+        type="button"
+        onClick={onClose}
+        disabled={pending}
+        className="min-h-11 rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold"
+      >
+        Cancelar
+      </button>
+      <button
+        disabled={pending}
+        className="min-h-11 rounded-xl bg-blue-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+      >
+        {pending ? "Guardando..." : "Guardar"}
+      </button>
+    </div>
+  );
+}
+function Status({ active }: { active: boolean }) {
+  return (
+    <span
+      className={`mt-2 inline-block shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${active ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}
+    >
+      {active ? "Activa" : "Inactiva"}
+    </span>
+  );
+}

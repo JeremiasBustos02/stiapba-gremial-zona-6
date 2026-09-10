@@ -111,4 +111,24 @@ public class TemplateField extends AuditableEntity {
         this.alignment = alignment;
         this.multiline = multiline;
     }
+
+    public void updateAcroform(FieldDefinition definition, boolean required, int displayOrder, String acroFieldName,
+                               Float fontSize, Float minFontSize, Float maxFontSize,
+                               TemplateFieldAlignment alignment, Boolean multiline) {
+        this.fieldDefinition = definition;
+        this.mode = TemplateFieldMode.ACROFORM;
+        this.acroFieldName = acroFieldName;
+        this.required = required;
+        this.displayOrder = displayOrder;
+        this.pageNumber = null;
+        this.x = null;
+        this.y = null;
+        this.width = null;
+        this.height = null;
+        this.fontSize = fontSize;
+        this.minFontSize = minFontSize;
+        this.maxFontSize = maxFontSize;
+        this.alignment = alignment;
+        this.multiline = multiline;
+    }
 }

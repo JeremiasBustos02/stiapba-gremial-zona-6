@@ -187,6 +187,56 @@ class PdfTemplateRendererTest {
     }
 
     @Test
+    void appliesExplicitLeftAndRightAlignmentWhileNullKeepsTheCenteredFallback() throws Exception {
+        byte[] source = Files.readAllBytes(ACROFORM_TEMPLATE);
+        PDRectangle rectangle;
+        try (PDDocument document = Loader.loadPDF(source)) {
+            rectangle = ((PDTextField) findField(document.getDocumentCatalog().getAcroForm(), "Empresa"))
+                    .getWidgets().getFirst().getRectangle();
+        }
+
+        TemplateVariant left = configuredVariant();
+        configureAcroformField(left, "company", TemplateFieldAlignment.LEFT, null, null, null, null);
+        TemplateVariant right = configuredVariant();
+        configureAcroformField(right, "company", TemplateFieldAlignment.RIGHT, null, null, null, null);
+
+        try (PDDocument leftDocument = Loader.loadPDF(renderer.render(left, shortValues(), source));
+             PDDocument rightDocument = Loader.loadPDF(renderer.render(right, shortValues(), source))) {
+            List<TextPosition> leftText = textPositions(leftDocument, "INFRIBA");
+            List<TextPosition> rightText = textPositions(rightDocument, "INFRIBA");
+            assertThat(leftText.getFirst().getXDirAdj()).isCloseTo(rectangle.getLowerLeftX() + 2f, within(2f));
+            TextPosition last = rightText.getLast();
+            assertThat(last.getXDirAdj() + last.getWidthDirAdj()).isCloseTo(rectangle.getUpperRightX() - 2f, within(2f));
+        }
+    }
+
+    @Test
+    void appliesPreferredFontSize() throws Exception {
+        TemplateVariant preferred = configuredVariant();
+        configureAcroformField(preferred, "company", null, 9f, 7f, 12f, null);
+
+        try (PDDocument document = Loader.loadPDF(renderer.render(preferred, shortValues(), Files.readAllBytes(ACROFORM_TEMPLATE)))) {
+            assertThat(textPositions(document, "INFRIBA")).extracting(TextPosition::getFontSizeInPt)
+                    .allSatisfy(size -> assertThat(size).isCloseTo(9f, within(0.1f)));
+        }
+
+    }
+
+    @Test
+    void appliesMultilineOnlyWhenConfigured() throws Exception {
+        TemplateVariant variant = configuredVariant();
+        configureAcroformField(variant, "delegate", null, null, null, null, true);
+        Map<String, String> values = new LinkedHashMap<>(shortValues());
+        values.put("delegate", "Juan Pérez\nDNI 40123456");
+
+        byte[] generated = renderer.render(variant, values, Files.readAllBytes(ACROFORM_TEMPLATE));
+
+        try (PDDocument document = Loader.loadPDF(generated)) {
+            assertThat(new PDFTextStripper().getText(document)).contains("Juan Pérez", "DNI 40123456");
+        }
+    }
+
+    @Test
     void rejectsAnUnknownAcroFormField() throws Exception {
         TemplateVariant variant = new TemplateVariant(new Template("Permiso Gremial", "Prueba"), "Bruna", "template.pdf");
         addField(variant, "company", "No existe", true, 1);
@@ -267,6 +317,16 @@ class PdfTemplateRendererTest {
         TemplateField field = new TemplateField(variant, new FieldDefinition(key), TemplateFieldMode.ACROFORM,
                 acroFieldName, required, displayOrder);
         variant.addField(field);
+    }
+
+    private void configureAcroformField(TemplateVariant variant, String key, TemplateFieldAlignment alignment,
+                                        Float fontSize, Float minFontSize, Float maxFontSize, Boolean multiline) {
+        TemplateField field = variant.getFields().stream()
+                .filter(value -> value.getFieldDefinition().getKey().equals(key))
+                .findFirst()
+                .orElseThrow();
+        field.updateAcroform(field.getFieldDefinition(), field.isRequired(), field.getDisplayOrder(), field.getAcroFieldName(),
+                fontSize, minFontSize, maxFontSize, alignment, multiline);
     }
 
     private Map<String, String> shortValues() {

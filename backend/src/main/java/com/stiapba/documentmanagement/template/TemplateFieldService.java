@@ -130,7 +130,12 @@ public class TemplateFieldService {
                 if (!acroformNames.add(configured.acroFieldName())) {
                     throw new TemplateException(400, "ACROFORM_FIELD_DUPLICATED", "Un campo del documento solo puede configurarse una vez.");
                 }
-                fields.add(new TemplateField(variant, definition, mode, configured.acroFieldName(), configured.required(), displayOrder));
+                validateAcroformAppearance(configured);
+                TemplateField field = new TemplateField(variant, definition, mode, configured.acroFieldName(), configured.required(), displayOrder);
+                field.updateAcroform(definition, configured.required(), displayOrder, configured.acroFieldName(),
+                        configured.fontSize(), configured.minFontSize(), configured.maxFontSize(),
+                        configured.alignment() == null ? null : alignment(configured.alignment()), configured.multiline());
+                fields.add(field);
                 continue;
             }
             PositionedFieldRequest positioned = new PositionedFieldRequest(definition.getId(), configured.required(), displayOrder,
@@ -171,6 +176,14 @@ public class TemplateFieldService {
             return TemplateFieldAlignment.valueOf(value);
         } catch (IllegalArgumentException | NullPointerException exception) {
             throw new TemplateException(400, "POSITIONED_FIELD_INVALID", "La alineación del campo no es válida.");
+        }
+    }
+
+    private void validateAcroformAppearance(ConfiguredField configured) {
+        boolean anySize = configured.fontSize() != null || configured.minFontSize() != null || configured.maxFontSize() != null;
+        if (anySize && (configured.fontSize() == null || configured.minFontSize() == null || configured.maxFontSize() == null
+                || configured.minFontSize() > configured.fontSize() || configured.fontSize() > configured.maxFontSize())) {
+            throw new TemplateException(400, "ACROFORM_FIELD_INVALID", "El tamaño de fuente debe estar entre el mínimo y el máximo.");
         }
     }
 
