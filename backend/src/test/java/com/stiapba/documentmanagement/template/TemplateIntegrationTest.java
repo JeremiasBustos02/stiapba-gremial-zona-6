@@ -26,6 +26,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.transaction.TestTransaction;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
@@ -147,8 +148,11 @@ class TemplateIntegrationTest {
         assertThat(objectMapper.readTree(replacement.getResponse().getContentAsString()).get("fileKey")).isNull();
         String newFileKey = variantRepository.findById(UUID.fromString(variantId)).orElseThrow().getFileKey();
         assertThat(newFileKey).isNotEqualTo(oldFileKey);
-        assertThat(Files.exists(storagePath.resolve(oldFileKey))).isFalse();
+        assertThat(Files.exists(storagePath.resolve(oldFileKey))).isTrue();
         assertThat(Files.exists(storagePath.resolve(newFileKey))).isTrue();
+        TestTransaction.flagForCommit();
+        TestTransaction.end();
+        assertThat(Files.exists(storagePath.resolve(oldFileKey))).isFalse();
     }
 
     @Test

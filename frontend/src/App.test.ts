@@ -13,4 +13,13 @@ describe('URL navigation', () => {
     expect(isAdminPath('/admin/usuarios')).toBe(true)
     expect(isAdminPath('/perfil')).toBe(false)
   })
+
+  it('recognizes document preview and every administration deep link', () => {
+    expect(screenForPath('/documentos/nuevo/template-id/vista-previa')).toBe('preview')
+    expect(screenForPath('/admin')).toBe('admin')
+    expect(screenForPath('/admin/usuarios')).toBe('users')
+    expect(screenForPath('/admin/empresas')).toBe('companies')
+    expect(screenForPath('/admin/convenios')).toBe('agreements')
+    expect(screenForPath('/admin/plantillas')).toBe('templates')
+  })
 })

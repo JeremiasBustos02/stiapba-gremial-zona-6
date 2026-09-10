@@ -11,7 +11,11 @@ import jakarta.transaction.Transactional;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.List;
@@ -19,6 +23,8 @@ import java.util.UUID;
 
 @Service
 public class TemplateVariantService {
+    private static final Logger log = LoggerFactory.getLogger(TemplateVariantService.class);
+
     private final TemplateService templateService;
     private final TemplateVariantRepository variantRepository;
     private final TemplateFieldRepository fieldRepository;
@@ -86,11 +92,7 @@ public class TemplateVariantService {
             variant.updateFileKey(newFileKey);
             TemplateVariant saved = variantRepository.saveAndFlush(variant);
             fieldRepository.deleteByTemplateVariant_Id(variantId);
-            try {
-                fileStorage.delete(oldFileKey);
-            } catch (IOException | RuntimeException exception) {
-                throw storageFailure("No pudimos retirar el archivo anterior de forma segura.", exception);
-            }
+            registerReplacementCleanup(newFileKey, oldFileKey);
             return toResponse(saved);
         } catch (RuntimeException exception) {
             deleteQuietly(newFileKey);
@@ -146,9 +148,29 @@ public class TemplateVariantService {
     private void deleteQuietly(String fileKey) {
         try {
             fileStorage.delete(fileKey);
-        } catch (IOException | RuntimeException ignored) {
-            // The original reference remains authoritative when cleanup cannot complete.
+        } catch (IOException | RuntimeException exception) {
+            log.warn("No pudimos limpiar el archivo nuevo de la variante: {}", fileKey, exception);
         }
+    }
+
+    private void registerReplacementCleanup(String newFileKey, String oldFileKey) {
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                try {
+                    fileStorage.delete(oldFileKey);
+                } catch (IOException | RuntimeException exception) {
+                    log.warn("La DB confirmó el reemplazo, pero no pudimos retirar el archivo anterior: {}", oldFileKey, exception);
+                }
+            }
+
+            @Override
+            public void afterCompletion(int status) {
+                if (status != TransactionSynchronization.STATUS_COMMITTED) {
+                    deleteQuietly(newFileKey);
+                }
+            }
+        });
     }
 
     private TemplateException storageFailure(String message, Exception cause) {
