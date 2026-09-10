@@ -26,7 +26,7 @@ import {
   Users,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Navigate, useLocation, useNavigate, useParams } from "react-router";
+import { Navigate, useLocation, useMatch, useNavigate } from "react-router";
 import { UserManagementPage } from "@/features/users/UserManagementPage";
 import { CatalogManagementPage } from "@/features/catalog/CatalogManagementPage";
 import {
@@ -159,7 +159,9 @@ function App() {
 }
 
 function FieldEditorRoute() {
-  const { templateId, variantId } = useParams<{ templateId: string; variantId: string }>();
+  const match = useMatch("/admin/plantillas/:templateId/variantes/:variantId/campos");
+  const templateId = match?.params.templateId;
+  const variantId = match?.params.variantId;
   const navigate = useNavigate();
   const variantsQuery = useQuery({ queryKey: ["template-variants", templateId], queryFn: () => getVariants(templateId!), enabled: Boolean(templateId) });
   if (!templateId || !variantId) return <Navigate to="/admin/plantillas" replace />;
