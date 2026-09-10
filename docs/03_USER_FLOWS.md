@@ -966,21 +966,25 @@ Cada módulo administrativo deberá seguir patrones de interacción consistentes
 
 ---
 
-# 40. Flujos fuera del MVP
+# 40. Historial y envío por correo
 
-Los siguientes flujos quedan explícitamente reservados para versiones futuras:
+Después de una generación definitiva, el documento queda disponible en el historial lógico. El PDF no se persiste; la regeneración lo reconstruye en memoria desde el snapshot y respeta los permisos del usuario.
 
 ### Envío por correo
 
 ```text
-PDF
+Historial
  ↓
-Redactar correo
+Seleccionar registro
  ↓
-Adjuntar PDF
+Ingresar destinatario
  ↓
-SMTP
+Regenerar PDF en memoria y adjuntar
+ ↓
+Enviar por SMTP
 ```
+
+El envío es individual y no crea historial de emails ni persiste el PDF.
 
 ### Google Drive
 
@@ -999,16 +1003,16 @@ Guardar referencia
 ```text
 Documento generado
        ↓
-Registro persistente
+DocumentRecord + snapshot
        ↓
 Historial
        ↓
-Buscar / filtrar / consultar
+Regenerar / Descargar
 ```
 
-Estos flujos sirven únicamente como referencia de evolución.
+ADMIN consulta todos los registros. DELEGADO consulta únicamente los propios.
 
-**No deberán implementarse como parte del MVP actual.**
+Google Drive permanece reservado para una versión futura.
 
 ---
 

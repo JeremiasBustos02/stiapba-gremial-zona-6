@@ -7,6 +7,8 @@ describe('URL navigation', () => {
     expect(screenForPath('/admin/plantillas/template-id/variantes/variant-id/campos')).toBe('positioned-editor')
     expect(screenForPath('/documentos/nuevo/template-id/formulario')).toBe('form')
     expect(routeForScreen('variants', 'template-id')).toBe('/documentos/nuevo/template-id/variante')
+    expect(screenForPath('/historial')).toBe('history')
+    expect(routeForScreen('history', null)).toBe('/historial')
   })
 
   it('recognizes administration paths for role protection', () => {

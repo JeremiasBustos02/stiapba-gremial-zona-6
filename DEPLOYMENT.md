@@ -70,6 +70,12 @@ Vite solo incorpora variables con prefijo `VITE_` al bundle. No definir allí se
 | `S3_ACCESS_KEY` | Access key S3 de Supabase, secreto. |
 | `S3_SECRET_KEY` | Secret key S3 de Supabase, secreto. |
 | `S3_BUCKET` | Nombre del bucket privado creado en Supabase. |
+| `SPRING_MAIL_HOST` | Host SMTP para habilitar el envío de documentos. |
+| `SPRING_MAIL_PORT` | Puerto SMTP, por ejemplo `587`. |
+| `SPRING_MAIL_USERNAME` | Usuario SMTP, secreto si el proveedor lo requiere. |
+| `SPRING_MAIL_PASSWORD` | Contraseña o app password SMTP, secreto. |
+| `MAIL_FROM` | Dirección remitente común de los documentos. |
+| `MAIL_FROM_NAME` | Nombre visible del remitente; default `STIA PBA Zona 6`. |
 
 `TEMPLATE_STORAGE_PATH` queda disponible solo para `TEMPLATE_STORAGE_TYPE=local`; no se configura ni se usa en Render. Si Supabase entrega una URL JDBC completa en vez de los componentes `DB_*`, se puede configurar como `SPRING_DATASOURCE_URL`; debe incluir `sslmode=require` o una política TLS más estricta compatible.
 

@@ -4,8 +4,11 @@ import com.stiapba.documentmanagement.agreement.entity.Agreement;
 import com.stiapba.documentmanagement.agreement.repository.AgreementRepository;
 import com.stiapba.documentmanagement.company.entity.Company;
 import com.stiapba.documentmanagement.company.repository.CompanyRepository;
+import com.stiapba.documentmanagement.document.entity.DocumentRecord;
+import com.stiapba.documentmanagement.document.repository.DocumentRecordRepository;
 import com.stiapba.documentmanagement.province.entity.Province;
 import com.stiapba.documentmanagement.province.repository.ProvinceRepository;
+import com.stiapba.documentmanagement.security.UserPrincipal;
 import com.stiapba.documentmanagement.template.entity.TemplateVariant;
 import com.stiapba.documentmanagement.template.entity.DocumentType;
 import com.stiapba.documentmanagement.template.entity.FieldDefinition;
@@ -22,8 +25,8 @@ import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.time.format.TextStyle;
+import java.text.Normalizer;
 import java.util.Map;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -39,11 +42,15 @@ public class DocumentGenerationService {
     private final TemplateFileStorage fileStorage;
     private final DocumentGenerator generator;
     private final PdfTemplateRenderer pdfTemplateRenderer;
+    private final DocumentRecordRepository documentRecordRepository;
+    private final DocumentNumberService documentNumberService;
 
     public DocumentGenerationService(ProvinceRepository provinceRepository, CompanyRepository companyRepository,
-                                      UserRepository userRepository, AgreementRepository agreementRepository,
-                                      TemplateVariantRepository variantRepository, TemplateFileStorage fileStorage,
-                                      DocumentGenerator generator, PdfTemplateRenderer pdfTemplateRenderer) {
+                                       UserRepository userRepository, AgreementRepository agreementRepository,
+                                       TemplateVariantRepository variantRepository, TemplateFileStorage fileStorage,
+                                       DocumentGenerator generator, PdfTemplateRenderer pdfTemplateRenderer,
+                                       DocumentRecordRepository documentRecordRepository,
+                                       DocumentNumberService documentNumberService) {
         this.provinceRepository = provinceRepository;
         this.companyRepository = companyRepository;
         this.userRepository = userRepository;
@@ -52,10 +59,12 @@ public class DocumentGenerationService {
         this.fileStorage = fileStorage;
         this.generator = generator;
         this.pdfTemplateRenderer = pdfTemplateRenderer;
+        this.documentRecordRepository = documentRecordRepository;
+        this.documentNumberService = documentNumberService;
     }
 
     @Transactional
-    public byte[] generatePermisoGremial(PermisoGremialRequest request) {
+    public GeneratedDocument generatePermisoGremial(PermisoGremialRequest request, UserPrincipal principal) {
         if (request.permitDay() < 1 || request.permitDay() > 31) {
             throw new DocumentException(400, "INVALID_PERMIT_DAY", "El día de permiso debe estar entre 1 y 31.");
         }
@@ -77,19 +86,69 @@ public class DocumentGenerationService {
         if (variant.getTemplate().getDocumentType() != DocumentType.PERMISO_GREMIAL) {
             throw new DocumentException(422, "TEMPLATE_DOCUMENT_TYPE_UNSUPPORTED", "La plantilla seleccionada no corresponde a Permiso Gremial.");
         }
+        Map<String, String> values = new LinkedHashMap<>(logicalValues(province, company, delegate, agreement, request));
+        addManualValues(variant, request.manualValues(), values);
+        byte[] pdf = render(variant, values);
+        User createdBy = userRepository.findById(principal.id())
+                .filter(User::isActive)
+                .orElseThrow(() -> new DocumentException(401, "SESSION_INVALID", "La sesión no es válida o expiró."));
+        String publicNumber = documentNumberService.nextPermisoGremialNumber();
+        String delegateName = delegate.getNombre() + " " + delegate.getApellido();
+        DocumentRecord record = documentRecordRepository.save(new DocumentRecord(publicNumber, DocumentType.PERMISO_GREMIAL,
+                createdBy.getId(), createdBy.getNombre() + " " + createdBy.getApellido(), variant.getTemplate().getId(), variant.getId(),
+                request.issueDate(), company.getNombre(), delegateName, values));
+        return new GeneratedDocument(pdf, record.getId(), publicNumber, filename(publicNumber, delegateName));
+    }
+
+    private Map<String, String> logicalValues(Province province, Company company, User delegate, Agreement agreement,
+                                              PermisoGremialRequest request) {
+        String delegateName = delegate.getNombre() + " " + delegate.getApellido();
+        String delegateDni = delegate.getDni();
+        Map<String, String> values = new LinkedHashMap<>();
+        values.put("province", province.getName());
+        values.put("company", company.getNombre());
+        values.put("delegate", delegateName + " DNI " + delegateDni);
+        values.put("delegateDni", delegateDni);
+        values.put("agreement", agreement.getCodigo().trim());
+        values.put("issueDay", Integer.toString(request.issueDate().getDayOfMonth()));
+        values.put("issueMonth", request.issueDate().getMonth().getDisplayName(TextStyle.FULL, Locale.forLanguageTag("es-AR")));
+        values.put("issueYear", String.format("%02d", request.issueDate().getYear() % 100));
+        values.put("permitDay", Integer.toString(request.permitDay()));
+        values.put("issueDate", request.issueDate().toString());
+        values.put("companyName", company.getNombre());
+        values.put("delegateName", delegateName);
+        values.put("agreementCode", agreement.getCodigo().trim());
+        return values;
+    }
+
+    @Transactional
+    public GeneratedDocument regenerate(UUID recordId, UserPrincipal principal) {
+        DocumentRecord record = documentRecordRepository.findById(recordId)
+                .orElseThrow(() -> notFound("DOCUMENT_RECORD_NOT_FOUND", "No encontramos el documento solicitado."));
+        if (principal.role() != Role.ADMIN && !record.getCreatedByUserId().equals(principal.id())) {
+            throw new DocumentException(403, "DOCUMENT_RECORD_FORBIDDEN", "No tenés permisos para acceder a este documento.");
+        }
+        if (record.getDocumentType() != DocumentType.PERMISO_GREMIAL) {
+            throw new DocumentException(422, "DOCUMENT_TYPE_UNSUPPORTED", "El tipo de documento no está disponible para regenerar.");
+        }
+        TemplateVariant variant = variantRepository.findById(record.getVariantId())
+                .orElseThrow(() -> notFound("TEMPLATE_VARIANT_NOT_FOUND", "No encontramos la variante usada por este documento."));
+        byte[] pdf = render(variant, record.getSnapshot());
+        return new GeneratedDocument(pdf, record.getId(), record.getPublicNumber(), filename(record.getPublicNumber(), record.getDelegateName()));
+    }
+
+    private byte[] render(TemplateVariant variant, Map<String, String> values) {
         try {
             byte[] templateContent = fileStorage.load(variant.getFileKey());
             if (!variant.getFields().isEmpty()) {
-                Map<String, String> values = new HashMap<>(logicalValues(province, company, delegate, agreement, request));
-                addManualValues(variant, request.manualValues(), values);
                 return pdfTemplateRenderer.render(variant, values, templateContent);
             }
             if (!variant.isLegacyPositioned()) {
                 throw new DocumentException(422, "TEMPLATE_FIELDS_NOT_CONFIGURED", "La variante no tiene campos configurados para generar el documento.");
             }
-            return generator.generate(new PermisoGremialData(province.getName(), request.issueDate(), company.getNombre(),
-                    delegate.getNombre() + " " + delegate.getApellido() + " DNI " + delegate.getDni(),
-                    request.permitDay(), agreement.getCodigo().trim()), templateContent);
+            return generator.generate(new PermisoGremialData(values.get("province"), java.time.LocalDate.parse(values.get("issueDate")),
+                    values.get("companyName"), values.get("delegate"), Integer.parseInt(values.get("permitDay")),
+                    values.get("agreementCode")), templateContent);
         } catch (DocumentException exception) {
             throw exception;
         } catch (IOException exception) {
@@ -97,21 +156,16 @@ public class DocumentGenerationService {
         }
     }
 
-    private Map<String, String> logicalValues(Province province, Company company, User delegate, Agreement agreement,
-                                              PermisoGremialRequest request) {
-        String delegateName = delegate.getNombre() + " " + delegate.getApellido();
-        String delegateDni = delegate.getDni();
-        return Map.of(
-                "province", province.getName(),
-                "company", company.getNombre(),
-                "delegate", delegateName + " DNI " + delegateDni,
-                "delegateDni", delegateDni,
-                "agreement", agreement.getCodigo().trim(),
-                "issueDay", Integer.toString(request.issueDate().getDayOfMonth()),
-                "issueMonth", request.issueDate().getMonth().getDisplayName(TextStyle.FULL, Locale.forLanguageTag("es-AR")),
-                "issueYear", String.format("%02d", request.issueDate().getYear() % 100),
-                "permitDay", Integer.toString(request.permitDay())
-        );
+    static String filename(String publicNumber, String delegateName) {
+        return sanitize(publicNumber) + "_permiso-gremial_" + sanitize(delegateName) + ".pdf";
+    }
+
+    private static String sanitize(String value) {
+        String normalized = Normalizer.normalize(value == null ? "" : value, Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "").toLowerCase(Locale.ROOT)
+                .replaceAll("[^a-z0-9]+", "-")
+                .replaceAll("(^-+|-+$)", "");
+        return normalized.isBlank() ? "documento" : normalized;
     }
 
     @Transactional
@@ -158,6 +212,9 @@ public class DocumentGenerationService {
     }
 
     public record ManualFieldResponse(UUID id, String label, FieldType type, boolean required) {
+    }
+
+    public record GeneratedDocument(byte[] content, UUID recordId, String publicNumber, String filename) {
     }
 
     private DocumentException notFound(String code, String message) {

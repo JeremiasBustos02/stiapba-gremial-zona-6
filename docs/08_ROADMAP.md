@@ -894,10 +894,9 @@ Algunas tareas podrán desarrollarse parcialmente en paralelo, pero para un desa
 
 No implementar durante estos milestones:
 
-* SMTP.
 * Google Drive.
-* Historial de documentos.
 * Borradores persistentes.
+* Historial de emails y auditoría de envíos.
 * WhatsApp.
 * Notificaciones.
 * Firma digital.
@@ -911,17 +910,35 @@ No implementar durante estos milestones:
 
 Una vez validado el MVP, podrán incorporarse nuevas fases.
 
-## Fase futura A — Historial
+## M17 — Historial documental — Completado
 
 ```text
-Documento persistente
-Storage
-Búsqueda
-Filtros
-Numeración oficial
+DocumentRecord
+Snapshot JSONB
+Historial paginado
+Regeneración y permisos
+Numeración pública
 ```
 
-## Fase futura B — Google Drive
+## M18 — Interfaz de historial — Completado
+
+```text
+/historial
+Tabla desktop
+Cards mobile
+Descarga y paginación
+```
+
+## M19 — Envío por email — Completado
+
+```text
+Regeneración PDF en memoria
+Adjunto SMTP
+Destinatario individual
+Sin historial de emails
+```
+
+## Fase futura A — Google Drive
 
 ```text
 DocumentStorage

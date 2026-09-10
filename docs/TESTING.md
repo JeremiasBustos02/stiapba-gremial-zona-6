@@ -2,13 +2,14 @@
 
 ## Frontend
 
-El frontend usa Vitest con entorno `jsdom`. La suite actual tiene **53 tests** y cubre principalmente:
+El frontend usa Vitest con entorno `jsdom`. La suite actual tiene **60 tests** y cubre principalmente:
 
 - autenticacion, sesion y CSRF;
 - routing y guards para `ADMIN`/`DELEGADO`;
 - primer ingreso;
 - recuperacion de draft local;
-- generacion PDF mediante API, preview e impresion;
+- generacion PDF mediante API, preview, impresion e historial documental;
+- envio de documentos por correo desde el historial;
 - templates, variants y editor visual de campos.
 
 Comandos desde `frontend/`:
@@ -21,9 +22,9 @@ npm run build
 
 ## Backend
 
-El backend usa JUnit, Spring Boot Test, Mockito y PostgreSQL local para las integraciones. La suite actual tiene **96 tests**, entre pruebas unitarias e integracion.
+El backend usa JUnit, Spring Boot Test, Mockito y PostgreSQL local para las integraciones. La suite actual tiene **110 tests**, entre pruebas unitarias e integracion.
 
-Incluye cobertura de autenticacion, autorizacion, catalogos, plantillas, generacion PDF, consistencia DB/storage y una regresion de performance para el listado de empresas.
+Incluye cobertura de autenticacion, autorizacion, catalogos, plantillas, generacion y regeneracion PDF, historial, envio por correo, consistencia DB/storage y una regresion de performance para el listado de empresas.
 
 Comando de la suite completa desde `backend/`:
 

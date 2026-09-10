@@ -1,6 +1,6 @@
 # Requisitos del Sistema
 
-Los wireframes son referencia visual. Si representan historial, borradores persistentes, envío por correo, numeración u otra funcionalidad fuera del MVP, prevalecen `01_CONTEXT.md` y este documento. El formulario sí cuenta con recuperacion local limitada.
+Los wireframes son referencia visual. El estado actual incluye historial documental y envío por correo desde el historial; no incluye borradores persistentes, auditoría de emails ni otras funcionalidades futuras. El formulario sí cuenta con recuperacion local limitada.
 
 ## 1. Propósito
 
@@ -656,16 +656,20 @@ La estrategia técnica concreta para crear el administrador inicial será defini
 
 ---
 
-# 20. Funcionalidades explícitamente excluidas
+# 20. Funcionalidades implementadas en M17-M19
+
+El sistema actualmente incluye historial documental mediante `DocumentRecord` y snapshot JSONB, numeración pública `PG-YYYY-NNNNNN`, regeneración con permisos ADMIN/DELEGADO y envío individual por email desde historial. Los PDFs se generan o regeneran en memoria y no se persisten; el envío no mantiene historial ni auditoría persistente.
+
+---
+
+# 21. Funcionalidades explícitamente excluidas
 
 No deberán implementarse como parte del MVP:
 
-* SMTP.
-* Envío automático de correos.
 * Google Drive.
 * Almacenamiento cloud de documentos.
-* Historial persistente de PDFs.
-* Borradores persistentes en servidor o historial de documentos. Se admite un draft local limitado para recuperar el formulario.
+* Borradores persistentes en servidor. Se admite un draft local limitado para recuperar el formulario.
+* Historial o auditoría persistente de emails.
 * WhatsApp.
 * Estadísticas.
 * Notificaciones.
@@ -679,7 +683,7 @@ Estas funcionalidades requieren una ampliación explícita del alcance antes de 
 
 ---
 
-# 21. Reglas para futuras ampliaciones
+# 22. Reglas para futuras ampliaciones
 
 La existencia de una posible funcionalidad futura **no implica que deba implementarse anticipadamente**.
 
@@ -692,7 +696,7 @@ El MVP deberá mantener puntos de extensión razonables cuando resulte útil, pe
 
 ---
 
-# 22. Criterios de aceptación generales
+# 23. Criterios de aceptación generales
 
 Una funcionalidad podrá considerarse terminada cuando:
 
@@ -709,7 +713,7 @@ Una funcionalidad podrá considerarse terminada cuando:
 
 ---
 
-# 23. Prioridad del MVP
+# 24. Prioridad del MVP
 
 Ante una decisión entre agregar complejidad o simplificar el flujo principal, deberá priorizarse el correcto funcionamiento de:
 

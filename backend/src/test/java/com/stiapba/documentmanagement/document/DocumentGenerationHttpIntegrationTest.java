@@ -12,6 +12,7 @@ import com.stiapba.documentmanagement.template.entity.Template;
 import com.stiapba.documentmanagement.template.entity.TemplateVariant;
 import com.stiapba.documentmanagement.template.repository.TemplateRepository;
 import com.stiapba.documentmanagement.template.repository.TemplateVariantRepository;
+import com.stiapba.documentmanagement.document.repository.DocumentRecordRepository;
 import com.stiapba.documentmanagement.user.entity.Role;
 import com.stiapba.documentmanagement.user.entity.User;
 import com.stiapba.documentmanagement.user.repository.UserRepository;
@@ -29,6 +30,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.context.ActiveProfiles;
 
 import javax.sql.DataSource;
 import java.nio.file.Files;
@@ -48,6 +50,7 @@ import static org.assertj.core.api.Assertions.assertThat;
         "app.security.initial-admin.name=",
         "app.security.initial-admin.lastname="
 })
+@ActiveProfiles("test")
 class DocumentGenerationHttpIntegrationTest {
     @Autowired private TestRestTemplate restTemplate;
     @Autowired private UserRepository userRepository;
@@ -58,14 +61,17 @@ class DocumentGenerationHttpIntegrationTest {
     @Autowired private TemplateVariantRepository variantRepository;
     @Autowired private PasswordEncoder passwordEncoder;
     @Autowired private DataSource dataSource;
+    @Autowired private DocumentRecordRepository documentRecordRepository;
 
     private UUID adminId;
     private UUID delegateId;
     private UUID companyId;
     private UUID agreementId;
+    private UUID documentRecordId;
 
     @AfterEach
     void cleanUp() {
+        if (documentRecordId != null) documentRecordRepository.deleteById(documentRecordId);
         if (agreementId != null) agreementRepository.deleteById(agreementId);
         if (companyId != null) companyRepository.deleteById(companyId);
         if (delegateId != null) userRepository.deleteById(delegateId);
@@ -106,15 +112,16 @@ class DocumentGenerationHttpIntegrationTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_PDF);
         assertThat(response.getHeaders().getFirst(HttpHeaders.CONTENT_DISPOSITION)).startsWith("inline;");
+        assertThat(response.getHeaders().getFirst(HttpHeaders.CONTENT_DISPOSITION)).contains("pg-2026-000");
+        documentRecordId = UUID.fromString(response.getHeaders().getFirst("X-Document-Id"));
+        assertThat(response.getHeaders().getFirst("X-Public-Number")).matches("PG-2026-\\d{6}");
         assertThat(response.getBody()).isNotEmpty();
         try (PDDocument generated = Loader.loadPDF(response.getBody())) {
             assertThat(generated.getNumberOfPages()).isEqualTo(1);
         }
         assertThat(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(source))).isEqualTo(sourceHash);
         assertThat(variantRepository.findById(variant.getId()).orElseThrow().getFileKey()).isEqualTo(originalFileKey);
-        try (var connection = dataSource.getConnection(); var tables = connection.getMetaData().getTables(null, null, "documents", null)) {
-            assertThat(tables.next()).isFalse();
-        }
+        assertThat(documentRecordRepository.findById(documentRecordId)).isPresent();
     }
 
     @Test

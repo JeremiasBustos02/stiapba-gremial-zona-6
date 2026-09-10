@@ -40,8 +40,10 @@ import { TemplateManagementPage } from "@/features/templates/TemplateManagementP
 import { getVariants } from "@/features/templates/templatesApi";
 import { HomePage } from "@/features/home/HomePage";
 import { ProfilePage } from "@/features/profile/ProfilePage";
+import { HistoryPage } from "@/features/history/HistoryPage";
 import type { DocumentFormValues } from "@/features/documents/DocumentFlow";
-import { getDocumentVariants } from "@/features/documents/documentsApi";
+import { getDocumentVariants, type GeneratedDocument } from "@/features/documents/documentsApi";
+import { PostGenerationActions } from "@/features/documents/PostGenerationActions";
 import {
   clearDocumentDraft,
   readDocumentDraft,
@@ -121,11 +123,11 @@ function App() {
   const [documentForm, setDocumentForm] = useState<DocumentFormValues>(
     draft?.templateId === templateId ? draft.form : initialDocumentForm,
   );
-  const [generatedPdf, setGeneratedPdf] = useState<Blob | null>(null);
+  const [generatedDocument, setGeneratedDocument] = useState<GeneratedDocument | null>(null);
   const [sessionExpired, setSessionExpired] = useState(false);
   const [startupComplete, setStartupComplete] = useState(false);
   const sessionQuery = useQuery({ queryKey: ["auth", "me"], queryFn: getCurrentUser, retry: false });
-  const clearSession = (expired = false) => { queryClient.clear(); clearDocumentDraft(); setDocumentForm(initialDocumentForm); setGeneratedPdf(null); setSessionExpired(expired); navigate("/", { replace: true }); };
+  const clearSession = (expired = false) => { queryClient.clear(); clearDocumentDraft(); setDocumentForm(initialDocumentForm); setGeneratedDocument(null); setSessionExpired(expired); navigate("/", { replace: true }); };
   const loginMutation = useMutation({ mutationFn: ({ dni, password }: { dni: string; password: string }) => login(dni, password), onSuccess: ({ user }) => { queryClient.setQueryData(["auth", "me"], user); setSessionExpired(false); navigate("/"); } });
   const logoutMutation = useMutation({ mutationFn: logout, onSuccess: () => clearSession() });
   useEffect(() => { setUnauthorizedHandler(() => clearSession(true)); return () => setUnauthorizedHandler(); }, [queryClient]);
@@ -141,7 +143,7 @@ function App() {
   if (currentUser.firstLogin) return <FirstLoginPage onSaved={async () => { await queryClient.invalidateQueries({ queryKey: ["auth", "me"] }); navigate("/"); }} />;
   if (currentUser.role !== "ADMIN" && isAdminPath(location.pathname)) return <Navigate to="/" replace />;
   if ((screen === "form" || screen === "preview") && templateId && documentVariantsQuery.isSuccess && !documentVariantsQuery.data.some((variant) => variant.id === documentForm.variantId)) return <Navigate to={`/documentos/nuevo/${templateId}/variante`} replace />;
-  if (screen === "preview" && !generatedPdf) return <Navigate to={routeForScreen("form", templateId)} replace />;
+  if (screen === "preview" && !generatedDocument) return <Navigate to={routeForScreen("form", templateId)} replace />;
   const saveDraft = (nextTemplateId: string, form: DocumentFormValues) => { setDocumentForm(form); saveDocumentDraft({ templateId: nextTemplateId, form }); };
   const adminContent = screen === "users" ? <UserManagementPage /> : screen === "companies" ? <CatalogManagementPage<Company, CompanyForm> kind="companies" title="Empresas" description="Administrá las empresas disponibles para completar documentos." emptyForm={{ nombre: "", agreementId: "" }} getItems={getCompanies} createItem={createCompany} updateItem={updateCompany} setActive={setCompanyActive} /> : screen === "agreements" ? <CatalogManagementPage<Agreement, AgreementForm> kind="agreements" title="Convenios" description="Administrá los convenios disponibles para completar documentos." emptyForm={{ codigo: "", descripcion: "" }} getItems={getAgreements} createItem={createAgreement} updateItem={updateAgreement} setActive={setAgreementActive} /> : screen === "positioned-editor" ? <FieldEditorRoute /> : <TemplateManagementPage initialTemplateId={location.pathname.match(/^\/admin\/plantillas\/([^/]+)$/)?.[1]} onTemplateSelected={(id) => navigate(`/admin/plantillas/${id}`)} onDetailBack={() => navigate("/admin/plantillas")} onConfigureFields={(id, variant) => navigate(`/admin/plantillas/${id}/variantes/${variant.id}/campos`)} />;
   return <AppLayout screen={screen} role={currentUser.role} onNavigate={go} onLogout={() => logoutMutation.mutate()}>
@@ -150,9 +152,10 @@ function App() {
     {screen === "home" && <HomePage user={currentUser} onNavigate={go} />}
      {screen === "new-document" && <Suspense fallback={<LazyLoadingState />}><DocumentTemplateSelection onBack={() => navigate("/")} onSelect={(id) => { const form = { ...documentForm, variantId: "", manualValues: {} }; saveDraft(id, form); navigate(`/documentos/nuevo/${id}/variante`); }} /></Suspense>}
      {screen === "variants" && <Suspense fallback={<LazyLoadingState />}><DocumentVariantSelection templateId={templateId} onBack={() => navigate("/documentos/nuevo")} onSelect={(variantId) => { if (!templateId) return; const form = { ...documentForm, variantId, manualValues: {} }; saveDraft(templateId, form); navigate(`/documentos/nuevo/${templateId}/formulario`); }} /></Suspense>}
-     {screen === "form" && templateId && <Suspense fallback={<LazyLoadingState />}><PermisoGremialForm value={documentForm} onChange={(form) => saveDraft(templateId, form)} onBack={() => navigate(`/documentos/nuevo/${templateId}/variante`)} onGenerated={(pdf) => { setGeneratedPdf(pdf); navigate(`/documentos/nuevo/${templateId}/vista-previa`); }} /></Suspense>}
-     {screen === "preview" && <Suspense fallback={<LazyLoadingState />}><PdfPreview pdf={generatedPdf} onEdit={() => navigate(routeForScreen("form", templateId))} onHome={() => { clearDocumentDraft(); navigate("/"); }} /></Suspense>}
-    {screen === "profile" && <ProfilePage user={currentUser} onLogout={() => logoutMutation.mutate()} />}
+      {screen === "form" && templateId && <Suspense fallback={<LazyLoadingState />}><PermisoGremialForm value={documentForm} onChange={(form) => saveDraft(templateId, form)} onBack={() => navigate(`/documentos/nuevo/${templateId}/variante`)} onGenerated={(document) => { setGeneratedDocument(document); navigate(`/documentos/nuevo/${templateId}/vista-previa`); }} /></Suspense>}
+      {screen === "preview" && generatedDocument && <Suspense fallback={<LazyLoadingState />}><PdfPreview pdf={generatedDocument.blob} filename={generatedDocument.filename} onEdit={() => { setGeneratedDocument(null); navigate(routeForScreen("form", templateId)); }} onHome={() => { clearDocumentDraft(); setGeneratedDocument(null); navigate("/"); }} /><PostGenerationActions document={generatedDocument} onEdit={() => { setGeneratedDocument(null); navigate(routeForScreen("form", templateId)); }} onFinish={() => { clearDocumentDraft(); setGeneratedDocument(null); navigate("/"); }} /></Suspense>}
+     {screen === "profile" && <ProfilePage user={currentUser} onLogout={() => logoutMutation.mutate()} />}
+     {screen === "history" && <HistoryPage role={currentUser.role} />}
     {screen === "admin" && <AdminPage onNavigate={go} />}
     {["users", "companies", "agreements", "templates", "positioned-editor"].includes(screen) && adminContent}
   </AppLayout>;

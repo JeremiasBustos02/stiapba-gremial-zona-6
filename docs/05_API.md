@@ -976,7 +976,7 @@ Elimina únicamente campos de modo `POSITIONED` y devuelve `204 No Content`.
 
 ---
 
-Los endpoints de generación no implican persistencia del documento dentro del MVP.
+Los endpoints de generación no persisten bytes PDF. Cada generación definitiva crea un registro lógico de historial con snapshot de los datos renderizados.
 
 El backend recibe datos, genera el PDF y devuelve el resultado.
 
@@ -1182,7 +1182,9 @@ aunque técnicamente el PDF ya haya sido generado en memoria.
 ```http
 200 OK
 Content-Type: application/pdf
-Content-Disposition: inline; filename="permiso-gremial.pdf"
+Content-Disposition: inline; filename="pg-2026-000123_permiso-gremial_juan-perez.pdf"
+X-Document-Id: uuid
+X-Public-Number: PG-2026-000123
 ```
 
 ### Resolución futura de datos
@@ -1227,7 +1229,7 @@ Si el usuario vuelve y modifica información, se realiza una nueva solicitud.
 
 # 48. Numeración del documento
 
-La numeración oficial queda fuera del MVP y no forma parte del modelo persistente actual.
+Cada generación definitiva recibe un número público persistente con formato `PG-YYYY-NNNNNN`. La secuencia es global y segura ante concurrencia; el año es visual y no reinicia el contador.
 
 Sin embargo, existe una consideración importante.
 
@@ -1401,14 +1403,88 @@ No será necesario crear una `v2` mientras no exista un cambio incompatible real
 
 ---
 
-# 57. Endpoints fuera del MVP
+# 57. Historial documental
+
+## GET `/api/v1/documents/history`
+
+### Acceso
+
+ADMIN / DELEGADO. Acepta `page` (0 por defecto) y `size` (20 por defecto, máximo 100), ordenado por `createdAt` descendente.
+
+ADMIN recibe todos los registros. DELEGADO recibe únicamente los creados por su usuario autenticado.
+
+```json
+{
+  "content": [
+    {
+      "id": "uuid",
+      "publicNumber": "PG-2026-000123",
+      "documentType": "PERMISO_GREMIAL",
+      "createdAt": "2026-09-10T10:00:00-03:00",
+      "createdBy": "Juan Pérez",
+      "companyName": "Empresa Ejemplo",
+      "delegateName": "Ana Paz",
+      "issueDate": "2026-08-18"
+    }
+  ],
+  "page": 0,
+  "size": 20,
+  "totalElements": 1,
+  "totalPages": 1
+}
+```
+
+## GET `/api/v1/documents/history/{id}/pdf`
+
+### Acceso
+
+ADMIN puede regenerar cualquier registro. DELEGADO solo puede regenerar registros creados por él; acceder a uno ajeno devuelve `403`.
+
+La respuesta es `application/pdf` en memoria. No crea otro registro histórico y usa `Content-Disposition` junto con `X-Document-Id` y `X-Public-Number`.
+
+## POST `/api/v1/documents/history/{id}/email`
+
+### Acceso
+
+ADMIN puede enviar cualquier registro. DELEGADO solo puede enviar registros creados por él; acceder a uno ajeno devuelve `403`.
+
+### Request
+
+```json
+{
+  "recipient": "persona@ejemplo.com"
+}
+```
+
+El backend regenera el PDF en memoria y lo envía como adjunto mediante SMTP. No persiste el PDF ni crea historial de emails.
+
+### Response — 200
+
+```json
+{
+  "message": "Correo enviado correctamente."
+}
+```
+
+Si SMTP no está configurado devuelve `503 MAIL_NOT_CONFIGURED`. Si el proveedor rechaza o no puede entregar el mensaje devuelve `502 MAIL_DELIVERY_FAILED`, sin exponer detalles técnicos.
+
+## Generación de Permiso Gremial
+
+`POST /api/v1/documents/permiso-gremial/generate` mantiene respuesta binaria `application/pdf`. Además de `Content-Disposition`, devuelve:
+
+```http
+X-Document-Id: uuid
+X-Public-Number: PG-2026-000123
+```
+
+El filename se decide en backend: `pg-2026-000123_permiso-gremial_juan-perez.pdf`.
+
+# 58. Endpoints fuera del MVP
 
 No deberán implementarse todavía:
 
 ```text
-/api/v1/emails/**
 /api/v1/storage/**
-/api/v1/history/**
 /api/v1/documents/{id}
 /api/v1/documents/{id}/send
 /api/v1/documents/{id}/upload
@@ -1418,8 +1494,7 @@ Tampoco:
 
 ```text
 Google Drive API
-SMTP
-historial de documentos
+historial de emails
 ```
 
 ---

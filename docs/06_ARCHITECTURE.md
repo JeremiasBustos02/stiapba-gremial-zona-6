@@ -57,12 +57,11 @@ El sistema seguirá una arquitectura cliente-servidor.
 └──────────────┘        └────────────────┘
 ```
 
-En el MVP no existirán todavía:
+En el estado actual no existen:
 
-* SMTP.
 * Google Drive.
-* Historial persistente.
 * Almacenamiento cloud de PDFs generados.
+* Auditoría persistente de emails.
 
 ---
 
@@ -582,7 +581,7 @@ Frontend
 
 El backend no persistirá el resultado después de finalizar la respuesta.
 
-Esto cambiará únicamente cuando se implemente historial o cloud storage.
+El historial conserva datos lógicos y snapshot JSONB en PostgreSQL, pero los bytes del PDF generado o regenerado siguen siendo efímeros.
 
 ---
 
@@ -701,7 +700,7 @@ Las operaciones de solo lectura podrán optimizarse cuando aporte valor.
 
 `Plantilla` contempla:
 
-La numeración oficial queda fuera del MVP y no forma parte del modelo persistente actual.
+La numeración pública actual usa `PG-YYYY-NNNNNN` y una secuencia global; no requiere campos persistentes `prefijo` ni `ultimoNumero`.
 
 Cuando se implemente, deberá hacerse de manera atómica para evitar duplicados.
 
@@ -1064,30 +1063,27 @@ porque ya existe almacenamiento de plantillas.
 Ejemplo que NO deberá implementarse:
 
 ```text
-EmailService
 GoogleDriveService
-DocumentHistoryService
+EmailHistoryService
 ```
 
 porque esas funcionalidades todavía no existen en el MVP.
 
 ---
 
-# 46. Integración futura con SMTP
+# 46. Integración SMTP actual
 
-En una versión posterior:
+El envío actual desde el historial utiliza:
 
 ```text
-Document
+DocumentRecord
    ↓
-EmailService
+DocumentEmailService / JavaMailSender
    ↓
 SMTP Provider
 ```
 
-Se incorporará como módulo independiente.
-
-No formará parte del código actual hasta aprobar el nuevo alcance.
+El PDF se regenera en memoria y se adjunta al mensaje. No se persiste el PDF ni un historial de emails.
 
 ---
 
@@ -1107,16 +1103,15 @@ La aplicación no deberá incorporar SDKs ni credenciales de Google durante el M
 
 ---
 
-# 48. Historial futuro
+# 48. Historial documental actual
 
-Cuando se incorpore historial:
+El historial actual:
 
-* Se agregará entidad Documento.
-* Se persistirán metadatos.
-* El archivo podrá almacenarse externamente.
-* PostgreSQL guardará la referencia.
+* `DocumentRecord` persiste metadatos y snapshot JSONB.
+* ADMIN ve todos los registros y DELEGADO solo los propios.
+* La regeneración, descarga y emisión por email generan el PDF en memoria.
 
-No se guardarán archivos grandes directamente en PostgreSQL salvo una decisión futura justificada.
+No se guardan archivos PDF directamente en PostgreSQL ni en storage permanente.
 
 ---
 

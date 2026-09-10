@@ -2,6 +2,7 @@ import { ArrowLeft } from "lucide-react";
 import type { Screen } from "@/navigation";
 
 const screenParents: Partial<Record<Screen, Screen>> = {
+  history: "home",
   profile: "home",
   admin: "home",
   users: "admin",

@@ -27,7 +27,7 @@ El MVP estará compuesto inicialmente por las siguientes entidades:
 * FieldDefinition
 * TemplateField
 
-El proceso de generación de PDF utilizará estas entidades, pero **no persistirá todavía un historial de documentos generados**.
+El proceso de generación de PDF utiliza estas entidades y persiste un registro lógico del documento generado. Los bytes del PDF no se persisten.
 
 Por este motivo, en el MVP inicial no es necesario que exista una entidad `Documento` persistente.
 
@@ -261,7 +261,7 @@ Plantilla
 
 ## 7.4. Numeración futura
 
-La numeración oficial queda fuera del MVP. `prefijo` y `ultimoNumero` no forman parte del modelo persistente actual y podrán evaluarse en una evolución futura.
+La numeración pública actual usa `PG-YYYY-NNNNNN` mediante una secuencia global. No se modelan `prefijo` ni `ultimoNumero` como campos persistentes.
 
 ---
 
@@ -665,13 +665,15 @@ El campo `activo` será suficiente.
 
 ---
 
-# 19. Entidades excluidas del MVP
+# 19. DocumentRecord y entidades excluidas del MVP
 
-Las siguientes entidades fueron consideradas durante el análisis, pero quedan fuera del modelo persistente inicial.
+`DocumentRecord` forma parte del modelo persistente actual para conservar el historial lógico y el snapshot JSONB de los valores renderizados. No almacena bytes PDF.
+
+Las siguientes entidades fueron consideradas durante el análisis, pero quedan fuera del modelo persistente actual.
 
 ## Documento
 
-Se incorporará cuando sea necesario mantener historial de documentos generados.
+No se crea una entidad `Documento` adicional: `DocumentRecord` representa el registro histórico actual.
 
 Posibles datos futuros:
 
@@ -722,7 +724,7 @@ No se prevé incorporarla porque las firmas forman parte de los PDFs de `Templat
 
 # 20. Evolución futura: Documento persistente
 
-Cuando se implemente historial, la estructura podrá evolucionar a:
+Si en el futuro se necesita reproducibilidad visual exacta, la estructura podrá evolucionar para versionar el archivo y la configuración de la variante:
 
 ```text
 Usuario
@@ -751,7 +753,7 @@ Esto permitirá posteriormente consultar:
 * cuándo fue generado,
 * dónde está almacenado.
 
-Esta estructura no deberá implementarse anticipadamente en el MVP.
+Esta evolución no forma parte del MVP actual.
 
 ---
 
@@ -800,7 +802,7 @@ No crear entidades únicamente porque existe un elemento visual en la interfaz.
 
 Ejemplo:
 
-`Historial` es una pantalla o consulta futura, no necesariamente una entidad.
+`Historial` es una pantalla y consulta sobre `DocumentRecord`; no requiere una entidad adicional.
 
 ---
 
@@ -838,12 +840,12 @@ Quedan establecidas las siguientes decisiones:
 6. No existe entidad Firma.
 7. Empresa, Convenio y Provincia son datos reutilizables.
 8. El MVP no persiste documentos generados.
-9. El MVP no tiene Historial persistente.
-10. El MVP no tiene SMTP.
+9. `DocumentRecord` conserva el historial lógico y el snapshot JSONB, sin bytes PDF.
+10. El envío por email se realiza desde historial mediante SMTP, sin `EmailHistory` ni auditoría persistente.
 11. El MVP no tiene Google Drive.
 12. El formulario Permiso Gremial será específico en la V1.
 13. La arquitectura deberá permitir agregar otros tipos de documentos más adelante.
-14. La numeración oficial queda fuera del MVP.
+14. La numeración pública usa `PG-YYYY-NNNNNN` y una secuencia global.
 15. Un delegado seleccionable se representa mediante `User` con rol `DELEGADO`; puede ser distinto del usuario autenticado.
 16. Las provincias se provisionan como catálogo controlado y no tienen CRUD administrativo en el MVP.
 

@@ -1,4 +1,4 @@
-import { Home, LogOut, Menu, Plus, UserRound, FileText } from "lucide-react";
+import { Home, LogOut, Menu, Plus, UserRound, FileText, History } from "lucide-react";
 import type { Screen } from "@/navigation";
 
 export function AppLayout({
@@ -59,6 +59,7 @@ function navigationItems(role: "ADMIN" | "DELEGADO") {
   return [
     { label: "Inicio", icon: Home, screen: "home" as Screen },
     { label: "Nuevo documento", icon: Plus, screen: "new-document" as Screen },
+    { label: "Historial", icon: History, screen: "history" as Screen },
     ...(role === "ADMIN"
       ? [{ label: "Administración", icon: Menu, screen: "admin" as Screen }]
       : []),

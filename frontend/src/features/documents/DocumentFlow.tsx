@@ -5,7 +5,8 @@ import { Document, Page, pdfjs } from 'react-pdf'
 import { z } from 'zod'
 import { ApiError } from '@/lib/api'
 import { agreementAfterCompanyChange } from './companyAgreement'
-import { generatePermisoGremial, getDelegates, getDocumentAgreements, getDocumentCompanies, getDocumentTemplates, getDocumentVariants, getManualFields, getProvinces, type Delegate, type ManualField } from './documentsApi'
+import { generatePermisoGremial, getDelegates, getDocumentAgreements, getDocumentCompanies, getDocumentTemplates, getDocumentVariants, getManualFields, getProvinces, type Delegate, type GeneratedDocument, type ManualField } from './documentsApi'
+import { downloadDocument } from './documentActions'
 
 import 'react-pdf/dist/Page/AnnotationLayer.css'
 import 'react-pdf/dist/Page/TextLayer.css'
@@ -49,7 +50,7 @@ export function DocumentVariantSelection({ templateId, onBack, onSelect }: { tem
   return <><PageIntro title="Elegí una versión" description="Seleccioná la firma que se utilizará en el documento." step="Paso 2 de 3" /><section className="mt-6 max-w-3xl space-y-2 sm:mt-8"><QueryState query={query} emptyText="No hay versiones activas disponibles para este documento.">{variants.length ? variants.map((variant) => <SelectionRow key={variant.id} icon={Pencil} title={variant.nombre} description="Versión activa del documento." onSelect={() => onSelect(variant.id)} />) : null}</QueryState></section><button type="button" onClick={onBack} className="mt-5 min-h-11 rounded-lg px-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 sm:mt-8">Volver</button></>
 }
 
-export function PermisoGremialForm({ value, onChange, onBack, onGenerated, editing = false, title = editing ? 'Editar documento' : 'Completar datos', description = editing ? 'Modificá los datos y actualizá la vista previa.' : 'Completá los datos necesarios para generar la vista previa.', submitLabel = editing ? 'Actualizar documento' : 'Generar vista previa' }: { value: DocumentFormValues; onChange: (value: DocumentFormValues) => void; onBack: () => void; onGenerated: (pdf: Blob) => void; editing?: boolean; title?: string; description?: string; submitLabel?: string }) {
+export function PermisoGremialForm({ value, onChange, onBack, onGenerated, editing = false, title = editing ? 'Editar documento' : 'Completar datos', description = editing ? 'Modificá los datos y actualizá la vista previa.' : 'Completá los datos necesarios para generar la vista previa.', submitLabel = editing ? 'Actualizar documento' : 'Generar vista previa' }: { value: DocumentFormValues; onChange: (value: DocumentFormValues) => void; onBack: () => void; onGenerated: (document: GeneratedDocument) => void; editing?: boolean; title?: string; description?: string; submitLabel?: string }) {
   const provincesQuery = useQuery({ queryKey: ['documents', 'provinces'], queryFn: getProvinces })
   const companiesQuery = useQuery({ queryKey: ['documents', 'companies'], queryFn: getDocumentCompanies })
   const delegatesQuery = useQuery({ queryKey: ['documents', 'delegates'], queryFn: getDelegates })
@@ -92,7 +93,7 @@ function FormSection({ title, children }: { title: string; children: React.React
 function SelectField({ label, value, onChange, options, placeholder, error }: { label: string; value: string; onChange: (value: string) => void; options: string[][]; placeholder: string; error?: string }) { return <label className="mt-4 block text-sm font-semibold first:mt-0">{label}<select required value={value} onChange={(event) => onChange(event.target.value)} className="mt-2 h-12 w-full rounded-xl border border-slate-300 bg-white px-3 outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100"><option value="">{placeholder}</option>{options.map(([id, text]) => <option key={id} value={id}>{text}</option>)}</select>{error && <span className="mt-1 block text-sm text-rose-700">{error}</span>}</label> }
 function ManualFieldInput({ field, value, error, onChange }: { field: ManualField; value: string; error?: string; onChange: (value: string) => void }) { const type = field.type === 'NUMBER' ? 'number' : field.type === 'DATE' ? 'date' : 'text'; return <label className="mt-4 block text-sm font-semibold first:mt-0">{field.label}<input required={field.required} type={type} value={value} onChange={(event) => onChange(event.target.value)} className="mt-2 h-12 w-full rounded-xl border border-slate-300 bg-white px-3 outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100" />{error && <span className="mt-1 block text-sm text-rose-700">{error}</span>}</label> }
 
-export function PdfPreview({ pdf, onEdit, onHome }: { pdf: Blob | null; onEdit: () => void; onHome: () => void }) {
+export function PdfPreview({ pdf, filename = '', onEdit, onHome }: { pdf: Blob | null; filename?: string; onEdit: () => void; onHome: () => void }) {
   const host = useRef<HTMLDivElement>(null)
   const printCleanup = useRef<(() => void) | null>(null)
   const [fitWidth, setFitWidth] = useState(0)
@@ -114,7 +115,7 @@ export function PdfPreview({ pdf, onEdit, onHome }: { pdf: Blob | null; onEdit: 
 
   const pageWidth = Math.floor(fitWidth * zoom)
   const changeZoom = (amount: number) => setZoom((current) => Math.min(2.5, Math.max(0.5, Number((current + amount).toFixed(2)))))
-  const download = () => { if (!pdf) return; const downloadUrl = URL.createObjectURL(pdf); const link = document.createElement('a'); link.href = downloadUrl; link.download = 'permiso-gremial.pdf'; document.body.appendChild(link); link.click(); link.remove(); window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 0) }
+  const download = () => { if (pdf && filename) downloadDocument(pdf, filename) }
   const print = () => {
     if (!pdf) return
     printCleanup.current?.()

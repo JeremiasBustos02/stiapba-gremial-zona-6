@@ -1,0 +1,15 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5433/stiapba_test
+    username: stiapba
+    password: change-me-local
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    properties:
+      hibernate:
+        format_sql: true
+
+app:
+  template:
+    seed-enabled: true
+    seed-file: ../docs/pdf-templates/Permiso Gremial Bruna.pdf

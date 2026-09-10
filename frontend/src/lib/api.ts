@@ -63,6 +63,11 @@ export async function apiRequestBlob(path: string, requestOptions: ApiRequestOpt
   return response.blob()
 }
 
+export async function apiRequestBlobWithHeaders(path: string, requestOptions: ApiRequestOptions = {}) {
+  const response = await apiResponse(path, requestOptions)
+  return { blob: await response.blob(), headers: response.headers }
+}
+
 async function apiResponse(path: string, requestOptions: ApiRequestOptions): Promise<Response> {
   const { notifyUnauthorized = true, ...options } = requestOptions
   const method = options.method?.toUpperCase() ?? 'GET'

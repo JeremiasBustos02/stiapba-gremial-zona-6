@@ -4,7 +4,10 @@
 
 - Los PDFs generados se crean en memoria y se devuelven como `application/pdf`.
 - El frontend reutiliza el mismo Blob para preview, descarga e impresion.
-- No existe entidad persistente `Document` ni historial de PDFs generados.
+- `DocumentRecord` conserva el historial lógico de cada generación, pero nunca los bytes del PDF. La regeneración produce un PDF nuevo en memoria.
+- El snapshot JSONB contiene los valores lógicos efectivamente renderizados, incluidos los campos manuales por `field key`; los nombres de empresa y delegado, y la fecha de emisión se duplican en columnas solo para listar eficientemente.
+- La numeración usa una secuencia PostgreSQL global y concurrente. El año de emisión se muestra en `PG-YYYY-NNNNNN`, pero no reinicia el contador anual; pueden existir saltos legítimos si una transacción posterior no se confirma.
+- El PDF de la generación y de la regeneración informa `X-Document-Id` y `X-Public-Number`, además de un `Content-Disposition` con nombre derivado exclusivamente en backend.
 - Las plantillas administradas se abstraen mediante `TemplateFileStorage`: local en desarrollo y S3-compatible en produccion.
 - El reemplazo de una plantilla sube primero el objeto nuevo, actualiza la referencia dentro de la transaccion y hace cleanup best-effort: el nuevo ante rollback y el anterior despues de `AFTER_COMMIT`. Se prioriza una posible huella huerfana temporal en storage antes que una referencia DB a un objeto eliminado.
 

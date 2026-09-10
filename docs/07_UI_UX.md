@@ -448,10 +448,10 @@ Ejemplo:
 permiso-gremial.pdf
 ```
 
-Cuando en el futuro exista numeración oficial:
+El nombre actual incorpora la numeración pública:
 
 ```text
-PG-000123.pdf
+pg-2026-000123_permiso-gremial_juan-perez.pdf
 ```
 
 ---
@@ -982,7 +982,21 @@ No deberán realizarse rediseños grandes sin aprobación.
 
 ---
 
-# 54. Lo que Codex NO debe hacer
+# 54. Historial documental
+
+La ruta `/historial` deberá ofrecer:
+
+* Tabla en desktop.
+* Cards en mobile.
+* Paginación.
+* Descarga mediante regeneración en memoria.
+* Acción `Enviar por mail` desde cada registro.
+
+El diálogo de email deberá permitir ingresar un destinatario, mostrar estados de carga y error, y confirmar el envío sin presentar una auditoría inexistente.
+
+---
+
+# 56. Lo que Codex NO debe hacer
 
 Durante la implementación visual no deberá:
 
@@ -990,9 +1004,8 @@ Durante la implementación visual no deberá:
 * Agregar dashboards.
 * Agregar estadísticas.
 * Inventar funcionalidades.
-* Incorporar historial.
-* Incorporar SMTP.
 * Incorporar Google Drive.
+* Incorporar historial de emails.
 * Incorporar funcionalidades fuera del alcance aprobado.
 * Añadir animaciones complejas.
 * Cambiar la identidad visual sin motivo.
@@ -1001,7 +1014,7 @@ Durante la implementación visual no deberá:
 
 ---
 
-# 55. Flujo visual prioritario
+# 57. Flujo visual prioritario
 
 El flujo que deberá recibir mayor atención será:
 
