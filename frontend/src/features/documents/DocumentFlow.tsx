@@ -2,6 +2,7 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { ChevronRight, Download, FileText, LoaderCircle, Pencil, Printer, ZoomIn, ZoomOut } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Document, Page, pdfjs } from 'react-pdf'
+import { motion, useReducedMotion } from 'motion/react'
 import { z } from 'zod'
 import { ApiError } from '@/lib/api'
 import { agreementAfterCompanyChange } from './companyAgreement'
@@ -18,6 +19,7 @@ import 'react-pdf/dist/Page/TextLayer.css'
 pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString()
 
 export type DocumentFormValues = { provinceId: string; issueDate: string; companyId: string; delegateId: string; permitDay: string; agreementId: string; variantId: string; manualValues: Record<string, string> }
+type GenerationStage = 'idle' | 'submitting' | 'revealing'
 export const initialDocumentForm: DocumentFormValues = { provinceId: '', issueDate: new Date().toISOString().slice(0, 10), companyId: '', delegateId: '', permitDay: '', agreementId: '', variantId: '', manualValues: {} }
 const formSchema = z.object({ provinceId: z.string().min(1, 'Seleccioná una provincia.'), issueDate: z.string().date('La fecha de emisión no es válida.'), companyId: z.string().min(1, 'Seleccioná una empresa.'), delegateId: z.string().min(1, 'Seleccioná un delegado.'), permitDay: z.coerce.number().int().min(1, 'El día debe estar entre 1 y 31.').max(31, 'El día debe estar entre 1 y 31.'), agreementId: z.string().min(1, 'Seleccioná un convenio.'), variantId: z.string().min(1, 'Seleccioná una versión del documento.') })
 
@@ -61,8 +63,29 @@ export function PermisoGremialForm({ value, onChange, onBack, onGenerated, editi
   const agreementsQuery = useQuery({ queryKey: ['documents', 'agreements'], queryFn: getDocumentAgreements })
   const manualFieldsQuery = useQuery({ queryKey: ['documents', 'manual-fields', value.variantId], queryFn: () => getManualFields(value.variantId), enabled: Boolean(value.variantId) })
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [generationStage, setGenerationStage] = useState<GenerationStage>('idle')
+  const [slowGeneration, setSlowGeneration] = useState(false)
   const previousCompanyId = useRef(value.companyId)
-  const mutation = useMutation({ mutationFn: generatePermisoGremial, onSuccess: onGenerated })
+  const generationInFlight = useRef(false)
+  const revealTimer = useRef<number | null>(null)
+  const slowTimer = useRef<number | null>(null)
+  const reduceMotion = useReducedMotion()
+  const mutation = useMutation({
+    mutationFn: generatePermisoGremial,
+    onSuccess: (document) => {
+      generationInFlight.current = false
+      if (slowTimer.current) window.clearTimeout(slowTimer.current)
+      setSlowGeneration(false)
+      setGenerationStage('revealing')
+      revealTimer.current = window.setTimeout(() => onGenerated(document), reduceMotion ? 0 : 320)
+    },
+    onError: () => {
+      generationInFlight.current = false
+      if (slowTimer.current) window.clearTimeout(slowTimer.current)
+      setSlowGeneration(false)
+      setGenerationStage('idle')
+    },
+  })
   const delegate = delegatesQuery.data?.find((item: Delegate) => item.id === value.delegateId)
   const queries = [provincesQuery, companiesQuery, delegatesQuery, agreementsQuery, manualFieldsQuery]
   const loading = queries.some((query) => query.isPending)
@@ -77,6 +100,10 @@ export function PermisoGremialForm({ value, onChange, onBack, onGenerated, editi
     const agreementId = agreementAfterCompanyChange(companiesQuery.data ?? [], previousId, value.companyId, value.agreementId)
     if (agreementId !== value.agreementId) onChange({ ...value, agreementId })
   }, [companiesQuery.data, onChange, value])
+  useEffect(() => () => {
+    if (revealTimer.current) window.clearTimeout(revealTimer.current)
+    if (slowTimer.current) window.clearTimeout(slowTimer.current)
+  }, [])
 
   const submit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -84,16 +111,27 @@ export function PermisoGremialForm({ value, onChange, onBack, onGenerated, editi
     if (!result.success) { setErrors(Object.fromEntries(result.error.issues.map((issue) => [String(issue.path[0]), issue.message]))); return }
     const manualErrors = Object.fromEntries((manualFieldsQuery.data ?? []).filter((field) => field.required && !value.manualValues[field.id]?.trim()).map((field) => [`manual-${field.id}`, `${field.label} es obligatorio.`]))
     if (Object.keys(manualErrors).length) { setErrors(manualErrors); return }
-    setErrors({})
+    if (generationInFlight.current || generationStage !== 'idle') return
+    generationInFlight.current = true
+    setErrors({}); setGenerationStage('submitting'); setSlowGeneration(false)
+    slowTimer.current = window.setTimeout(() => setSlowGeneration(true), 2_500)
     mutation.mutate({ ...result.data, permitDay: Number(result.data.permitDay), manualValues: value.manualValues })
   }
 
   const generationMessage = mutation.error instanceof ApiError && mutation.error.code === 'TEMPLATE_FIELDS_NOT_CONFIGURED' ? 'Esta variante todavía no está configurada para generar documentos.' : errorMessage(mutation.error, 'No pudimos generar el documento. Intentá nuevamente.')
 
+  if (generationStage !== 'idle') {
+    return <><PageIntro context={editing ? 'Editar documento' : 'Nuevo documento'} title={title} description={description} step={editing ? undefined : 'Paso 3 de 3'} /><GenerationState stage={generationStage} publicNumber={mutation.data?.publicNumber ?? ''} slow={slowGeneration} reduceMotion={Boolean(reduceMotion)} /></>
+  }
+
   return <><PageIntro context={editing ? 'Editar documento' : 'Nuevo documento'} title={title} description={description} step={editing ? undefined : 'Paso 3 de 3'} />{mutation.isPending && <div role="status" aria-live="polite" className="mt-5 flex max-w-3xl items-center gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm font-semibold text-blue-900"><LoaderCircle className="animate-spin" size={20} />Preparando documento...</div>}{catalogError && <div role="alert" className="mt-5 max-w-3xl rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">{errorMessage(catalogError.error, 'No pudimos cargar los datos del formulario.')}<button type="button" onClick={() => queries.forEach((query) => void query.refetch())} className="mt-3 min-h-11 font-semibold underline">Reintentar</button></div>}{catalogsEmpty && <div className="mt-5 max-w-3xl rounded-xl border border-dashed border-slate-300 bg-white p-5 text-center text-sm text-slate-600">Faltan datos activos para completar el formulario. Contactá a un administrador.</div>}<form onSubmit={submit} className="mt-6 max-w-3xl"><fieldset disabled={disabled} className="disabled:opacity-60"><FormSection title="Contexto institucional"><SelectField label="Provincia" value={value.provinceId} onChange={(next) => set('provinceId', next)} options={(provincesQuery.data ?? []).map((item) => [item.id, item.name])} placeholder="Seleccioná una provincia" error={errors.provinceId} /><SelectField label="Empresa" value={value.companyId} onChange={(next) => set('companyId', next)} options={(companiesQuery.data ?? []).map((item) => [item.id, item.nombre])} placeholder="Seleccioná una empresa" error={errors.companyId} /></FormSection><FormSection title="Información del delegado"><SelectField label="Delegado" value={value.delegateId} onChange={(next) => set('delegateId', next)} options={(delegatesQuery.data ?? []).map((item) => [item.id, `${item.nombre} ${item.apellido}`])} placeholder="Seleccioná un delegado" error={errors.delegateId} /><div className="mt-4 rounded-xl bg-slate-100 px-4 py-3"><p className="typo-caption font-semibold uppercase tracking-wide text-slate-500">DNI del delegado</p><p className="mt-1 font-medium text-slate-800">{delegate?.dni ?? 'Se completa al seleccionar un delegado'}</p></div></FormSection><FormSection title="Datos del permiso"><label className="block text-sm font-semibold">Fecha de emisión<input required type="date" value={value.issueDate} onChange={(event) => set('issueDate', event.target.value)} className="mt-2 h-12 w-full rounded-xl border border-slate-300 bg-white px-3 outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100" />{errors.issueDate && <span className="mt-1 block text-sm text-rose-700">{errors.issueDate}</span>}</label><label className="mt-4 block text-sm font-semibold">Día de permiso gremial<input required type="number" min="1" max="31" value={value.permitDay} onChange={(event) => set('permitDay', event.target.value)} className="mt-2 h-12 w-full rounded-xl border border-slate-300 bg-white px-3 outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100" />{errors.permitDay && <span className="mt-1 block text-sm text-rose-700">{errors.permitDay}</span>}</label><SelectField label="Convenio" value={value.agreementId} onChange={(next) => set('agreementId', next)} options={(agreementsQuery.data ?? []).map((item) => [item.id, `${item.codigo ? `${item.codigo} — ` : ''}${item.descripcion}`])} placeholder="Seleccioná un convenio" error={errors.agreementId} /><div className="mt-4 rounded-xl bg-slate-100 px-4 py-3"><p className="typo-caption font-semibold uppercase tracking-wide text-slate-500">Versión del documento</p><p className="mt-1 font-medium text-slate-800">Seleccionada</p></div>{(manualFieldsQuery.data ?? []).map((field) => <ManualFieldInput key={field.id} field={field} value={value.manualValues[field.id] ?? ''} error={errors[`manual-${field.id}`]} onChange={(next) => onChange({ ...value, manualValues: { ...value.manualValues, [field.id]: next } })} />)}</FormSection></fieldset>{mutation.error && <p role="alert" className="mt-5 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">{generationMessage}</p>}<div className="mt-6 flex flex-col gap-3 border-t border-slate-200 pt-4 sm:flex-row sm:justify-end"><button type="button" onClick={onBack} disabled={mutation.isPending} className="min-h-12 rounded-xl border border-slate-300 px-5 py-3 font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60">{editing ? 'Cancelar edición' : 'Volver'}</button><button type="submit" disabled={disabled} className="min-h-12 flex items-center justify-center gap-2 rounded-xl bg-blue-700 px-5 py-3 font-semibold text-white hover:bg-blue-800 disabled:cursor-wait disabled:opacity-60">{mutation.isPending && <LoaderCircle className="animate-spin" size={19} />}{mutation.isPending ? 'Preparando documento...' : submitLabel}</button></div></form></>
 }
 
 function FormSection({ title, children }: { title: string; children: React.ReactNode }) { return <section className="border-b border-slate-200 py-5 first:pt-0 last:border-b-0"><h2 className="typo-eyebrow text-slate-600">{title}</h2><div className="mt-4">{children}</div></section> }
+function GenerationState({ stage, publicNumber, slow, reduceMotion }: { stage: GenerationStage; publicNumber: string; slow: boolean; reduceMotion: boolean }) {
+  const hidden = reduceMotion ? { opacity: 0 } : { opacity: 0, y: 8 }
+  return <motion.section initial={hidden} animate={{ opacity: 1, y: 0 }} transition={{ duration: reduceMotion ? 0.12 : 0.2, ease: [0.16, 1, 0.3, 1] }} className="mt-6 max-w-3xl border-y border-blue-200 bg-blue-50/70 px-5 py-8 sm:mt-8 sm:px-8 sm:py-10" aria-busy={stage === 'submitting'} aria-labelledby="generation-status-title"><div className="flex items-start gap-4"><span aria-hidden="true" className="grid h-12 w-10 shrink-0 place-items-center border border-blue-200 bg-white text-blue-700"><FileText size={21} /></span><div><p className="typo-eyebrow text-blue-700">Permiso gremial</p>{stage === 'submitting' ? <><h2 id="generation-status-title" role="status" aria-live="polite" className="typo-heading-2 mt-2">Generando documento</h2><p className="typo-body-sm mt-2 text-slate-600">Estamos preparando tu permiso con la información ingresada.</p>{slow && <p className="typo-body-sm mt-4 text-slate-600">Esto puede tardar unos segundos.</p>}</> : <><p role="status" aria-live="polite" className="sr-only">Documento {publicNumber} generado correctamente.</p><h2 id="generation-status-title" className="typo-heading-2 mt-2">Documento generado</h2><motion.p initial={reduceMotion ? { opacity: 1 } : { opacity: 0, y: 6, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: reduceMotion ? 0.12 : 0.32, ease: [0.16, 1, 0.3, 1] }} className="typo-display-lg mt-3 tabular-nums text-blue-900">{publicNumber}</motion.p><p className="typo-body-sm mt-2 text-slate-600">Abriendo la vista previa.</p></>}</div></div></motion.section>
+}
 function FieldMessage({ id, message }: { id: string; message?: string }) { return message ? <p id={id} className="typo-body-sm mt-1.5 text-rose-700">{message}</p> : null }
 function SelectField({ label, value, onChange, options, placeholder, error }: { label: string; value: string; onChange: (value: string) => void; options: string[][]; placeholder: string; error?: string }) {
   const suggestionsQuery = useQuery({ queryKey: ['documents', 'suggestions'], queryFn: getDocumentSuggestions, retry: false })
