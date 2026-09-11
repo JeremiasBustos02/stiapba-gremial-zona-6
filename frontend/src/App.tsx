@@ -42,7 +42,7 @@ import { HomePage } from "@/features/home/HomePage";
 import { ProfilePage } from "@/features/profile/ProfilePage";
 import { HistoryPage } from "@/features/history/HistoryPage";
 import type { DocumentFormValues } from "@/features/documents/DocumentFlow";
-import { getDocumentVariants, type GeneratedDocument } from "@/features/documents/documentsApi";
+import { getDocumentVariants, type DocumentHistoryDetail, type GeneratedDocument } from "@/features/documents/documentsApi";
 import { PostGenerationActions } from "@/features/documents/PostGenerationActions";
 import {
   clearDocumentDraft,
@@ -146,6 +146,20 @@ function App() {
   if ((screen === "form" || screen === "preview") && templateId && documentVariantsQuery.isSuccess && !documentVariantsQuery.data.some((variant) => variant.id === documentForm.variantId)) return <Navigate to={`/documentos/nuevo/${templateId}/variante`} replace />;
   if (screen === "preview" && !generatedDocument) return <Navigate to={routeForScreen("form", templateId)} replace />;
   const saveDraft = (nextTemplateId: string, form: DocumentFormValues) => { setDocumentForm(form); saveDocumentDraft({ templateId: nextTemplateId, form }); };
+  const useHistoryAsBase = (detail: DocumentHistoryDetail) => {
+    const form: DocumentFormValues = {
+      provinceId: detail.provinceId ?? "",
+      issueDate: detail.issueDate ?? new Date().toISOString().slice(0, 10),
+      companyId: detail.companyId ?? "",
+      delegateId: detail.delegateId ?? "",
+      permitDay: detail.permitDay == null ? "" : String(detail.permitDay),
+      agreementId: detail.agreementId ?? "",
+      variantId: detail.variantId,
+      manualValues: detail.manualValues ?? {},
+    };
+    saveDraft(detail.templateId, form);
+    navigate(`/documentos/nuevo/${detail.templateId}/formulario`);
+  };
   const adminContent = screen === "users" ? <UserManagementPage /> : screen === "companies" ? <CatalogManagementPage<Company, CompanyForm> kind="companies" title="Empresas" description="Administrá las empresas disponibles para completar documentos." emptyForm={{ nombre: "", agreementId: "" }} getItems={getCompanies} createItem={createCompany} updateItem={updateCompany} setActive={setCompanyActive} /> : screen === "agreements" ? <CatalogManagementPage<Agreement, AgreementForm> kind="agreements" title="Convenios" description="Administrá los convenios disponibles para completar documentos." emptyForm={{ codigo: "", descripcion: "" }} getItems={getAgreements} createItem={createAgreement} updateItem={updateAgreement} setActive={setAgreementActive} /> : screen === "positioned-editor" ? <FieldEditorRoute /> : <TemplateManagementPage initialTemplateId={location.pathname.match(/^\/admin\/plantillas\/([^/]+)$/)?.[1]} onTemplateSelected={(id) => navigate(`/admin/plantillas/${id}`)} onDetailBack={() => navigate("/admin/plantillas")} onConfigureFields={(id, variant) => navigate(`/admin/plantillas/${id}/variantes/${variant.id}/campos`)} />;
   return <AppLayout screen={screen} role={currentUser.role} onNavigate={go} onLogout={() => logoutMutation.mutate()}>
     {screen !== "positioned-editor" && <SecondaryNavigation screen={screen} onNavigate={go} />}
@@ -156,7 +170,7 @@ function App() {
        {screen === "form" && templateId && <Suspense fallback={<LazyLoadingState />}><PermisoGremialForm value={documentForm} onChange={(form) => saveDraft(templateId, form)} onBack={() => navigate(`/documentos/nuevo/${templateId}/variante`)} onGenerated={(document) => { setEmailFeedback(''); setGeneratedDocument(document); navigate(`/documentos/nuevo/${templateId}/vista-previa`); }} /></Suspense>}
          {screen === "preview" && generatedDocument && <Suspense fallback={<LazyLoadingState />}><div className="preview-action-flow"><PdfPreview pdf={generatedDocument.blob} filename={generatedDocument.filename} onEdit={() => { setGeneratedDocument(null); navigate(routeForScreen("form", templateId)); }} onHome={() => { clearDocumentDraft(); setGeneratedDocument(null); navigate("/"); }} postGenerationAction={<PostGenerationActions document={generatedDocument} inline />} />{emailFeedback && <p role="status" className="mt-3 max-w-3xl rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-800">{emailFeedback}</p>}</div></Suspense>}
      {screen === "profile" && <ProfilePage user={currentUser} onLogout={() => logoutMutation.mutate()} />}
-     {screen === "history" && <HistoryPage role={currentUser.role} />}
+      {screen === "history" && <HistoryPage role={currentUser.role} onUseAsBase={useHistoryAsBase} />}
     {screen === "admin" && <AdminPage onNavigate={go} />}
     {["users", "companies", "agreements", "templates", "positioned-editor"].includes(screen) && adminContent}
   </AppLayout>;

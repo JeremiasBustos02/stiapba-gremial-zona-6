@@ -106,6 +106,7 @@ public class DocumentGenerationService {
         String delegateDni = delegate.getDni();
         Map<String, String> values = new LinkedHashMap<>();
         values.put("province", province.getName());
+        values.put("provinceId", idValue(province.getId()));
         values.put("company", company.getNombre());
         values.put("delegate", delegateName + " DNI " + delegateDni);
         values.put("delegateDni", delegateDni);
@@ -116,10 +117,15 @@ public class DocumentGenerationService {
         values.put("permitDay", Integer.toString(request.permitDay()));
         values.put("issueDate", request.issueDate().toString());
         values.put("companyName", company.getNombre());
+        values.put("companyId", idValue(company.getId()));
         values.put("delegateName", delegateName);
+        values.put("delegateId", idValue(delegate.getId()));
         values.put("agreementCode", agreement.getCodigo().trim());
+        values.put("agreementId", idValue(agreement.getId()));
         return values;
     }
+
+    private String idValue(UUID id) { return id == null ? "" : id.toString(); }
 
     @Transactional
     public GeneratedDocument regenerate(UUID recordId, UserPrincipal principal) {
@@ -193,6 +199,7 @@ public class DocumentGenerationService {
             if (value != null && !value.isBlank()) {
                 validateManualValue(definition.getType(), value);
                 values.put(definition.getKey(), value.trim());
+                values.put("manual:" + definition.getId(), value.trim());
             }
         }
     }

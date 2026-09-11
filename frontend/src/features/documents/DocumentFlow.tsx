@@ -5,8 +5,8 @@ import { Document, Page, pdfjs } from 'react-pdf'
 import { z } from 'zod'
 import { ApiError } from '@/lib/api'
 import { agreementAfterCompanyChange } from './companyAgreement'
-import { generatePermisoGremial, getDelegates, getDocumentAgreements, getDocumentCompanies, getDocumentTemplates, getDocumentVariants, getManualFields, getProvinces, type Delegate, type GeneratedDocument, type ManualField } from './documentsApi'
-import { downloadDocument } from './documentActions'
+import { generatePermisoGremial, getDelegates, getDocumentAgreements, getDocumentCompanies, getDocumentSuggestions, getDocumentTemplates, getDocumentVariants, getManualFields, getProvinces, type Delegate, type DocumentSuggestionCategory, type GeneratedDocument, type ManualField } from './documentsApi'
+import { downloadDocument, printDocument } from './documentActions'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
@@ -96,9 +96,20 @@ export function PermisoGremialForm({ value, onChange, onBack, onGenerated, editi
 function FormSection({ title, children }: { title: string; children: React.ReactNode }) { return <section className="border-b border-slate-200 py-5 first:pt-0 last:border-b-0"><h2 className="typo-eyebrow text-slate-600">{title}</h2><div className="mt-4">{children}</div></section> }
 function FieldMessage({ id, message }: { id: string; message?: string }) { return message ? <p id={id} className="typo-body-sm mt-1.5 text-rose-700">{message}</p> : null }
 function SelectField({ label, value, onChange, options, placeholder, error }: { label: string; value: string; onChange: (value: string) => void; options: string[][]; placeholder: string; error?: string }) {
+  const suggestionsQuery = useQuery({ queryKey: ['documents', 'suggestions'], queryFn: getDocumentSuggestions, retry: false })
+  const category = label === 'Empresa' ? suggestionsQuery.data?.companies : label === 'Delegado' ? suggestionsQuery.data?.delegates : label === 'Convenio' ? suggestionsQuery.data?.agreements : undefined
   const id = `document-${label.toLowerCase().replaceAll(' ', '-')}`
   const errorId = `${id}-error`
-  return <div className="mt-4 first:mt-0"><Label htmlFor={id}>{label}</Label><Select id={id} required value={value} onChange={(event) => onChange(event.target.value)} aria-invalid={Boolean(error)} aria-describedby={error ? errorId : undefined} className="mt-2"><option value="">{placeholder}</option>{options.map(([optionId, text]) => <option key={optionId} value={optionId}>{text}</option>)}</Select><FieldMessage id={errorId} message={error} /></div>
+  return <div className="mt-4 first:mt-0"><Label htmlFor={id}>{label}</Label><SuggestionQuickAccess category={category} options={options} onSelect={onChange} /><Select id={id} required value={value} onChange={(event) => onChange(event.target.value)} aria-invalid={Boolean(error)} aria-describedby={error ? errorId : undefined} className="mt-2"><option value="">{placeholder}</option>{options.map(([optionId, text]) => <option key={optionId} value={optionId}>{text}</option>)}</Select><FieldMessage id={errorId} message={error} /></div>
+}
+
+function SuggestionQuickAccess({ category, options, onSelect }: { category?: DocumentSuggestionCategory; options: string[][]; onSelect: (id: string) => void }) {
+  if (!category) return null
+  const available = new Set(options.map(([id]) => id))
+  const recent = category.recent.filter((item) => available.has(item.id))
+  const frequent = category.frequent.filter((item) => available.has(item.id))
+  if (!recent.length && !frequent.length) return null
+  return <div className="mt-3 space-y-2" aria-label="Accesos rápidos"><p className="typo-caption text-slate-500">{recent.length ? 'Usados recientemente' : 'Usados con frecuencia'}</p><div className="flex flex-wrap gap-2">{recent.map((item) => <button key={item.id} type="button" className="min-h-11 rounded-lg border border-blue-200 bg-blue-50 px-3 text-left text-sm font-semibold text-blue-800 hover:border-blue-400" onClick={() => onSelect(item.id)}>{item.label}</button>)}{!recent.length && frequent.map((item) => <button key={item.id} type="button" className="min-h-11 rounded-lg border border-blue-200 bg-blue-50 px-3 text-left text-sm font-semibold text-blue-800 hover:border-blue-400" onClick={() => onSelect(item.id)}>{item.label}</button>)}</div></div>
 }
 function ManualFieldInput({ field, value, error, onChange }: { field: ManualField; value: string; error?: string; onChange: (value: string) => void }) {
   const id = `manual-${field.id}`
@@ -130,35 +141,7 @@ export function PdfPreview({ pdf, filename = '', onEdit, onHome, postGenerationA
   const pageWidth = Math.floor(fitWidth * zoom)
   const changeZoom = (amount: number) => setZoom((current) => Math.min(2.5, Math.max(0.5, Number((current + amount).toFixed(2)))))
   const download = () => { if (pdf && filename) downloadDocument(pdf, filename) }
-  const print = () => {
-    if (!pdf) return
-    printCleanup.current?.()
-    const printUrl = URL.createObjectURL(pdf)
-    const frame = document.createElement('iframe')
-    let cleanupTimer: number | undefined
-    let cleaned = false
-    const cleanup = () => {
-      if (cleaned) return
-      cleaned = true
-      if (cleanupTimer !== undefined) window.clearTimeout(cleanupTimer)
-      frame.onload = null
-      frame.onerror = null
-      frame.contentWindow?.removeEventListener('afterprint', cleanup)
-      frame.remove()
-      URL.revokeObjectURL(printUrl)
-      if (printCleanup.current === cleanup) printCleanup.current = null
-    }
-    printCleanup.current = cleanup
-    frame.style.display = 'none'
-    frame.onload = () => {
-      frame.contentWindow?.addEventListener('afterprint', cleanup, { once: true })
-      frame.contentWindow?.print()
-      cleanupTimer = window.setTimeout(cleanup, 1_000)
-    }
-    frame.onerror = cleanup
-    frame.src = printUrl
-    document.body.appendChild(frame)
-  }
+  const print = () => { if (pdf) { printCleanup.current?.(); printCleanup.current = printDocument(pdf) } }
 
   return <><PageIntro context="Documento generado" title="Vista previa" description="Revisá el documento antes de finalizar." />{previewError ? <p role="alert" className="mt-5 max-w-3xl rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">{previewError}</p> : <section ref={host} className="mt-5 max-w-3xl min-w-0 overflow-auto overscroll-contain rounded-2xl border border-slate-300 bg-slate-200 p-2 sm:mt-7 sm:p-4" style={{ maxHeight: 'min(62dvh, 720px)', touchAction: 'pan-x pan-y' }}><div className="mx-auto w-max"><Document file={pdf} loading={<p className="p-8 text-center text-sm text-slate-600">Cargando vista previa...</p>} error={<p className="p-8 text-center text-sm text-rose-800">No pudimos visualizar el PDF generado.</p>} onLoadSuccess={({ numPages }) => { setPageCount(numPages); setPreviewError('') }} onLoadError={() => setPreviewError('No pudimos visualizar el PDF generado.')}>{Array.from({ length: pageCount }, (_, index) => <Page key={index + 1} pageNumber={index + 1} width={pageWidth || undefined} renderTextLayer={false} className="mb-3 last:mb-0 shadow-lg" />)}</Document></div></section>}<section className="mt-3 max-w-3xl rounded-xl border border-slate-200 bg-white p-3"><div className="flex flex-wrap items-center justify-between gap-2"><div className="flex items-center gap-1"><button type="button" onClick={() => changeZoom(-0.25)} disabled={zoom <= 0.5} aria-label="Alejar" className="grid h-11 w-11 place-items-center rounded-lg text-slate-700 hover:bg-slate-100 disabled:opacity-40"><ZoomOut size={19} /></button><span className="min-w-14 text-center text-sm font-semibold tabular-nums">{Math.round(zoom * 100)}%</span><button type="button" onClick={() => changeZoom(0.25)} disabled={zoom >= 2.5} aria-label="Acercar" className="grid h-11 w-11 place-items-center rounded-lg text-slate-700 hover:bg-slate-100 disabled:opacity-40"><ZoomIn size={19} /></button><button type="button" onClick={() => setZoom(1)} disabled={zoom === 1} className="min-h-11 rounded-lg px-3 text-sm font-semibold text-blue-700 hover:bg-blue-50">Ajustar</button></div><span className="px-2 typo-caption text-slate-500">{pageCount ? `${pageCount} ${pageCount === 1 ? 'página' : 'páginas'}` : 'Preparando vista previa...'}</span></div><ActionGroup aria-label="Acciones del documento" className="mt-3"><ActionGroupItem><button type="button" onClick={download} disabled={!pdf} className="flex min-h-12 w-full items-center justify-center gap-2 bg-blue-700 px-5 py-3 font-semibold text-white transition-colors hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50"><Download size={19} /> Descargar PDF</button></ActionGroupItem><ActionGroupItem><button type="button" onClick={print} disabled={!pdf} className="flex min-h-12 w-full items-center justify-center gap-2 px-5 py-3 font-semibold text-blue-700 transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"><Printer size={19} /> Imprimir</button></ActionGroupItem><ActionGroupItem><button type="button" onClick={onEdit} className="min-h-12 w-full px-5 py-3 font-semibold text-slate-700 transition-colors hover:bg-slate-50">Editar documento</button></ActionGroupItem><ActionGroupItem><button type="button" onClick={onHome} className="min-h-12 w-full px-5 py-3 font-semibold text-slate-600 transition-colors hover:bg-slate-100">Finalizar y volver al inicio</button></ActionGroupItem>{postGenerationAction && <ActionGroupItem>{postGenerationAction}</ActionGroupItem>}</ActionGroup></section></>
 }

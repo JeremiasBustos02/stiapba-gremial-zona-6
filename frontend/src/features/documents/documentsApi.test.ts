@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { generatePermisoGremial, getDocumentHistory, regenerateDocument, sendDocumentEmail } from './documentsApi'
+import { generatePermisoGremial, getDocumentHistory, getDocumentSuggestions, regenerateDocument, sendDocumentEmail } from './documentsApi'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -45,6 +45,15 @@ describe('document generation API', () => {
     await getDocumentHistory(2)
 
     expect(fetchMock).toHaveBeenCalledWith('/api/v1/documents/history?page=2&size=20', expect.objectContaining({ credentials: 'include' }))
+  })
+
+  it('requests personal document suggestions from the dedicated endpoint', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ companies: { recent: [], frequent: [] }, delegates: { recent: [], frequent: [] }, agreements: { recent: [], frequent: [] } }), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await getDocumentSuggestions()
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/documents/suggestions', expect.objectContaining({ credentials: 'include' }))
   })
 
   it('includes active history filters in the server request', async () => {

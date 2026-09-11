@@ -1447,6 +1447,33 @@ ADMIN recibe todos los registros. DELEGADO recibe únicamente los creados por su
 }
 ```
 
+## GET `/api/v1/documents/suggestions`
+
+### Acceso
+
+ADMIN / DELEGADO. Devuelve sugerencias personales calculadas únicamente con documentos creados por el usuario autenticado.
+
+Las listas `recent` contienen hasta cinco elementos ordenados por último uso. Las listas `frequent` contienen hasta cinco elementos ordenados por cantidad de usos y, en empate, por último uso. Para evitar solapamiento, `frequent` excluye los elementos presentes en `recent`.
+
+Solo se devuelven entidades activas que todavía existen en el catálogo. Snapshots sin un ID válido se ignoran.
+
+```json
+{
+  "companies": {
+    "recent": [{ "id": "uuid", "label": "Empresa Ejemplo" }],
+    "frequent": []
+  },
+  "delegates": {
+    "recent": [{ "id": "uuid", "label": "Ana Paz" }],
+    "frequent": []
+  },
+  "agreements": {
+    "recent": [{ "id": "uuid", "label": "CCT-123 - Convenio" }],
+    "frequent": []
+  }
+}
+```
+
 ## GET `/api/v1/documents/history/{id}/pdf`
 
 ### Acceso

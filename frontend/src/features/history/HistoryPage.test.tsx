@@ -12,9 +12,9 @@ function response(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 }
 
-function renderPage(role: 'ADMIN' | 'DELEGADO' = 'ADMIN') {
+function renderPage(role: 'ADMIN' | 'DELEGADO' = 'ADMIN', onUseAsBase?: (detail: unknown) => void) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  root.render(<QueryClientProvider client={client}><HistoryPage role={role} /></QueryClientProvider>)
+  root.render(<QueryClientProvider client={client}><HistoryPage role={role} onUseAsBase={onUseAsBase} /></QueryClientProvider>)
 }
 
 async function waitFor(assertion: () => void) {
@@ -121,5 +121,25 @@ describe('HistoryPage', () => {
     expect(document.body.querySelector('[role="tooltip"]')).not.toBeNull()
     expect(document.querySelector('[role="dialog"]')).toBeNull()
     expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith('/documents/history/1/email'))).toBe(false)
+  })
+
+  it('loads the detail and exposes the base action without generating a document', async () => {
+    const onUseAsBase = vi.fn()
+    const fetchMock = vi.fn((input: string | URL | Request) => {
+      const path = new URL(typeof input === 'string' ? input : input.toString(), 'http://localhost').pathname
+      if (path === '/api/v1/documents/history') return Promise.resolve(response({ content: [{ id: '1', publicNumber: 'PG-2026-000003', documentType: 'PERMISO_GREMIAL', createdAt: '2026-09-10T10:00:00-03:00', createdBy: 'Admin STIA', companyName: 'Empresa', delegateName: 'Ana Paz', issueDate: '2026-08-18' }], page: 0, size: 20, totalElements: 1, totalPages: 1 }))
+      if (path === '/api/v1/documents/history/1') return Promise.resolve(response({ id: '1', publicNumber: 'PG-2026-000003', documentType: 'PERMISO_GREMIAL', templateId: 'template-1', variantId: 'variant-1', createdAt: '2026-09-10T10:00:00-03:00', createdBy: 'Admin STIA', provinceName: 'Buenos Aires', companyName: 'Empresa', delegateName: 'Ana Paz', delegateDni: '12345678', agreementCode: '771/10', permitDay: 15, issueDate: '2026-08-18', provinceId: 'province-1', companyId: 'company-1', delegateId: 'delegate-1', agreementId: 'agreement-1', manualValues: {} }))
+      throw new Error(`Unexpected request: ${path}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    renderPage('ADMIN', onUseAsBase)
+
+    await waitFor(() => expect(container.textContent).toContain('PG-2026-000003'))
+    await act(async () => [...container.querySelectorAll('button')].find((button) => button.textContent?.includes('PG-2026-000003'))!.click())
+    await waitFor(() => expect(document.body.textContent).toContain('Usar como base'))
+    await act(async () => [...document.querySelectorAll('button')].find((button) => button.textContent?.includes('Usar como base'))!.click())
+
+    expect(onUseAsBase).toHaveBeenCalledWith(expect.objectContaining({ variantId: 'variant-1', companyId: 'company-1', permitDay: 15 }))
+    expect(fetchMock.mock.calls.some(([input]) => String(input).includes('/documents/permiso-gremial/generate'))).toBe(false)
   })
 })

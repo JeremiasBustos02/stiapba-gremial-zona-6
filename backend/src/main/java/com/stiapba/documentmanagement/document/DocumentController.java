@@ -2,6 +2,8 @@ package com.stiapba.documentmanagement.document;
 
 import jakarta.validation.Valid;
 import com.stiapba.documentmanagement.document.DocumentHistoryDtos.DocumentHistoryPageResponse;
+import com.stiapba.documentmanagement.document.DocumentHistoryDtos.DocumentHistoryDetailResponse;
+import com.stiapba.documentmanagement.document.DocumentSuggestionDtos.DocumentSuggestionsResponse;
 import com.stiapba.documentmanagement.document.DocumentHistoryDtos.SendDocumentEmailRequest;
 import com.stiapba.documentmanagement.document.DocumentHistoryDtos.SendDocumentEmailResponse;
 import com.stiapba.documentmanagement.security.UserPrincipal;
@@ -68,6 +70,11 @@ public class DocumentController {
         return documentHistoryService.list(principal, page, size, q, documentType, issueDateFrom, issueDateTo, createdBy, order);
     }
 
+    @GetMapping("/suggestions")
+    public DocumentSuggestionsResponse suggestions(@AuthenticationPrincipal UserPrincipal principal) {
+        return documentHistoryService.suggestions(principal);
+    }
+
     @GetMapping(value = "/history/{id}/pdf", produces = MediaType.APPLICATION_PDF_VALUE)
     public ResponseEntity<byte[]> regenerate(@PathVariable UUID id, @AuthenticationPrincipal UserPrincipal principal) {
         DocumentGenerationService.GeneratedDocument document = documentGenerationService.regenerate(id, principal);
@@ -76,6 +83,11 @@ public class DocumentController {
                 .header("X-Document-Id", document.recordId().toString())
                 .header("X-Public-Number", document.publicNumber())
                 .body(document.content());
+    }
+
+    @GetMapping("/history/{id}")
+    public DocumentHistoryDetailResponse detail(@PathVariable UUID id, @AuthenticationPrincipal UserPrincipal principal) {
+        return documentHistoryService.detail(id, principal);
     }
 
     @PostMapping("/history/{id}/email")

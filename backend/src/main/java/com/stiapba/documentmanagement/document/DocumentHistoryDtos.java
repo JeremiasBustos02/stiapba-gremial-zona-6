@@ -5,6 +5,7 @@ import com.stiapba.documentmanagement.template.entity.DocumentType;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -20,7 +21,15 @@ public final class DocumentHistoryDtos {
     }
 
     public record DocumentHistoryPageResponse(List<DocumentHistoryResponse> content, int page, int size,
-                                              long totalElements, int totalPages) {
+                                               long totalElements, int totalPages) {
+    }
+
+    public record DocumentHistoryDetailResponse(UUID id, String publicNumber, DocumentType documentType,
+                                                UUID templateId, UUID variantId, OffsetDateTime createdAt,
+                                                String createdBy, String provinceName, String companyName,
+                                                String delegateName, String delegateDni, String agreementCode,
+                                                Integer permitDay, LocalDate issueDate, UUID provinceId, UUID companyId,
+                                                UUID delegateId, UUID agreementId, Map<UUID, String> manualValues) {
     }
 
     public record SendDocumentEmailRequest(

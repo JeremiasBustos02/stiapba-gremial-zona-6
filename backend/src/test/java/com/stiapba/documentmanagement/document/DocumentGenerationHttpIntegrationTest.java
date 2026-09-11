@@ -122,6 +122,11 @@ class DocumentGenerationHttpIntegrationTest {
         assertThat(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(source))).isEqualTo(sourceHash);
         assertThat(variantRepository.findById(variant.getId()).orElseThrow().getFileKey()).isEqualTo(originalFileKey);
         assertThat(documentRecordRepository.findById(documentRecordId)).isPresent();
+
+        ResponseEntity<String> suggestions = restTemplate.exchange("/api/v1/documents/suggestions", HttpMethod.GET,
+                new HttpEntity<>(headers(authCookie, csrfCookie)), String.class);
+        assertThat(suggestions.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(suggestions.getBody()).contains(companyId.toString(), delegateId.toString(), agreementId.toString());
     }
 
     @Test

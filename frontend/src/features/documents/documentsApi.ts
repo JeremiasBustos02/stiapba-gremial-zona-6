@@ -4,6 +4,9 @@ import type { Template, TemplateVariant } from '@/features/templates/types'
 
 export type Province = { id: string; name: string }
 export type Delegate = { id: string; nombre: string; apellido: string; dni: string }
+export type DocumentSuggestionItem = { id: string; label: string }
+export type DocumentSuggestionCategory = { recent: DocumentSuggestionItem[]; frequent: DocumentSuggestionItem[] }
+export type DocumentSuggestions = { companies: DocumentSuggestionCategory; delegates: DocumentSuggestionCategory; agreements: DocumentSuggestionCategory }
 
 export type PermisoGremialRequest = {
   provinceId: string
@@ -22,6 +25,7 @@ export const getProvinces = () => apiRequest<Province[]>('/provinces')
 export const getDocumentCompanies = () => apiRequest<Company[]>('/companies?active=true')
 export const getDelegates = () => apiRequest<Delegate[]>('/delegates')
 export const getDocumentAgreements = () => apiRequest<Agreement[]>('/agreements?active=true')
+export const getDocumentSuggestions = () => apiRequest<DocumentSuggestions>('/documents/suggestions')
 export const getDocumentTemplates = () => apiRequest<Template[]>('/templates?active=true')
 export const getDocumentVariants = (templateId: string) => apiRequest<TemplateVariant[]>(`/templates/${templateId}/variants?active=true`)
 export const getManualFields = (variantId: string) => apiRequest<ManualField[]>(`/documents/permiso-gremial/variants/${variantId}/manual-fields`)
@@ -35,6 +39,20 @@ export type DocumentHistoryRecord = {
   companyName: string
   delegateName: string
   issueDate: string
+}
+
+export type DocumentHistoryDetail = DocumentHistoryRecord & {
+  templateId: string
+  variantId: string
+  provinceName: string
+  delegateDni: string
+  agreementCode: string
+  permitDay: number | null
+  provinceId: string | null
+  companyId: string | null
+  delegateId: string | null
+  agreementId: string | null
+  manualValues: Record<string, string>
 }
 
 export type DocumentHistoryPage = {
@@ -64,6 +82,7 @@ export const getDocumentHistory = (page: number, filters: DocumentHistoryFilters
 }
 
 export const regenerateDocument = (id: string) => apiRequestBlobWithHeaders(`/documents/history/${id}/pdf`)
+export const getDocumentHistoryDetail = (id: string) => apiRequest<DocumentHistoryDetail>(`/documents/history/${id}`)
 export type SendDocumentEmailRequest = { recipients: string[]; subject: string; message: string }
 
 export const sendDocumentEmail = (id: string, request: SendDocumentEmailRequest) => apiRequest<{ message: string }>(`/documents/history/${id}/email`, {
