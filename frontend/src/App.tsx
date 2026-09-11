@@ -172,7 +172,7 @@ function App() {
   return <AppLayout screen={screen} role={currentUser.role} onNavigate={go} onLogout={() => logoutMutation.mutate()} onOpenDocument={openSearchDocument} onPrefill={prefillFromSearch}>
     {screen !== "positioned-editor" && <SecondaryNavigation screen={screen} onNavigate={go} />}
     {["admin", "users", "companies", "agreements", "templates"].includes(screen) && <AdminModuleNavigation screen={screen} onNavigate={go} />}
-     {screen === "home" && <HomePage user={currentUser} onNavigate={go} onUseAsBase={useHistoryAsBase} />}
+      {screen === "home" && <HomePage user={currentUser} onNavigate={go} />}
       {screen === "new-document" && <Suspense fallback={<LazyLoadingState />}><DocumentTemplateSelection onBack={() => navigate("/")} onSelect={(id) => { const form = { ...documentForm, ...documentPrefill, variantId: "", manualValues: {} }; setDocumentPrefill({}); saveDraft(id, form); navigate(`/documentos/nuevo/${id}/variante`); }} /></Suspense>}
      {screen === "variants" && <Suspense fallback={<LazyLoadingState />}><DocumentVariantSelection templateId={templateId} onBack={() => navigate("/documentos/nuevo")} onSelect={(variantId) => { if (!templateId) return; const form = { ...documentForm, variantId, manualValues: {} }; saveDraft(templateId, form); navigate(`/documentos/nuevo/${templateId}/formulario`); }} /></Suspense>}
        {screen === "form" && templateId && <Suspense fallback={<LazyLoadingState />}><PermisoGremialForm value={documentForm} onChange={(form) => saveDraft(templateId, form)} onBack={() => navigate(`/documentos/nuevo/${templateId}/variante`)} onGenerated={(document) => { setEmailFeedback(''); setGeneratedDocument(document); navigate(`/documentos/nuevo/${templateId}/vista-previa`); }} /></Suspense>}

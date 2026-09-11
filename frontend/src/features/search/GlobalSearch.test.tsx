@@ -21,7 +21,7 @@ beforeEach(() => {
 afterEach(() => { act(() => root.unmount()); container.remove(); vi.restoreAllMocks() })
 
 describe('GlobalSearch', () => {
-  it('opens with Ctrl+K and closes with Escape', async () => {
+  it('opens with Ctrl+K or the shared search event, then closes with Escape', async () => {
     await act(async () => root.render(<QueryClientProvider client={new QueryClient()}><GlobalSearch role="DELEGADO" onNavigate={vi.fn()} onOpenDocument={vi.fn()} onPrefill={vi.fn()} /></QueryClientProvider>))
 
     await act(async () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true })))
@@ -30,5 +30,8 @@ describe('GlobalSearch', () => {
 
     await act(async () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })))
     expect(document.querySelector('[role="dialog"]')).toBeNull()
+
+    await act(async () => window.dispatchEvent(new Event('open-global-search')))
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull()
   })
 })

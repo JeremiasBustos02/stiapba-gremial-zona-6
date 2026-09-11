@@ -39,6 +39,12 @@ export function GlobalSearch({ role, onNavigate, onOpenDocument, onPrefill }: Pr
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [])
 
+  useEffect(() => {
+    const openSearch = () => setOpen(true)
+    window.addEventListener('open-global-search', openSearch)
+    return () => window.removeEventListener('open-global-search', openSearch)
+  }, [])
+
   const close = () => {
     setOpen(false)
     setQuery('')
