@@ -47,6 +47,15 @@ describe('document generation API', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/v1/documents/history?page=2&size=20', expect.objectContaining({ credentials: 'include' }))
   })
 
+  it('includes active history filters in the server request', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 }), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await getDocumentHistory(0, { q: 'PG-2026', issueDateFrom: '2026-01-01', issueDateTo: '2026-12-31', createdBy: 'Ana', order: 'oldest' })
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/documents/history?page=0&size=20&q=PG-2026&issueDateFrom=2026-01-01&issueDateTo=2026-12-31&createdBy=Ana&order=oldest', expect.objectContaining({ credentials: 'include' }))
+  })
+
   it('returns the regenerated PDF and its response headers', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(new Blob(['pdf'], { type: 'application/pdf' }), {
       status: 200,

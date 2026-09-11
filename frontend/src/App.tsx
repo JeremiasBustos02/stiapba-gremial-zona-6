@@ -154,7 +154,7 @@ function App() {
      {screen === "new-document" && <Suspense fallback={<LazyLoadingState />}><DocumentTemplateSelection onBack={() => navigate("/")} onSelect={(id) => { const form = { ...documentForm, variantId: "", manualValues: {} }; saveDraft(id, form); navigate(`/documentos/nuevo/${id}/variante`); }} /></Suspense>}
      {screen === "variants" && <Suspense fallback={<LazyLoadingState />}><DocumentVariantSelection templateId={templateId} onBack={() => navigate("/documentos/nuevo")} onSelect={(variantId) => { if (!templateId) return; const form = { ...documentForm, variantId, manualValues: {} }; saveDraft(templateId, form); navigate(`/documentos/nuevo/${templateId}/formulario`); }} /></Suspense>}
        {screen === "form" && templateId && <Suspense fallback={<LazyLoadingState />}><PermisoGremialForm value={documentForm} onChange={(form) => saveDraft(templateId, form)} onBack={() => navigate(`/documentos/nuevo/${templateId}/variante`)} onGenerated={(document) => { setEmailFeedback(''); setGeneratedDocument(document); navigate(`/documentos/nuevo/${templateId}/vista-previa`); }} /></Suspense>}
-       {screen === "preview" && generatedDocument && <Suspense fallback={<LazyLoadingState />}><PdfPreview pdf={generatedDocument.blob} filename={generatedDocument.filename} onEdit={() => { setGeneratedDocument(null); navigate(routeForScreen("form", templateId)); }} onHome={() => { clearDocumentDraft(); setGeneratedDocument(null); navigate("/"); }} /><PostGenerationActions document={generatedDocument} onSuccess={setEmailFeedback} />{emailFeedback && <p role="status" className="mt-3 max-w-3xl rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-800">{emailFeedback}</p>}</Suspense>}
+         {screen === "preview" && generatedDocument && <Suspense fallback={<LazyLoadingState />}><div className="preview-action-flow"><PdfPreview pdf={generatedDocument.blob} filename={generatedDocument.filename} onEdit={() => { setGeneratedDocument(null); navigate(routeForScreen("form", templateId)); }} onHome={() => { clearDocumentDraft(); setGeneratedDocument(null); navigate("/"); }} postGenerationAction={<PostGenerationActions document={generatedDocument} inline />} />{emailFeedback && <p role="status" className="mt-3 max-w-3xl rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-800">{emailFeedback}</p>}</div></Suspense>}
      {screen === "profile" && <ProfilePage user={currentUser} onLogout={() => logoutMutation.mutate()} />}
      {screen === "history" && <HistoryPage role={currentUser.role} />}
     {screen === "admin" && <AdminPage onNavigate={go} />}
@@ -169,7 +169,7 @@ function FieldEditorRoute() {
   const navigate = useNavigate();
   const variantsQuery = useQuery({ queryKey: ["template-variants", templateId], queryFn: () => getVariants(templateId!), enabled: Boolean(templateId) });
   if (!templateId || !variantId) return <Navigate to="/admin/plantillas" replace />;
-  if (variantsQuery.isPending) return <p className="py-10 text-center text-sm text-slate-500">Cargando variante...</p>;
+  if (variantsQuery.isPending) return <p className="typo-body-sm py-10 text-center text-slate-500">Cargando variante...</p>;
   const variant = variantsQuery.data?.find((item) => item.id === variantId);
   if (!variant) return <Navigate to={`/admin/plantillas/${templateId}`} replace />;
   return (
@@ -185,7 +185,7 @@ function FieldEditorRoute() {
 
 function LazyLoadingState() {
   return (
-    <p className="flex items-center justify-center gap-2 py-10 text-sm text-slate-500">
+    <p className="typo-body-sm flex items-center justify-center gap-2 py-10 text-slate-500">
       <LoaderCircle className="animate-spin" size={18} /> Cargando...
     </p>
   );
@@ -214,28 +214,25 @@ function LoginPage({
         ? "No pudimos iniciar sesión. Intentá nuevamente."
         : "";
   return (
-    <main className="flex min-h-screen flex-col bg-slate-50 px-5 py-10 sm:px-10">
-      <section className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center">
-        <div className="mb-10 text-center">
+    <main className="relative flex min-h-[100dvh] flex-col overflow-hidden bg-slate-50 px-5 py-10 sm:px-10">
+      <div aria-hidden="true" className="absolute -right-24 -top-24 h-72 w-72 rounded-full border-[2rem] border-blue-100 opacity-70" />
+      <section className="relative mx-auto flex w-full max-w-md flex-1 flex-col justify-center">
+        <div className="mb-10 text-left">
           <BrandMark />
-          <p className="mt-5 text-sm font-semibold uppercase tracking-[.16em] text-blue-700">
-            STIA PBA Zona 6
-          </p>
-          <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">
-            Ingresá a tu cuenta
-          </h1>
-          <p className="mt-3 text-base leading-relaxed text-slate-600">
+          <p className="typo-eyebrow mt-5 text-blue-700">STIA PBA · Zona 6</p>
+          <h1 className="typo-display-xl mt-2 uppercase text-slate-950">Ingresá a tu cuenta</h1>
+          <p className="typo-body mt-3 text-slate-600">
             Accedé a tus documentos de forma segura.
           </p>
         </div>
         <form
           onSubmit={submit}
-          className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8"
+          className="border border-slate-200 bg-white p-6 shadow-[var(--shadow-surface)] sm:p-8"
         >
           {sessionExpired && (
             <p
               role="status"
-              className="mb-5 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800"
+              className="typo-body-sm mb-5 rounded-xl bg-amber-50 px-4 py-3 text-amber-800"
             >
               Tu sesión expiró. Volvé a iniciar sesión.
             </p>
@@ -243,19 +240,19 @@ function LoginPage({
           {message && (
             <p
               role="alert"
-              className="mb-5 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-800"
+              className="typo-body-sm mb-5 rounded-xl bg-rose-50 px-4 py-3 text-rose-800"
             >
               {message}
             </p>
           )}
-          <label className="block text-sm font-semibold text-slate-900">
+          <label className="typo-label block text-slate-900">
             DNI
             <input
               required
               name="dni"
               inputMode="numeric"
               placeholder="Ingresá tu DNI"
-              className="mt-2 h-12 w-full rounded-xl border border-slate-300 bg-white px-4 outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100"
+              className="mt-2 h-12 w-full rounded-md border border-slate-300 bg-white px-4 outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100"
             />
           </label>
           <PasswordInput
@@ -266,7 +263,7 @@ function LoginPage({
           />
           <button
             disabled={pending}
-            className="mt-8 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-blue-700 px-4 py-3 font-semibold text-white hover:bg-blue-800 focus-visible:ring-2 focus-visible:ring-blue-600 disabled:cursor-wait disabled:opacity-60"
+            className="typo-control mt-8 flex min-h-12 w-full items-center justify-center gap-2 rounded-md bg-[var(--color-action)] px-4 py-3 text-white hover:bg-blue-700 disabled:cursor-wait disabled:opacity-60"
           >
             {pending ? (
               <>
@@ -281,7 +278,7 @@ function LoginPage({
           </button>
         </form>
       </section>
-      <footer className="pt-8 text-center text-xs font-medium text-slate-500">
+      <footer className="typo-caption pt-8 text-center text-slate-500">
         StiaPba Gremial Zona 6
       </footer>
     </main>
@@ -312,26 +309,24 @@ function FirstLoginPage({ onSaved }: { onSaved: () => void | Promise<void> }) {
     mutation.mutate({ newPassword, confirmPassword });
   };
   return (
-    <main className="flex min-h-screen items-center bg-slate-50 px-5 py-10">
+    <main className="flex min-h-[100dvh] items-center bg-slate-50 px-5 py-10">
       <form
         onSubmit={submit}
-        className="mx-auto w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8"
+        className="mx-auto w-full max-w-md border border-slate-200 bg-white p-6 shadow-[var(--shadow-surface)] sm:p-8"
       >
         <BrandMark />
-        <p className="mt-6 text-sm font-semibold uppercase tracking-[.16em] text-blue-700">
+        <p className="typo-eyebrow mt-6 text-blue-700">
           Primer ingreso
         </p>
-        <h1 className="mt-2 text-3xl font-bold tracking-tight">
-          Creá una nueva contraseña
-        </h1>
-        <p className="mt-3 text-slate-600">
+        <h1 className="typo-display-xl mt-2 uppercase">Creá una nueva contraseña</h1>
+        <p className="typo-body-sm mt-3 text-slate-600">
           Por seguridad, antes de continuar necesitás crear una nueva
           contraseña.
         </p>
         {error && (
           <p
             role="alert"
-            className="mt-5 rounded-xl bg-rose-50 p-3 text-sm text-rose-800"
+              className="typo-body-sm mt-5 rounded-xl bg-rose-50 p-3 text-rose-800"
           >
             {error}
           </p>
@@ -339,7 +334,7 @@ function FirstLoginPage({ onSaved }: { onSaved: () => void | Promise<void> }) {
         <PasswordFields />
         <button
           disabled={mutation.isPending}
-          className="mt-7 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-blue-700 px-4 py-3 font-semibold text-white hover:bg-blue-800 focus-visible:ring-2 focus-visible:ring-blue-600 disabled:opacity-60"
+          className="typo-control mt-7 flex min-h-12 w-full items-center justify-center gap-2 rounded-md bg-[var(--color-action)] px-4 py-3 text-white hover:bg-blue-700 disabled:opacity-60"
         >
           {mutation.isPending && (
             <LoaderCircle className="animate-spin" size={18} />
@@ -356,7 +351,7 @@ function PasswordFields() {
     <div className="mt-6 space-y-4">
       <PasswordInput name="password" label="Nueva contraseña" minLength={10} />
       <PasswordInput name="confirm" label="Repetir contraseña" minLength={10} />
-      <p className="text-xs text-slate-500">Entre 10 y 72 caracteres.</p>
+      <p className="typo-caption text-slate-500">Entre 10 y 72 caracteres.</p>
     </div>
   );
 }
@@ -376,7 +371,7 @@ function PasswordInput({
   const [visible, setVisible] = useState(false);
   return (
     <label
-      className={`block text-sm font-semibold text-slate-900 ${className}`}
+      className={`typo-label block text-slate-900 ${className}`}
     >
       {label}
       <div className="relative mt-2">
@@ -386,7 +381,7 @@ function PasswordInput({
           minLength={minLength}
           type={visible ? "text" : "password"}
           placeholder={placeholder}
-          className="h-12 w-full rounded-xl border border-slate-300 bg-white px-4 pr-12 outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100"
+          className="h-12 w-full rounded-md border border-slate-300 bg-white px-4 pr-12 outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100"
         />
         <button
           type="button"
@@ -440,7 +435,7 @@ function AdminPage({ onNavigate }: { onNavigate: (screen: Screen) => void }) {
   return (
     <section className="max-w-5xl">
       <header className="border-b border-slate-200 pb-4">
-        <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-700">
+        <p className="typo-eyebrow text-blue-700">
           Administración
         </p>
         <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">

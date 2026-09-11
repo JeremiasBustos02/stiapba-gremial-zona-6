@@ -32,7 +32,7 @@ export function SecondaryNavigation({
       <button
         type="button"
         onClick={() => onNavigate(parent)}
-        className="flex min-h-11 items-center gap-2 rounded-lg px-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-blue-600 sm:px-3"
+        className="typo-control flex min-h-11 items-center gap-2 rounded-lg px-2 text-slate-700 hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-blue-600 sm:px-3"
       >
         <ArrowLeft size={20} className="shrink-0" />
         <span>Volver</span>
@@ -67,7 +67,7 @@ export function AdminModuleNavigation({
             type="button"
             onClick={() => onNavigate(module.screen)}
             aria-current={screen === module.screen ? "page" : undefined}
-            className={`min-h-11 shrink-0 border-b-2 px-3 text-sm font-semibold ${screen === module.screen ? "border-blue-700 text-blue-700" : "border-transparent text-slate-600 hover:border-slate-300 hover:text-slate-950"}`}
+            className={`typo-control min-h-11 shrink-0 border-b-2 px-3 ${screen === module.screen ? "border-blue-700 text-blue-700" : "border-transparent text-slate-600 hover:border-slate-300 hover:text-slate-950"}`}
           >
             {module.label}
           </button>

@@ -431,7 +431,7 @@ export function PositionedFieldEditor({
             {variant.nombre}
           </h1>
           <span
-            className={`shrink-0 rounded-full px-2 py-1 text-[11px] font-semibold ${saveMutation.isPending ? "bg-blue-50 text-blue-700" : dirty ? "bg-amber-50 text-amber-800" : "bg-emerald-50 text-emerald-700"}`}
+            className={`typo-meta shrink-0 rounded-full px-2 py-1 ${saveMutation.isPending ? "bg-blue-50 text-blue-700" : dirty ? "bg-amber-50 text-amber-800" : "bg-emerald-50 text-emerald-700"}`}
           >
             {saveStatus}
           </span>
@@ -590,6 +590,7 @@ export function PositionedFieldEditor({
                               className={`absolute z-20 border-2 ${active ? "border-blue-800 bg-blue-500/35 ring-2 ring-blue-300" : unassigned ? "border-amber-600 border-dashed bg-amber-300/20" : "border-blue-600 bg-blue-500/15"}`}
                               aria-label={`${field.displayName || "Campo"}: ${labelFor(configured?.fieldDefinitionId ?? "")}`}
                             >
+                              {/* Canvas-only field marker: it scales with the PDF overlay, not the application UI. */}
                               <span
                                 aria-hidden="true"
                                 className={`absolute left-0 top-0 grid h-4 min-w-4 place-items-center text-[9px] font-bold ${unassigned ? "bg-amber-600 text-white" : "bg-blue-700 text-white"}`}
@@ -620,6 +621,7 @@ export function PositionedFieldEditor({
                           className={`absolute z-20 border-2 ${selectedField ? "border-blue-800 bg-blue-500/30 ring-2 ring-blue-300" : unassigned ? "border-amber-600 border-dashed bg-amber-300/20" : "border-blue-600 bg-blue-500/15"}`}
                           aria-label={`Campo ${index + 1}: ${labelFor(field.fieldDefinitionId)}. ${selectedField ? "Seleccionado" : "Tocá para seleccionar"}`}
                         >
+                          {/* Canvas-only field marker: it scales with the PDF overlay, not the application UI. */}
                           <span
                             aria-hidden="true"
                             className={`absolute left-0 top-0 grid h-4 min-w-4 place-items-center text-[9px] font-bold ${unassigned ? "bg-amber-600 text-white" : "bg-blue-700 text-white"}`}
@@ -845,7 +847,7 @@ function PositionedConfiguration({
   return (
     <div className="mt-4 space-y-5">
       <section>
-        <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+        <p className="typo-eyebrow text-slate-500">
           Contenido
         </p>
         <label className="mt-3 block text-sm font-semibold">
@@ -867,7 +869,7 @@ function PositionedConfiguration({
         </label>
       </section>
       <section className="border-t border-slate-200 pt-4">
-        <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+        <p className="typo-eyebrow text-slate-500">
           Posición y tamaño
         </p>
         <p className="mt-2 text-sm text-slate-600">
@@ -876,7 +878,7 @@ function PositionedConfiguration({
         </p>
       </section>
       <section className="border-t border-slate-200 pt-4">
-        <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+        <p className="typo-eyebrow text-slate-500">
           Apariencia
         </p>
         <p className="mt-3 text-sm font-semibold">Alineación</p>
@@ -886,7 +888,7 @@ function PositionedConfiguration({
               key={alignment}
               type="button"
               onClick={() => onChange(field.clientId, { alignment })}
-              className={`min-h-11 rounded-lg border px-2 py-2 text-xs font-semibold ${field.alignment === alignment ? "border-blue-700 bg-blue-50 text-blue-800" : "border-slate-300"}`}
+              className={`typo-control min-h-11 rounded-lg border px-2 py-2 ${field.alignment === alignment ? "border-blue-700 bg-blue-50 text-blue-800" : "border-slate-300"}`}
             >
               {alignment === "LEFT"
                 ? "Izquierda"
@@ -899,7 +901,7 @@ function PositionedConfiguration({
         <p className="mt-3 text-sm text-slate-600">Tamaño: automático</p>
       </section>
       <section className="border-t border-slate-200 pt-4">
-        <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+        <p className="typo-eyebrow text-slate-500">
           Opciones
         </p>
         <label className="mt-3 flex min-h-11 items-center gap-2 text-sm font-medium">
@@ -1085,7 +1087,7 @@ function AcroformConfiguration({
                 {field.displayName || `Campo ${index + 1}`}
               </button>
               <section className="mt-3 border-t border-slate-200 pt-3">
-                <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                <p className="typo-eyebrow text-slate-500">
                   Contenido
                 </p>
                 <DataSelector
@@ -1112,7 +1114,7 @@ function AcroformConfiguration({
               {existing && (
                 <>
                   <section className="mt-3 border-t border-slate-200 pt-3">
-                    <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                    <p className="typo-eyebrow text-slate-500">
                       Apariencia
                     </p>
                     <p className="mt-3 text-sm font-semibold">Alineación</p>
@@ -1122,7 +1124,7 @@ function AcroformConfiguration({
                           key={alignment}
                           type="button"
                           onClick={() => onUpsert({ ...existing, alignment })}
-                          className={`min-h-11 rounded-lg border px-2 py-2 text-xs font-semibold ${(existing.alignment ?? "CENTER") === alignment ? "border-blue-700 bg-blue-50 text-blue-800" : "border-slate-300"}`}
+                          className={`typo-control min-h-11 rounded-lg border px-2 py-2 ${(existing.alignment ?? "CENTER") === alignment ? "border-blue-700 bg-blue-50 text-blue-800" : "border-slate-300"}`}
                         >
                           {alignment === "LEFT"
                             ? "Izquierda"
@@ -1134,7 +1136,7 @@ function AcroformConfiguration({
                     </div>
                   </section>
                   <section className="mt-3 border-t border-slate-200 pt-3">
-                    <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                    <p className="typo-eyebrow text-slate-500">
                       Opciones
                     </p>
                     <label className="mt-2 flex min-h-11 items-center gap-2 text-sm font-medium">

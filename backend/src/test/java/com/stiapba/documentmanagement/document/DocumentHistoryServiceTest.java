@@ -12,6 +12,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -32,13 +33,14 @@ class DocumentHistoryServiceTest {
     void adminListsAllRecordsDescendingByCreationDate() {
         DocumentHistoryService service = new DocumentHistoryService(documentRecordRepository);
         DocumentRecord record = record(UUID.randomUUID());
-        when(documentRecordRepository.findAll(any(Pageable.class))).thenReturn(new PageImpl<>(List.of(record)));
+        when(documentRecordRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(record)));
 
         var result = service.list(new UserPrincipal(UUID.randomUUID(), Role.ADMIN, false), 0, 20);
 
         assertThat(result.content()).hasSize(1);
         ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
-        verify(documentRecordRepository).findAll(pageable.capture());
+        verify(documentRecordRepository).findAll(any(Specification.class), pageable.capture());
         assertThat(pageable.getValue().getSort().getOrderFor("createdAt").isDescending()).isTrue();
     }
 
@@ -46,13 +48,28 @@ class DocumentHistoryServiceTest {
     void delegateListsOnlyOwnRecords() {
         DocumentHistoryService service = new DocumentHistoryService(documentRecordRepository);
         UUID delegateId = UUID.randomUUID();
-        when(documentRecordRepository.findByCreatedByUserId(eq(delegateId), any(Pageable.class)))
+        when(documentRecordRepository.findAll(any(Specification.class), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(record(delegateId))));
 
         var result = service.list(new UserPrincipal(delegateId, Role.DELEGADO, false), 0, 20);
 
         assertThat(result.content()).hasSize(1);
-        verify(documentRecordRepository).findByCreatedByUserId(eq(delegateId), any(Pageable.class));
+        verify(documentRecordRepository).findAll(any(Specification.class), any(Pageable.class));
+    }
+
+    @Test
+    void appliesFiltersWithinDelegateOwnershipScope() {
+        DocumentHistoryService service = new DocumentHistoryService(documentRecordRepository);
+        UUID delegateId = UUID.randomUUID();
+        when(documentRecordRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(record(delegateId))));
+
+        service.list(new UserPrincipal(delegateId, Role.DELEGADO, false), 0, 20, " PG-2026 ", DocumentType.PERMISO_GREMIAL,
+                LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31), "ignored", "oldest");
+
+        ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
+        verify(documentRecordRepository).findAll(any(Specification.class), pageable.capture());
+        assertThat(pageable.getValue().getSort().getOrderFor("createdAt").isAscending()).isTrue();
     }
 
     private DocumentRecord record(UUID creatorId) {

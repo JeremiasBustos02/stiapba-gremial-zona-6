@@ -5,6 +5,7 @@ import com.stiapba.documentmanagement.document.DocumentHistoryDtos.DocumentHisto
 import com.stiapba.documentmanagement.document.DocumentHistoryDtos.SendDocumentEmailRequest;
 import com.stiapba.documentmanagement.document.DocumentHistoryDtos.SendDocumentEmailResponse;
 import com.stiapba.documentmanagement.security.UserPrincipal;
+import com.stiapba.documentmanagement.template.entity.DocumentType;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -16,8 +17,10 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -54,9 +57,15 @@ public class DocumentController {
 
     @GetMapping("/history")
     public DocumentHistoryPageResponse history(@AuthenticationPrincipal UserPrincipal principal,
-                                                @RequestParam(defaultValue = "0") int page,
-                                                @RequestParam(defaultValue = "20") int size) {
-        return documentHistoryService.list(principal, page, size);
+                                                 @RequestParam(defaultValue = "0") int page,
+                                                 @RequestParam(defaultValue = "20") int size,
+                                                 @RequestParam(required = false) String q,
+                                                 @RequestParam(required = false) DocumentType documentType,
+                                                 @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate issueDateFrom,
+                                                 @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate issueDateTo,
+                                                 @RequestParam(required = false) String createdBy,
+                                                 @RequestParam(defaultValue = "newest") String order) {
+        return documentHistoryService.list(principal, page, size, q, documentType, issueDateFrom, issueDateTo, createdBy, order);
     }
 
     @GetMapping(value = "/history/{id}/pdf", produces = MediaType.APPLICATION_PDF_VALUE)

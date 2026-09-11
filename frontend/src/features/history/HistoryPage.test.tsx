@@ -61,13 +61,48 @@ describe('HistoryPage', () => {
     expect(container.textContent).toContain('Los documentos que generes aparecerán acá.')
   })
 
+  it('sends debounced search and date filters to the paginated endpoint', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(response({ content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 }))
+    vi.stubGlobal('fetch', fetchMock)
+    renderPage()
+
+    await waitFor(() => expect(container.querySelector('#history-search')).not.toBeNull())
+    const filtersButton = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes('Filtros'))
+    await act(async () => filtersButton!.click())
+    await waitFor(() => expect(document.querySelector('#history-from-mobile')).not.toBeNull())
+    const search = container.querySelector<HTMLInputElement>('#history-search')!
+    const from = document.querySelector<HTMLInputElement>('#history-from-mobile')!
+    const setInputValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+    await act(async () => {
+      setInputValue.call(search, 'PG-2026')
+      search.dispatchEvent(new Event('input', { bubbles: true }))
+      setInputValue.call(from, '2026-01-01')
+      from.dispatchEvent(new Event('input', { bubbles: true }))
+      from.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+
+    await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => String(input).includes('q=PG-2026') && String(input).includes('issueDateFrom=2026-01-01'))).toBe(true))
+    expect(container.textContent).toContain('Limpiar filtros')
+  })
+
+  it('does not expose the creator filter to delegates', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response({ content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 })))
+    renderPage('DELEGADO')
+
+    await waitFor(() => expect(container.querySelector('#history-search')).not.toBeNull())
+    const filtersButton = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes('Filtros'))
+    await act(async () => filtersButton!.click())
+    await waitFor(() => expect(document.querySelector('[role="dialog"]')).not.toBeNull())
+    expect(document.querySelector('#history-created-by-mobile')).toBeNull()
+  })
+
   it('shows a friendly error when history cannot be loaded', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(response({}, 500)))
     renderPage('DELEGADO')
     await waitFor(() => expect(container.textContent).toContain('No pudimos completar la operación.'))
   })
 
-  it('opens the email dialog and validates the recipient before sending', async () => {
+  it('keeps email sending disabled from history without calling the backend', async () => {
     const fetchMock = vi.fn((input: string | URL | Request) => {
       const path = new URL(typeof input === 'string' ? input : input.toString(), 'http://localhost').pathname
       if (path === '/api/v1/documents/history') return Promise.resolve(response({ content: [{ id: '1', publicNumber: 'PG-2026-000001', documentType: 'PERMISO_GREMIAL', createdAt: '2026-09-10T10:00:00-03:00', createdBy: 'Admin STIA', companyName: 'Empresa', delegateName: 'Ana Paz', issueDate: '2026-08-18' }], page: 0, size: 20, totalElements: 1, totalPages: 1 }))
@@ -77,13 +112,14 @@ describe('HistoryPage', () => {
     renderPage()
 
     await waitFor(() => expect(container.textContent).toContain('Enviar por mail'))
+    expect(container.querySelector('[role="group"]')).not.toBeNull()
     const emailButton = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes('Enviar por mail'))
     await act(async () => emailButton!.click())
-    await waitFor(() => expect(document.querySelector<HTMLInputElement>('input[autocomplete="email"]')).not.toBeNull())
-    const dialog = document.querySelector('[role="dialog"]')!
-    const sendButton = [...dialog.querySelectorAll('button')].find((button) => button.textContent?.includes('Enviar correo'))
-    await act(async () => sendButton!.click())
-    await waitFor(() => expect(document.body.textContent).toContain('Ingresá uno o más correos electrónicos válidos'))
+    expect(document.body.textContent).toContain('Envío por correo temporalmente deshabilitado')
+    expect(document.body.textContent).toContain('Estamos terminando de configurar esta función')
+    expect(container.querySelector('[role="tooltip"]')).toBeNull()
+    expect(document.body.querySelector('[role="tooltip"]')).not.toBeNull()
+    expect(document.querySelector('[role="dialog"]')).toBeNull()
     expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith('/documents/history/1/email'))).toBe(false)
   })
 })

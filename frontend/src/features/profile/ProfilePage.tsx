@@ -13,11 +13,11 @@ function PageIntro({
 }) {
   return (
     <header className="max-w-2xl">
-      <p className="text-sm font-semibold text-blue-700">Nuevo documento</p>
-      <h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">
+       <p className="typo-eyebrow text-blue-700">Cuenta personal</p>
+       <h1 className="typo-display-xl mt-2 uppercase">
         {title}
       </h1>
-      <p className="mt-3 leading-relaxed text-slate-600">{description}</p>
+       <p className="typo-body-sm mt-3 text-slate-600">{description}</p>
     </header>
   );
 }
@@ -62,36 +62,36 @@ export function ProfilePage({
         title="Mi perfil"
         description="Consultá la información de tu cuenta."
       />
-      <section className="mt-8 max-w-xl rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <section className="mt-8 max-w-xl border border-slate-200 bg-white p-6 shadow-[var(--shadow-surface)]">
         <div className="flex items-center gap-4">
-          <span className="rounded-full bg-blue-100 p-4 text-blue-700">
+          <span className="border border-blue-200 bg-blue-50 p-4 text-blue-700">
             <UserRound size={28} />
           </span>
           <div>
-            <h2 className="text-xl font-bold">
+            <h2 className="typo-heading-3">
               {user.nombre} {user.apellido}
             </h2>
-            <p className="text-sm text-slate-600">DNI {user.dni}</p>
+            <p className="typo-meta text-slate-600">DNI {user.dni}</p>
           </div>
         </div>
         <dl className="mt-7 divide-y divide-slate-100 border-y border-slate-100">
           <div className="flex justify-between py-4">
-            <dt className="text-slate-600">Rol</dt>
-            <dd className="font-semibold">{user.role}</dd>
+            <dt className="typo-meta text-slate-600">Rol</dt>
+            <dd className="typo-label">{user.role}</dd>
           </div>
           <div className="flex justify-between py-4">
-            <dt className="text-slate-600">Estado</dt>
-            <dd className="font-semibold text-emerald-700">Activo</dd>
+            <dt className="typo-meta text-slate-600">Estado</dt>
+            <dd className="typo-label text-emerald-700">Activo</dd>
           </div>
         </dl>
         <form onSubmit={submit} className="mt-7 border-t border-slate-100 pt-6">
-          <h2 className="flex items-center gap-2 font-bold">
+           <h2 className="typo-heading-3 flex items-center gap-2">
             <LockKeyhole size={18} /> Cambiar contraseña
           </h2>
           {success && (
             <p
               role="status"
-              className="mt-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800"
+               className="typo-body-sm mt-4 rounded-xl bg-emerald-50 p-3 text-emerald-800"
             >
               {success}
             </p>
@@ -99,12 +99,12 @@ export function ProfilePage({
           {error && (
             <p
               role="alert"
-              className="mt-4 rounded-xl bg-rose-50 p-3 text-sm text-rose-800"
+               className="typo-body-sm mt-4 rounded-xl bg-rose-50 p-3 text-rose-800"
             >
               {error}
             </p>
           )}
-          <label className="mt-4 block text-sm font-semibold">
+           <label className="typo-label mt-4 block">
             Contraseña actual
             <input
               required
@@ -113,7 +113,7 @@ export function ProfilePage({
               className="mt-2 h-12 w-full rounded-xl border border-slate-300 px-3 outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100"
             />
           </label>
-          <label className="mt-4 block text-sm font-semibold">
+           <label className="typo-label mt-4 block">
             Nueva contraseña
             <input
               required
@@ -123,7 +123,7 @@ export function ProfilePage({
               className="mt-2 h-12 w-full rounded-xl border border-slate-300 px-3 outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100"
             />
           </label>
-          <label className="mt-4 block text-sm font-semibold">
+           <label className="typo-label mt-4 block">
             Repetir nueva contraseña
             <input
               required
@@ -135,7 +135,7 @@ export function ProfilePage({
           </label>
           <button
             disabled={mutation.isPending}
-            className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 px-4 py-3 font-semibold hover:bg-slate-50 disabled:opacity-60"
+             className="typo-control mt-5 flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 px-4 py-3 hover:bg-slate-50 disabled:opacity-60"
           >
             {mutation.isPending && (
               <LoaderCircle className="animate-spin" size={18} />
@@ -145,7 +145,7 @@ export function ProfilePage({
         </form>
         <button
           onClick={onLogout}
-          className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 font-semibold text-rose-700 hover:bg-rose-50"
+           className="typo-control mt-3 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-rose-700 hover:bg-rose-50"
         >
           Cerrar sesión <LogOut size={18} />
         </button>

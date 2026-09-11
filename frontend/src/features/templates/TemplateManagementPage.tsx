@@ -491,7 +491,7 @@ function TemplateDetail({
         >
           Volver a plantillas
         </button>
-        <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-700">
+        <p className="typo-eyebrow text-blue-700">
           Detalle de plantilla
         </p>
         <div className="mt-1 flex items-start justify-between gap-3">
@@ -849,7 +849,7 @@ function FormActions({
 function Status({ active }: { active: boolean }) {
   return (
     <span
-      className={`mt-2 inline-block shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${active ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}
+      className={`typo-caption mt-2 inline-block shrink-0 rounded-full px-2.5 py-1 font-semibold ${active ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}
     >
       {active ? "Activa" : "Inactiva"}
     </span>

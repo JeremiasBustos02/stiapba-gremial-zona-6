@@ -1,12 +1,13 @@
-import { Mail } from 'lucide-react'
-import { useState } from 'react'
-import { Button } from '@/components/ui/button'
 import type { GeneratedDocument } from './documentsApi'
-import { DocumentEmailDialog } from './DocumentEmailDialog'
+import { DisabledEmailAction } from './DisabledEmailAction'
+import { ActionGroup, ActionGroupItem } from '@/components/ui/action-group'
 
-export function PostGenerationActions({ document, onSuccess }: { document: GeneratedDocument; onSuccess?: (message: string) => void }) {
-  const [emailOpen, setEmailOpen] = useState(false)
-  return <><section className="mt-3 max-w-3xl rounded-xl border border-slate-200 bg-white p-3">
-    <Button className="w-full" variant="outline" onClick={() => setEmailOpen(true)}><Mail size={17} />Enviar mail</Button>
-  </section><DocumentEmailDialog documentId={document.documentId} publicNumber={document.publicNumber} open={emailOpen} onOpenChange={setEmailOpen} onSuccess={onSuccess} /></>
+export function PostGenerationActions({ inline = false }: { document: GeneratedDocument; onSuccess?: (message: string) => void; inline?: boolean }) {
+  if (inline) return <DisabledEmailAction label="Enviar por mail" grouped />
+
+  return <section className="post-generation-actions mt-3 max-w-3xl">
+    <ActionGroup aria-label="Acciones adicionales del documento">
+      <ActionGroupItem><DisabledEmailAction label="Enviar por mail" /></ActionGroupItem>
+    </ActionGroup>
+  </section>
 }

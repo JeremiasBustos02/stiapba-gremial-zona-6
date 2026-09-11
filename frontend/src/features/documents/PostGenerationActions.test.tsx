@@ -15,54 +15,28 @@ describe('PostGenerationActions', () => {
   })
   afterEach(() => { act(() => root.unmount()); container.remove(); vi.restoreAllMocks(); vi.unstubAllGlobals() })
 
-  it('shows only the inline email action and no automatic actions dialog', async () => {
+  it('shows the email action as disabled without opening a dialog', async () => {
     await act(async () => root.render(<PostGenerationActions document={generatedDocument} />))
 
-    expect(container.textContent).toContain('Enviar mail')
-    expect(container.textContent).not.toContain('Documento generado')
+    const button = container.querySelector('button')!
+    expect(button.textContent).toContain('Enviar por mail')
+    expect(button.getAttribute('aria-disabled')).toBe('true')
+    expect(container.querySelector('[role="group"]')).not.toBeNull()
     expect(window.document.querySelector('[role="dialog"]')).toBeNull()
   })
 
-  it('opens the email dialog only after selecting email and sends editable fields', async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify({ token: 'csrf-token' }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ message: 'Correo enviado correctamente.' }), { status: 200 }))
-    vi.stubGlobal('fetch', fetchMock)
-    const onSuccess = vi.fn()
-    await act(async () => root.render(<PostGenerationActions document={generatedDocument} onSuccess={onSuccess} />))
-
-    const mail = [...container.querySelectorAll('button')].find((item) => item.textContent?.includes('Enviar mail'))!
-    await act(async () => mail.click())
-    expect(window.document.body.textContent).toContain('Enviar documento')
-    const dialog = window.document.querySelector('[role="dialog"]')!
-    const inputs = dialog.querySelectorAll<HTMLInputElement>('input')
-    const message = dialog.querySelector<HTMLTextAreaElement>('textarea')!
-    await act(async () => {
-      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(inputs[0], 'uno@example.com, dos@example.com')
-      inputs[0].dispatchEvent(new Event('input', { bubbles: true }))
-      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(inputs[1], 'Asunto editado')
-      inputs[1].dispatchEvent(new Event('input', { bubbles: true }))
-      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(message, 'Mensaje editado')
-      message.dispatchEvent(new Event('input', { bubbles: true }))
-    })
-    const send = [...dialog.querySelectorAll('button')].find((item) => item.textContent?.includes('Enviar correo'))!
-    await act(async () => send.click())
-
-    expect(fetchMock.mock.calls[1][0]).toBe('/api/v1/documents/history/record-1/email')
-    expect(JSON.parse(fetchMock.mock.calls[1][1].body as string)).toEqual({
-      recipients: ['uno@example.com', 'dos@example.com'], subject: 'Asunto editado', message: 'Mensaje editado',
-    })
-    expect(onSuccess).toHaveBeenCalledWith('Correo enviado correctamente.')
-  })
-
-  it('validates recipients without requesting the backend', async () => {
+  it('shows the temporary availability message and never calls the API', async () => {
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
     await act(async () => root.render(<PostGenerationActions document={generatedDocument} />))
-    await act(async () => [...container.querySelectorAll('button')].find((item) => item.textContent?.includes('Enviar mail'))!.click())
-    const dialog = window.document.querySelector('[role="dialog"]')!
-    await act(async () => [...dialog.querySelectorAll('button')].find((item) => item.textContent?.includes('Enviar correo'))!.click())
-    expect(window.document.body.textContent).toContain('Ingresá uno o más correos electrónicos válidos')
+
+    await act(async () => container.querySelector('button')!.click())
+
+    expect(window.document.body.textContent).toContain('Envío por correo temporalmente deshabilitado')
+    expect(window.document.body.textContent).toContain('Estamos terminando de configurar esta función')
+    expect(container.querySelector('[role="tooltip"]')).toBeNull()
+    expect(window.document.body.querySelector('[role="tooltip"]')).not.toBeNull()
+    expect(window.document.querySelector('[role="dialog"]')).toBeNull()
     expect(fetchMock).not.toHaveBeenCalled()
   })
 })

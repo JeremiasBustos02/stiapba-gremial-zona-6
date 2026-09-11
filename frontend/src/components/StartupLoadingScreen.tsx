@@ -45,18 +45,18 @@ export function StartupLoadingScreen({ completed = false, onComplete }: StartupL
   return <main className="flex min-h-screen items-center justify-center bg-slate-50 px-5 py-10">
     <section className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-7 text-center shadow-sm sm:p-10" aria-labelledby="startup-title">
       <span className="mx-auto inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-700 text-white shadow-sm" aria-hidden="true"><FileText size={32} /></span>
-      <p className="mt-5 text-sm font-semibold uppercase tracking-[.16em] text-blue-700">STIA PBA Zona 6</p>
-      <h1 id="startup-title" className="mt-3 text-2xl font-bold tracking-tight text-slate-950">{completed ? 'Listo' : 'Preparando la aplicación'}</h1>
-      <div className="mt-7 flex items-center justify-center gap-2 text-sm font-semibold text-slate-600" role="status" aria-live="polite">
+      <p className="typo-eyebrow mt-5 text-blue-700">STIA PBA Zona 6</p>
+      <h1 id="startup-title" className="typo-heading-2 mt-3 text-slate-950">{completed ? 'Listo' : 'Preparando la aplicación'}</h1>
+      <div className="typo-meta mt-7 flex items-center justify-center gap-2 text-slate-600" role="status" aria-live="polite">
         {!completed && <LoaderCircle className="animate-spin text-blue-700" size={19} aria-hidden="true" />}
         <span>{completed ? 'Continuando...' : startupMessage(elapsedMs)}</span>
       </div>
-      {longWait && <p className="mt-3 text-sm leading-relaxed text-slate-500">Esto puede tardar unos instantes después de un período de inactividad.</p>}
+      {longWait && <p className="typo-body-sm mt-3 text-slate-500">Esto puede tardar unos instantes después de un período de inactividad.</p>}
       <div className="mt-7" role="progressbar" aria-label="Progreso estimado de inicio" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}>
         <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
           <div className="h-full rounded-full bg-blue-700 transition-[width] duration-300 ease-out" style={{ width: `${progress}%` }} />
         </div>
-        <p className="mt-3 text-sm font-semibold tabular-nums text-slate-600">{progress}%</p>
+        <p className="typo-meta mt-3 tabular-nums text-slate-600">{progress}%</p>
       </div>
     </section>
   </main>

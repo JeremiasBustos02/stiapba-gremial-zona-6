@@ -45,7 +45,23 @@ export type DocumentHistoryPage = {
   totalPages: number
 }
 
-export const getDocumentHistory = (page: number) => apiRequest<DocumentHistoryPage>(`/documents/history?page=${page}&size=20`)
+export type DocumentHistoryFilters = {
+  q?: string
+  issueDateFrom?: string
+  issueDateTo?: string
+  createdBy?: string
+  order?: 'newest' | 'oldest'
+}
+
+export const getDocumentHistory = (page: number, filters: DocumentHistoryFilters = {}) => {
+  const params = new URLSearchParams({ page: String(page), size: '20' })
+  if (filters.q) params.set('q', filters.q)
+  if (filters.issueDateFrom) params.set('issueDateFrom', filters.issueDateFrom)
+  if (filters.issueDateTo) params.set('issueDateTo', filters.issueDateTo)
+  if (filters.createdBy) params.set('createdBy', filters.createdBy)
+  if (filters.order) params.set('order', filters.order)
+  return apiRequest<DocumentHistoryPage>(`/documents/history?${params}`)
+}
 
 export const regenerateDocument = (id: string) => apiRequestBlobWithHeaders(`/documents/history/${id}/pdf`)
 export type SendDocumentEmailRequest = { recipients: string[]; subject: string; message: string }

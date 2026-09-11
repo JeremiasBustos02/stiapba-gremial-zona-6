@@ -1409,7 +1409,20 @@ No será necesario crear una `v2` mientras no exista un cambio incompatible real
 
 ### Acceso
 
-ADMIN / DELEGADO. Acepta `page` (0 por defecto) y `size` (20 por defecto, máximo 100), ordenado por `createdAt` descendente.
+ADMIN / DELEGADO. Acepta `page` (0 por defecto) y `size` (20 por defecto, máximo 100).
+
+Parámetros opcionales de consulta:
+
+```text
+q=PG-2026              búsqueda por número, empresa, delegado o generador
+documentType=PERMISO_GREMIAL
+issueDateFrom=2026-01-01
+issueDateTo=2026-12-31
+createdBy=juan          solo ADMIN
+order=newest|oldest     newest por defecto; ordena por createdAt
+```
+
+Los filtros siempre se aplican dentro del alcance de permisos: ADMIN consulta todos los registros y DELEGADO únicamente los creados por su usuario autenticado. `issueDateFrom` no puede ser posterior a `issueDateTo`.
 
 ADMIN recibe todos los registros. DELEGADO recibe únicamente los creados por su usuario autenticado.
 
