@@ -21,7 +21,21 @@ class DocumentEmailControllerTest {
                 .setControllerAdvice(new GlobalExceptionHandler()).build();
 
         mvc.perform(post("/api/v1/documents/history/{id}/email", UUID.randomUUID())
-                        .contentType(MediaType.APPLICATION_JSON).content("{\"recipient\":\"not-an-email\"}"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"recipients\":[\"not-an-email\"],\"subject\":\"Asunto\",\"message\":\"\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    void rejectsEmptyRecipientsAndSubject() throws Exception {
+        MockMvc mvc = MockMvcBuilders.standaloneSetup(new DocumentController(mock(DocumentGenerationService.class),
+                mock(DocumentHistoryService.class), mock(DocumentEmailService.class)))
+                .setControllerAdvice(new GlobalExceptionHandler()).build();
+
+        mvc.perform(post("/api/v1/documents/history/{id}/email", UUID.randomUUID())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"recipients\":[],\"subject\":\" \",\"message\":\"\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     }

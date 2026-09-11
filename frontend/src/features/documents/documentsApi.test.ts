@@ -61,16 +61,24 @@ describe('document generation API', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/v1/documents/history/record-1/pdf', expect.objectContaining({ credentials: 'include' }))
   })
 
-  it('gets CSRF and sends the recipient to the document email endpoint', async () => {
+  it('gets CSRF and sends the email fields to the document email endpoint', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ token: 'csrf-token' }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ message: 'Correo enviado correctamente.' }), { status: 200 }))
     vi.stubGlobal('fetch', fetchMock)
 
-    await sendDocumentEmail('record-1', 'persona@example.com')
+    await sendDocumentEmail('record-1', {
+      recipients: ['persona@example.com', 'otra@example.com'],
+      subject: 'Permiso Gremial PG-2026-000001',
+      message: 'Adjuntamos el documento.',
+    })
 
     expect(fetchMock.mock.calls[1]).toEqual(['/api/v1/documents/history/record-1/email', expect.objectContaining({
-      method: 'POST', body: JSON.stringify({ recipient: 'persona@example.com' }), credentials: 'include',
+      method: 'POST', body: JSON.stringify({
+        recipients: ['persona@example.com', 'otra@example.com'],
+        subject: 'Permiso Gremial PG-2026-000001',
+        message: 'Adjuntamos el documento.',
+      }), credentials: 'include',
     })])
     expect(fetchMock.mock.calls[1][1].headers.get('X-XSRF-TOKEN')).toBe('csrf-token')
   })

@@ -48,9 +48,11 @@ export type DocumentHistoryPage = {
 export const getDocumentHistory = (page: number) => apiRequest<DocumentHistoryPage>(`/documents/history?page=${page}&size=20`)
 
 export const regenerateDocument = (id: string) => apiRequestBlobWithHeaders(`/documents/history/${id}/pdf`)
-export const sendDocumentEmail = (id: string, recipient: string) => apiRequest<{ message: string }>(`/documents/history/${id}/email`, {
+export type SendDocumentEmailRequest = { recipients: string[]; subject: string; message: string }
+
+export const sendDocumentEmail = (id: string, request: SendDocumentEmailRequest) => apiRequest<{ message: string }>(`/documents/history/${id}/email`, {
   method: 'POST',
-  body: JSON.stringify({ recipient }),
+  body: JSON.stringify(request),
 })
 
 export async function generatePermisoGremial(data: PermisoGremialRequest): Promise<GeneratedDocument> {

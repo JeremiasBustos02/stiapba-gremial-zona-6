@@ -124,6 +124,7 @@ function App() {
     draft?.templateId === templateId ? draft.form : initialDocumentForm,
   );
   const [generatedDocument, setGeneratedDocument] = useState<GeneratedDocument | null>(null);
+  const [emailFeedback, setEmailFeedback] = useState('');
   const [sessionExpired, setSessionExpired] = useState(false);
   const [startupComplete, setStartupComplete] = useState(false);
   const sessionQuery = useQuery({ queryKey: ["auth", "me"], queryFn: getCurrentUser, retry: false });
@@ -152,8 +153,8 @@ function App() {
     {screen === "home" && <HomePage user={currentUser} onNavigate={go} />}
      {screen === "new-document" && <Suspense fallback={<LazyLoadingState />}><DocumentTemplateSelection onBack={() => navigate("/")} onSelect={(id) => { const form = { ...documentForm, variantId: "", manualValues: {} }; saveDraft(id, form); navigate(`/documentos/nuevo/${id}/variante`); }} /></Suspense>}
      {screen === "variants" && <Suspense fallback={<LazyLoadingState />}><DocumentVariantSelection templateId={templateId} onBack={() => navigate("/documentos/nuevo")} onSelect={(variantId) => { if (!templateId) return; const form = { ...documentForm, variantId, manualValues: {} }; saveDraft(templateId, form); navigate(`/documentos/nuevo/${templateId}/formulario`); }} /></Suspense>}
-      {screen === "form" && templateId && <Suspense fallback={<LazyLoadingState />}><PermisoGremialForm value={documentForm} onChange={(form) => saveDraft(templateId, form)} onBack={() => navigate(`/documentos/nuevo/${templateId}/variante`)} onGenerated={(document) => { setGeneratedDocument(document); navigate(`/documentos/nuevo/${templateId}/vista-previa`); }} /></Suspense>}
-      {screen === "preview" && generatedDocument && <Suspense fallback={<LazyLoadingState />}><PdfPreview pdf={generatedDocument.blob} filename={generatedDocument.filename} onEdit={() => { setGeneratedDocument(null); navigate(routeForScreen("form", templateId)); }} onHome={() => { clearDocumentDraft(); setGeneratedDocument(null); navigate("/"); }} /><PostGenerationActions document={generatedDocument} onEdit={() => { setGeneratedDocument(null); navigate(routeForScreen("form", templateId)); }} onFinish={() => { clearDocumentDraft(); setGeneratedDocument(null); navigate("/"); }} /></Suspense>}
+       {screen === "form" && templateId && <Suspense fallback={<LazyLoadingState />}><PermisoGremialForm value={documentForm} onChange={(form) => saveDraft(templateId, form)} onBack={() => navigate(`/documentos/nuevo/${templateId}/variante`)} onGenerated={(document) => { setEmailFeedback(''); setGeneratedDocument(document); navigate(`/documentos/nuevo/${templateId}/vista-previa`); }} /></Suspense>}
+       {screen === "preview" && generatedDocument && <Suspense fallback={<LazyLoadingState />}><PdfPreview pdf={generatedDocument.blob} filename={generatedDocument.filename} onEdit={() => { setGeneratedDocument(null); navigate(routeForScreen("form", templateId)); }} onHome={() => { clearDocumentDraft(); setGeneratedDocument(null); navigate("/"); }} /><PostGenerationActions document={generatedDocument} onSuccess={setEmailFeedback} />{emailFeedback && <p role="status" className="mt-3 max-w-3xl rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-800">{emailFeedback}</p>}</Suspense>}
      {screen === "profile" && <ProfilePage user={currentUser} onLogout={() => logoutMutation.mutate()} />}
      {screen === "history" && <HistoryPage role={currentUser.role} />}
     {screen === "admin" && <AdminPage onNavigate={go} />}

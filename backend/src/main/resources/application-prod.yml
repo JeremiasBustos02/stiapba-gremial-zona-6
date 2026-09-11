@@ -8,21 +8,6 @@ spring:
     password: ${SPRING_DATASOURCE_PASSWORD}
     driver-class-name: org.postgresql.Driver
 
-  mail:
-    host: ${SPRING_MAIL_HOST:}
-    port: ${SPRING_MAIL_PORT:587}
-    username: ${SPRING_MAIL_USERNAME:}
-    password: ${SPRING_MAIL_PASSWORD:}
-    properties:
-      mail:
-        smtp:
-          auth: true
-          starttls:
-            enable: true
-          connectiontimeout: 5000
-          timeout: 5000
-          writetimeout: 5000
-
   jpa:
     open-in-view: false
     hibernate:
@@ -43,6 +28,8 @@ server:
     include-binding-errors: never
 
 app:
+  resend:
+    api-key: ${RESEND_API_KEY:}
   security:
     jwt:
       secret: ${JWT_SECRET}

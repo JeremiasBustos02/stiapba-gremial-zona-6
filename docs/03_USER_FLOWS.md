@@ -977,11 +977,11 @@ Historial
  ↓
 Seleccionar registro
  ↓
-Ingresar destinatario
+ Ingresar destinatarios, asunto y mensaje
  ↓
 Regenerar PDF en memoria y adjuntar
  ↓
-Enviar por SMTP
+ Enviar mediante la API HTTPS de Resend
 ```
 
 El envío es individual y no crea historial de emails ni persiste el PDF.

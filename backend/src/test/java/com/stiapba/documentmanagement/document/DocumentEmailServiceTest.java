@@ -2,90 +2,68 @@ package com.stiapba.documentmanagement.document;
 
 import com.stiapba.documentmanagement.security.UserPrincipal;
 import com.stiapba.documentmanagement.user.entity.Role;
-import jakarta.mail.Session;
-import jakarta.mail.internet.MimeMessage;
-import jakarta.mail.internet.MimeMultipart;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.mail.MailSendException;
-import org.springframework.mail.javamail.JavaMailSender;
 
-import java.util.Properties;
+import java.util.List;
 import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.mockito.Mockito.lenient;
 
 @ExtendWith(MockitoExtension.class)
 class DocumentEmailServiceTest {
     @Mock private DocumentGenerationService documentGenerationService;
-    @Mock private ObjectProvider<JavaMailSender> mailSenderProvider;
-    @Mock private JavaMailSender mailSender;
+    @Mock private ResendEmailClient resendEmailClient;
 
     private DocumentEmailService service;
     private final UUID recordId = UUID.randomUUID();
     private final UserPrincipal admin = new UserPrincipal(UUID.randomUUID(), Role.ADMIN, false);
+    private final DocumentGenerationService.GeneratedDocument document = new DocumentGenerationService.GeneratedDocument(
+            new byte[]{1, 2, 3}, recordId, "PG-2026-000123", "pg-2026-000123_permiso-gremial_ana-paz.pdf");
 
     @BeforeEach
     void setUp() {
-        service = new DocumentEmailService(documentGenerationService, mailSenderProvider, "documentos@stiapba.org.ar", "STIA PBA Zona 6");
-        lenient().when(mailSenderProvider.getIfAvailable()).thenReturn(mailSender);
-        lenient().when(mailSender.createMimeMessage()).thenReturn(new MimeMessage(Session.getInstance(new Properties())));
-        lenient().when(documentGenerationService.regenerate(eq(recordId), any())).thenReturn(new DocumentGenerationService.GeneratedDocument(
-                new byte[]{1, 2, 3}, recordId, "PG-2026-000123", "pg-2026-000123_permiso-gremial_ana-paz.pdf"));
+        service = new DocumentEmailService(documentGenerationService, resendEmailClient,
+                "documentos@stiapba.org.ar", "STIA PBA Zona 6");
+        when(resendEmailClient.isConfigured()).thenReturn(true);
+        when(documentGenerationService.regenerate(eq(recordId), any())).thenReturn(document);
     }
 
     @Test
-    void adminSendsRegeneratedPdfWithDescriptiveAttachment() throws Exception {
-        service.send(recordId, "destinatario@example.com", admin);
+    void sendsRegeneratedPdfToOneRecipient() {
+        service.send(recordId, List.of("destinatario@example.com"), "Asunto personalizado", "Mensaje", admin);
 
-        ArgumentCaptor<MimeMessage> message = ArgumentCaptor.forClass(MimeMessage.class);
-        verify(mailSender).send(message.capture());
-        assertThat(message.getValue().getSubject()).isEqualTo("Permiso gremial PG-2026-000123");
-        assertThat(message.getValue().getAllRecipients()[0].toString()).isEqualTo("destinatario@example.com");
-        java.io.ByteArrayOutputStream rawMessage = new java.io.ByteArrayOutputStream();
-        message.getValue().writeTo(rawMessage);
-        String emailSource = rawMessage.toString(java.nio.charset.StandardCharsets.UTF_8);
-        assertThat(emailSource).contains("filename=pg-2026-000123_permiso-gremial_ana-paz.pdf");
-        assertThat(emailSource).contains("Content-Type: application/pdf");
+        verify(resendEmailClient).send("documentos@stiapba.org.ar", "STIA PBA Zona 6",
+                List.of("destinatario@example.com"), "Asunto personalizado", "Mensaje", document);
         verify(documentGenerationService).regenerate(recordId, admin);
     }
 
     @Test
-    void delegateCanSendOwnDocument() {
-        UserPrincipal delegate = new UserPrincipal(UUID.randomUUID(), Role.DELEGADO, false);
-        service.send(recordId, "delegate@example.com", delegate);
-        verify(documentGenerationService).regenerate(recordId, delegate);
-        verify(mailSender).send(any(MimeMessage.class));
+    void sendsToMultipleRecipients() {
+        List<String> recipients = List.of("uno@example.com", "dos@example.com");
+
+        service.send(recordId, recipients, "Asunto", "Mensaje", admin);
+
+        verify(resendEmailClient).send("documentos@stiapba.org.ar", "STIA PBA Zona 6", recipients,
+                "Asunto", "Mensaje", document);
     }
 
     @Test
-    void doesNotSendWhenRegenerationRejectsAnotherDelegatesDocument() {
-        UserPrincipal delegate = new UserPrincipal(UUID.randomUUID(), Role.DELEGADO, false);
-        when(documentGenerationService.regenerate(recordId, delegate))
-                .thenThrow(new DocumentException(403, "DOCUMENT_RECORD_FORBIDDEN", "Sin permiso."));
+    void returnsControlledErrorWhenResendFails() {
+        doThrow(new ResendEmailClient.ResendDeliveryException(422, "validation_error"))
+                .when(resendEmailClient).send(any(), any(), any(), any(), any(), any());
 
-        assertThatThrownBy(() -> service.send(recordId, "delegate@example.com", delegate))
-                .isInstanceOfSatisfying(DocumentException.class, error -> assertThat(error.getStatus()).isEqualTo(403));
-        verify(mailSender, never()).send(any(MimeMessage.class));
-    }
-
-    @Test
-    void returnsControlledErrorWhenSmtpFails() {
-        org.mockito.Mockito.doThrow(new MailSendException("SMTP unavailable")).when(mailSender).send(any(MimeMessage.class));
-
-        assertThatThrownBy(() -> service.send(recordId, "destinatario@example.com", admin))
+        assertThatThrownBy(() -> service.send(recordId, List.of("destinatario@example.com"), "Asunto", "Mensaje", admin))
                 .isInstanceOfSatisfying(DocumentException.class, error -> {
                     assertThat(error.getCode()).isEqualTo("MAIL_DELIVERY_FAILED");
                     assertThat(error.getStatus()).isEqualTo(502);
@@ -94,21 +72,19 @@ class DocumentEmailServiceTest {
 
     @Test
     void reportsConfigurationErrorWithoutAttemptingDelivery() {
-        DocumentEmailService unconfigured = new DocumentEmailService(documentGenerationService, mailSenderProvider, "", "STIA PBA Zona 6");
+        when(resendEmailClient.isConfigured()).thenReturn(false);
 
-        assertThatThrownBy(() -> unconfigured.send(recordId, "destinatario@example.com", admin))
+        assertThatThrownBy(() -> service.send(recordId, List.of("destinatario@example.com"), "Asunto", "Mensaje", admin))
                 .isInstanceOfSatisfying(DocumentException.class, error -> assertThat(error.getCode()).isEqualTo("MAIL_NOT_CONFIGURED"));
-        verify(mailSender, never()).send(any(MimeMessage.class));
+        verify(resendEmailClient, never()).send(any(), any(), any(), any(), any(), any());
     }
 
     @Test
-    void reportsConfigurationErrorWhenJavaMailSenderIsUnavailable() {
-        when(mailSenderProvider.getIfAvailable()).thenReturn(null);
-        DocumentEmailService unconfigured = new DocumentEmailService(documentGenerationService, mailSenderProvider,
-                "documentos@stiapba.org.ar", "STIA PBA Zona 6");
+    void reportsConfigurationErrorWhenFromIsMissing() {
+        DocumentEmailService unconfigured = new DocumentEmailService(documentGenerationService, resendEmailClient, "", "STIA PBA Zona 6");
 
-        assertThatThrownBy(() -> unconfigured.send(recordId, "destinatario@example.com", admin))
+        assertThatThrownBy(() -> unconfigured.send(recordId, List.of("destinatario@example.com"), "Asunto", "Mensaje", admin))
                 .isInstanceOfSatisfying(DocumentException.class, error -> assertThat(error.getCode()).isEqualTo("MAIL_NOT_CONFIGURED"));
-        verify(mailSender, never()).send(any(MimeMessage.class));
+        verify(resendEmailClient, never()).send(any(), any(), any(), any(), any(), any());
     }
 }

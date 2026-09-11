@@ -84,4 +84,16 @@ describe('PdfPreview print flow', () => {
     expect(URL.revokeObjectURL).toHaveBeenCalledOnce()
     expect(document.body.contains(createdFrame)).toBe(false)
   })
+
+  it('keeps the non-email actions below the preview', async () => {
+    await act(async () => {
+      root = createRoot(container)
+      root.render(<PdfPreview pdf={new Blob(['pdf'], { type: 'application/pdf' })} onEdit={vi.fn()} onHome={vi.fn()} />)
+    })
+
+    expect(container.textContent).toContain('Descargar PDF')
+    expect(container.textContent).toContain('Imprimir')
+    expect(container.textContent).toContain('Editar documento')
+    expect(container.textContent).toContain('Finalizar')
+  })
 })

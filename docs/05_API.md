@@ -1452,11 +1452,16 @@ ADMIN puede enviar cualquier registro. DELEGADO solo puede enviar registros crea
 
 ```json
 {
-  "recipient": "persona@ejemplo.com"
+  "recipients": [
+    "persona1@ejemplo.com",
+    "persona2@ejemplo.com"
+  ],
+  "subject": "Permiso Gremial PG-2026-000001",
+  "message": "Adjuntamos el Permiso Gremial correspondiente."
 }
 ```
 
-El backend regenera el PDF en memoria y lo envía como adjunto mediante SMTP. No persiste el PDF ni crea historial de emails.
+El backend regenera el PDF en memoria y lo envía como adjunto mediante la API HTTPS de Resend. No persiste el PDF ni crea historial de emails. El mensaje se envía como texto plano; el frontend no puede enviar HTML arbitrario.
 
 ### Response — 200
 
@@ -1466,7 +1471,7 @@ El backend regenera el PDF en memoria y lo envía como adjunto mediante SMTP. No
 }
 ```
 
-Si SMTP no está configurado devuelve `503 MAIL_NOT_CONFIGURED`. Si el proveedor rechaza o no puede entregar el mensaje devuelve `502 MAIL_DELIVERY_FAILED`, sin exponer detalles técnicos.
+Si Resend no está configurado devuelve `503 MAIL_NOT_CONFIGURED`. Si el proveedor rechaza o no puede entregar el mensaje devuelve `502 MAIL_DELIVERY_FAILED`, sin exponer detalles técnicos.
 
 ## Generación de Permiso Gremial
 

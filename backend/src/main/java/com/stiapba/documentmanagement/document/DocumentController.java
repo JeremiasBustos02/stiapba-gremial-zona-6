@@ -17,8 +17,6 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.UUID;
@@ -26,7 +24,6 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/v1/documents")
 public class DocumentController {
-    private static final Logger logger = LoggerFactory.getLogger(DocumentController.class);
     private final DocumentGenerationService documentGenerationService;
     private final DocumentHistoryService documentHistoryService;
     private final DocumentEmailService documentEmailService;
@@ -75,13 +72,8 @@ public class DocumentController {
     @PostMapping("/history/{id}/email")
     public SendDocumentEmailResponse sendByEmail(@PathVariable UUID id, @Valid @RequestBody SendDocumentEmailRequest request,
                                                  @AuthenticationPrincipal UserPrincipal principal) {
-        long endpointStart = System.nanoTime();
-        try {
-            documentEmailService.send(id, request.recipient(), principal);
-            return new SendDocumentEmailResponse("Correo enviado correctamente.");
-        } finally {
-            logger.info("Email timing recordId={} endpointTotalMs={}", id,
-                    (System.nanoTime() - endpointStart) / 1_000_000);
-        }
+        documentEmailService.send(id, request.recipients().stream().map(String::trim).distinct().toList(),
+                request.subject().trim(), request.message() == null ? "" : request.message(), principal);
+        return new SendDocumentEmailResponse("Correo enviado correctamente.");
     }
 }

@@ -1071,16 +1071,16 @@ porque esas funcionalidades todavía no existen en el MVP.
 
 ---
 
-# 46. Integración SMTP actual
+# 46. Integración de email mediante Resend
 
 El envío actual desde el historial utiliza:
 
 ```text
 DocumentRecord
    ↓
-DocumentEmailService / JavaMailSender
+DocumentEmailService / Resend HTTPS API
    ↓
-SMTP Provider
+https://api.resend.com/emails
 ```
 
 El PDF se regenera en memoria y se adjunta al mensaje. No se persiste el PDF ni un historial de emails.

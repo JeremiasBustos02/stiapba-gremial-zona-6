@@ -19,6 +19,7 @@ export function HistoryPage({ role }: { role: 'ADMIN' | 'DELEGADO' }) {
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
   const [downloadError, setDownloadError] = useState('')
   const [emailRecord, setEmailRecord] = useState<DocumentHistoryRecord | null>(null)
+  const [emailFeedback, setEmailFeedback] = useState('')
   const historyQuery = useQuery({ queryKey: ['documents', 'history', page], queryFn: () => getDocumentHistory(page), placeholderData: (previous) => previous })
   const errorText = historyQuery.error instanceof ApiError ? historyQuery.error.message : 'No pudimos cargar el historial. Intentá nuevamente.'
 
@@ -36,6 +37,7 @@ export function HistoryPage({ role }: { role: 'ADMIN' | 'DELEGADO' }) {
   }
 
   const openEmail = (record: DocumentHistoryRecord) => {
+    setEmailFeedback('')
     setEmailRecord(record)
   }
 
@@ -46,6 +48,7 @@ export function HistoryPage({ role }: { role: 'ADMIN' | 'DELEGADO' }) {
       <p className="mt-2 text-sm text-slate-600">Consultá y descargá los documentos generados.</p>
     </header>
     {downloadError && <p role="alert" className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">{downloadError}</p>}
+    {emailFeedback && <p role="status" className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">{emailFeedback}</p>}
     {historyQuery.isPending ? <LoadingState /> : historyQuery.isError ? <ErrorState text={errorText} onRetry={() => historyQuery.refetch()} /> : historyQuery.data.content.length === 0 ? <EmptyState role={role} /> : <>
       <div className="mt-6 hidden overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm md:block">
         <Table><TableHeader><TableRow><TableHead>Número</TableHead><TableHead>Generación</TableHead><TableHead>Tipo</TableHead><TableHead>Empresa</TableHead><TableHead>Delegado</TableHead><TableHead>Fecha permiso</TableHead><TableHead className="text-right">Acción</TableHead></TableRow></TableHeader><TableBody>{historyQuery.data.content.map((record) => <HistoryRow key={record.id} record={record} downloading={downloadingId === record.id} onDetail={() => setSelected(record)} onDownload={() => download(record)} onEmail={() => openEmail(record)} />)}</TableBody></Table>
@@ -54,7 +57,7 @@ export function HistoryPage({ role }: { role: 'ADMIN' | 'DELEGADO' }) {
       <Pagination page={page} totalPages={historyQuery.data.totalPages} disabled={historyQuery.isFetching} onPageChange={setPage} />
     </>}
     <Dialog open={Boolean(selected)} onOpenChange={(open) => !open && setSelected(null)}>{selected && <DialogContent><DialogHeader><DialogTitle>{selected.publicNumber}</DialogTitle><DialogDescription>{documentTypeLabels[selected.documentType] ?? selected.documentType}</DialogDescription></DialogHeader><dl className="mt-6 grid grid-cols-[auto_1fr] gap-x-5 gap-y-4 text-sm"><Detail label="Generado por" value={selected.createdBy} /><Detail label="Generación" value={formatDateTime(selected.createdAt)} /><Detail label="Empresa" value={selected.companyName} /><Detail label="Delegado" value={selected.delegateName} /><Detail label="Fecha del permiso" value={formatDate(selected.issueDate)} /></dl><div className="mt-7 flex justify-end gap-2"><DialogClose asChild><Button variant="outline">Cerrar</Button></DialogClose><Button onClick={() => download(selected)} disabled={downloadingId === selected.id}>{downloadingId === selected.id ? <LoaderCircle className="animate-spin" size={17} /> : <Download size={17} />} Descargar PDF</Button></div></DialogContent>}</Dialog>
-    <DocumentEmailDialog documentId={emailRecord?.id ?? null} publicNumber={emailRecord?.publicNumber ?? ''} open={Boolean(emailRecord)} onOpenChange={(open) => !open && setEmailRecord(null)} />
+    <DocumentEmailDialog documentId={emailRecord?.id ?? null} publicNumber={emailRecord?.publicNumber ?? ''} open={Boolean(emailRecord)} onOpenChange={(open) => !open && setEmailRecord(null)} onSuccess={setEmailFeedback} />
   </section>
 }
 
