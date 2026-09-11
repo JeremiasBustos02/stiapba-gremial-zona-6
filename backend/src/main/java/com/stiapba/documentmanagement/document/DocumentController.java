@@ -6,6 +6,7 @@ import com.stiapba.documentmanagement.document.DocumentHistoryDtos.DocumentHisto
 import com.stiapba.documentmanagement.document.DocumentSuggestionDtos.DocumentSuggestionsResponse;
 import com.stiapba.documentmanagement.document.DocumentHistoryDtos.SendDocumentEmailRequest;
 import com.stiapba.documentmanagement.document.DocumentHistoryDtos.SendDocumentEmailResponse;
+import com.stiapba.documentmanagement.document.DashboardDtos.DashboardResponse;
 import com.stiapba.documentmanagement.security.UserPrincipal;
 import com.stiapba.documentmanagement.template.entity.DocumentType;
 import org.springframework.http.ContentDisposition;
@@ -32,12 +33,14 @@ public class DocumentController {
     private final DocumentGenerationService documentGenerationService;
     private final DocumentHistoryService documentHistoryService;
     private final DocumentEmailService documentEmailService;
+    private final DashboardService dashboardService;
 
     public DocumentController(DocumentGenerationService documentGenerationService, DocumentHistoryService documentHistoryService,
-                              DocumentEmailService documentEmailService) {
+                              DocumentEmailService documentEmailService, DashboardService dashboardService) {
         this.documentGenerationService = documentGenerationService;
         this.documentHistoryService = documentHistoryService;
         this.documentEmailService = documentEmailService;
+        this.dashboardService = dashboardService;
     }
 
     @PostMapping(value = "/permiso-gremial/generate", produces = MediaType.APPLICATION_PDF_VALUE)
@@ -68,6 +71,11 @@ public class DocumentController {
                                                  @RequestParam(required = false) String createdBy,
                                                  @RequestParam(defaultValue = "newest") String order) {
         return documentHistoryService.list(principal, page, size, q, documentType, issueDateFrom, issueDateTo, createdBy, order);
+    }
+
+    @GetMapping("/dashboard")
+    public DashboardResponse dashboard(@AuthenticationPrincipal UserPrincipal principal) {
+        return dashboardService.getDashboard(principal);
     }
 
     @GetMapping("/suggestions")

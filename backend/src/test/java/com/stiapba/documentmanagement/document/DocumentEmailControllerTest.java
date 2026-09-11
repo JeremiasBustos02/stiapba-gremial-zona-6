@@ -27,7 +27,7 @@ class DocumentEmailControllerTest {
     void rejectsInvalidRecipientWithoutCreatingSingularRecipientError() throws Exception {
         DocumentEmailService emailService = mock(DocumentEmailService.class);
         MockMvc mvc = MockMvcBuilders.standaloneSetup(new DocumentController(mock(DocumentGenerationService.class),
-                mock(DocumentHistoryService.class), emailService))
+                mock(DocumentHistoryService.class), emailService, mock(DashboardService.class)))
                 .setControllerAdvice(new GlobalExceptionHandler()).build();
 
         mvc.perform(post("/api/v1/documents/history/{id}/email", UUID.randomUUID())
@@ -42,7 +42,7 @@ class DocumentEmailControllerTest {
     @Test
     void rejectsEmptyRecipientsAndSubjectUsingPluralFieldName() throws Exception {
         MockMvc mvc = MockMvcBuilders.standaloneSetup(new DocumentController(mock(DocumentGenerationService.class),
-                mock(DocumentHistoryService.class), mock(DocumentEmailService.class)))
+                mock(DocumentHistoryService.class), mock(DocumentEmailService.class), mock(DashboardService.class)))
                 .setControllerAdvice(new GlobalExceptionHandler()).build();
 
         mvc.perform(post("/api/v1/documents/history/{id}/email", UUID.randomUUID())
@@ -66,7 +66,7 @@ class DocumentEmailControllerTest {
         org.assertj.core.api.Assertions.assertThat(Validation.buildDefaultValidatorFactory().getValidator().validate(request)).isEmpty();
 
         SendDocumentEmailResponse response = new DocumentController(mock(DocumentGenerationService.class),
-                mock(DocumentHistoryService.class), emailService)
+                mock(DocumentHistoryService.class), emailService, mock(DashboardService.class))
                 .sendByEmail(UUID.randomUUID(), request, principal);
 
         verify(emailService).send(any(), eq(java.util.List.of("jeremias.e.bustos@gmail.com")),

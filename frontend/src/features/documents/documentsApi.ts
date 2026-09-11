@@ -63,6 +63,16 @@ export type DocumentHistoryPage = {
   totalPages: number
 }
 
+export type DashboardDocument = DocumentHistoryRecord
+export type DashboardResponse = {
+  documentsThisMonth: number
+  totalDocuments: number
+  latestDocument: DashboardDocument | null
+  recentActivity: DashboardDocument[]
+}
+
+export const getDashboard = () => apiRequest<DashboardResponse>('/documents/dashboard')
+
 export type DocumentHistoryFilters = {
   q?: string
   issueDateFrom?: string

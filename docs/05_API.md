@@ -1474,6 +1474,34 @@ Solo se devuelven entidades activas que todavía existen en el catálogo. Snapsh
 }
 ```
 
+## GET `/api/v1/documents/dashboard`
+
+### Acceso
+
+ADMIN / DELEGADO.
+
+Devuelve únicamente los datos operativos necesarios para el Home. ADMIN recibe actividad global; DELEGADO recibe exclusivamente registros creados por su usuario autenticado. Las métricas se calculan mediante consultas agregadas y la actividad reciente está limitada a cinco documentos.
+
+```json
+{
+  "documentsThisMonth": 7,
+  "totalDocuments": 24,
+  "latestDocument": {
+    "id": "uuid",
+    "publicNumber": "PG-2026-000143",
+    "documentType": "PERMISO_GREMIAL",
+    "createdAt": "2026-09-10T10:00:00-03:00",
+    "createdBy": "Juan Pérez",
+    "companyName": "Empresa Ejemplo",
+    "delegateName": "Ana Paz",
+    "issueDate": "2026-09-10"
+  },
+  "recentActivity": []
+}
+```
+
+Cuando no existen documentos, `latestDocument` es `null` y `recentActivity` es una lista vacía.
+
 ## GET `/api/v1/documents/history/{id}/pdf`
 
 ### Acceso

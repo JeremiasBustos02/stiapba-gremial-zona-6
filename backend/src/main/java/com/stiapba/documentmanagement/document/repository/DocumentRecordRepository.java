@@ -10,9 +10,20 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.UUID;
 import java.util.List;
+import java.time.OffsetDateTime;
 
 public interface DocumentRecordRepository extends JpaRepository<DocumentRecord, UUID>, JpaSpecificationExecutor<DocumentRecord> {
     Page<DocumentRecord> findByCreatedByUserId(UUID createdByUserId, Pageable pageable);
+
+    long countByCreatedAtGreaterThanEqual(OffsetDateTime start);
+
+    long countByCreatedByUserIdAndCreatedAtGreaterThanEqual(UUID createdByUserId, OffsetDateTime start);
+
+    long countByCreatedByUserId(UUID createdByUserId);
+
+    List<DocumentRecord> findTop5ByOrderByCreatedAtDesc();
+
+    List<DocumentRecord> findTop5ByCreatedByUserIdOrderByCreatedAtDesc(UUID createdByUserId);
 
     @Query(value = """
             SELECT c.id AS id,
