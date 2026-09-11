@@ -19,7 +19,7 @@ import { DocumentDetailDialog } from './DocumentDetailDialog'
 const documentTypeLabels: Record<string, string> = { PERMISO_GREMIAL: 'Permiso gremial' }
 const emptyFilters: DocumentHistoryFilters = { q: '', issueDateFrom: '', issueDateTo: '', createdBy: '', order: 'newest' }
 
-export function HistoryPage({ role, onUseAsBase }: { role: 'ADMIN' | 'DELEGADO'; onUseAsBase?: (detail: DocumentHistoryDetail) => void }) {
+export function HistoryPage({ role, onUseAsBase, openDocumentId, onDocumentOpened }: { role: 'ADMIN' | 'DELEGADO'; onUseAsBase?: (detail: DocumentHistoryDetail) => void; openDocumentId?: string; onDocumentOpened?: () => void }) {
   const [page, setPage] = useState(0)
   const [filters, setFilters] = useState<DocumentHistoryFilters>(emptyFilters)
   const [filtersOpen, setFiltersOpen] = useState(false)
@@ -34,6 +34,11 @@ export function HistoryPage({ role, onUseAsBase }: { role: 'ADMIN' | 'DELEGADO';
   const errorText = historyQuery.error instanceof ApiError ? historyQuery.error.message : 'No pudimos cargar el historial. Intentá nuevamente.'
 
   useEffect(() => { setPage(0) }, [deferredQuery, filters.issueDateFrom, filters.issueDateTo, filters.createdBy, filters.order])
+  useEffect(() => {
+    if (!openDocumentId) return
+    setSelected({ id: openDocumentId, publicNumber: '', documentType: 'PERMISO_GREMIAL', createdAt: '', createdBy: '', companyName: '', delegateName: '', issueDate: '' })
+    onDocumentOpened?.()
+  }, [openDocumentId, onDocumentOpened])
   const updateFilters = (next: Partial<DocumentHistoryFilters>) => setFilters((current) => ({ ...current, ...next }))
   const clearFilters = () => setFilters(emptyFilters)
   const download = async (record: DocumentHistoryRecord) => {

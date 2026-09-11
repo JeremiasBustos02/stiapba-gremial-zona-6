@@ -124,11 +124,13 @@ function App() {
     draft?.templateId === templateId ? draft.form : initialDocumentForm,
   );
   const [generatedDocument, setGeneratedDocument] = useState<GeneratedDocument | null>(null);
+  const [documentPrefill, setDocumentPrefill] = useState<Partial<Pick<DocumentFormValues, 'companyId' | 'delegateId' | 'agreementId'>>>({});
+  const [searchDocument, setSearchDocument] = useState<{ id: string } | null>(null);
   const [emailFeedback, setEmailFeedback] = useState('');
   const [sessionExpired, setSessionExpired] = useState(false);
   const [startupComplete, setStartupComplete] = useState(false);
   const sessionQuery = useQuery({ queryKey: ["auth", "me"], queryFn: getCurrentUser, retry: false });
-  const clearSession = (expired = false) => { queryClient.clear(); clearDocumentDraft(); setDocumentForm(initialDocumentForm); setGeneratedDocument(null); setSessionExpired(expired); navigate("/", { replace: true }); };
+   const clearSession = (expired = false) => { queryClient.clear(); clearDocumentDraft(); setDocumentForm(initialDocumentForm); setGeneratedDocument(null); setDocumentPrefill({}); setSearchDocument(null); setSessionExpired(expired); navigate("/", { replace: true }); };
   const loginMutation = useMutation({ mutationFn: ({ dni, password }: { dni: string; password: string }) => login(dni, password), onSuccess: ({ user }) => { queryClient.setQueryData(["auth", "me"], user); setSessionExpired(false); navigate("/"); } });
   const logoutMutation = useMutation({ mutationFn: logout, onSuccess: () => clearSession() });
   useEffect(() => { setUnauthorizedHandler(() => clearSession(true)); return () => setUnauthorizedHandler(); }, [queryClient]);
@@ -161,16 +163,22 @@ function App() {
     navigate(`/documentos/nuevo/${detail.templateId}/formulario`);
   };
   const adminContent = screen === "users" ? <UserManagementPage /> : screen === "companies" ? <CatalogManagementPage<Company, CompanyForm> kind="companies" title="Empresas" description="Administrá las empresas disponibles para completar documentos." emptyForm={{ nombre: "", agreementId: "" }} getItems={getCompanies} createItem={createCompany} updateItem={updateCompany} setActive={setCompanyActive} /> : screen === "agreements" ? <CatalogManagementPage<Agreement, AgreementForm> kind="agreements" title="Convenios" description="Administrá los convenios disponibles para completar documentos." emptyForm={{ codigo: "", descripcion: "" }} getItems={getAgreements} createItem={createAgreement} updateItem={updateAgreement} setActive={setAgreementActive} /> : screen === "positioned-editor" ? <FieldEditorRoute /> : <TemplateManagementPage initialTemplateId={location.pathname.match(/^\/admin\/plantillas\/([^/]+)$/)?.[1]} onTemplateSelected={(id) => navigate(`/admin/plantillas/${id}`)} onDetailBack={() => navigate("/admin/plantillas")} onConfigureFields={(id, variant) => navigate(`/admin/plantillas/${id}/variantes/${variant.id}/campos`)} />;
-  return <AppLayout screen={screen} role={currentUser.role} onNavigate={go} onLogout={() => logoutMutation.mutate()}>
+  const openSearchDocument = (document: DocumentHistoryDetail | { id: string }) => { setSearchDocument({ id: document.id }); navigate('/historial'); };
+  const prefillFromSearch = (kind: 'company' | 'delegate' | 'agreement', id: string) => {
+    const field = kind === 'company' ? 'companyId' : kind === 'delegate' ? 'delegateId' : 'agreementId';
+    setDocumentPrefill({ [field]: id });
+    navigate('/documentos/nuevo');
+  };
+  return <AppLayout screen={screen} role={currentUser.role} onNavigate={go} onLogout={() => logoutMutation.mutate()} onOpenDocument={openSearchDocument} onPrefill={prefillFromSearch}>
     {screen !== "positioned-editor" && <SecondaryNavigation screen={screen} onNavigate={go} />}
     {["admin", "users", "companies", "agreements", "templates"].includes(screen) && <AdminModuleNavigation screen={screen} onNavigate={go} />}
      {screen === "home" && <HomePage user={currentUser} onNavigate={go} onUseAsBase={useHistoryAsBase} />}
-     {screen === "new-document" && <Suspense fallback={<LazyLoadingState />}><DocumentTemplateSelection onBack={() => navigate("/")} onSelect={(id) => { const form = { ...documentForm, variantId: "", manualValues: {} }; saveDraft(id, form); navigate(`/documentos/nuevo/${id}/variante`); }} /></Suspense>}
+      {screen === "new-document" && <Suspense fallback={<LazyLoadingState />}><DocumentTemplateSelection onBack={() => navigate("/")} onSelect={(id) => { const form = { ...documentForm, ...documentPrefill, variantId: "", manualValues: {} }; setDocumentPrefill({}); saveDraft(id, form); navigate(`/documentos/nuevo/${id}/variante`); }} /></Suspense>}
      {screen === "variants" && <Suspense fallback={<LazyLoadingState />}><DocumentVariantSelection templateId={templateId} onBack={() => navigate("/documentos/nuevo")} onSelect={(variantId) => { if (!templateId) return; const form = { ...documentForm, variantId, manualValues: {} }; saveDraft(templateId, form); navigate(`/documentos/nuevo/${templateId}/formulario`); }} /></Suspense>}
        {screen === "form" && templateId && <Suspense fallback={<LazyLoadingState />}><PermisoGremialForm value={documentForm} onChange={(form) => saveDraft(templateId, form)} onBack={() => navigate(`/documentos/nuevo/${templateId}/variante`)} onGenerated={(document) => { setEmailFeedback(''); setGeneratedDocument(document); navigate(`/documentos/nuevo/${templateId}/vista-previa`); }} /></Suspense>}
           {screen === "preview" && generatedDocument && <Suspense fallback={<LazyLoadingState />}><div className="preview-action-flow"><p className="typo-display-lg max-w-3xl tabular-nums text-blue-900">{generatedDocument.publicNumber}</p><PdfPreview pdf={generatedDocument.blob} filename={generatedDocument.filename} onEdit={() => { setGeneratedDocument(null); navigate(routeForScreen("form", templateId)); }} onHome={() => { clearDocumentDraft(); setGeneratedDocument(null); navigate("/"); }} postGenerationAction={<PostGenerationActions document={generatedDocument} inline />} />{emailFeedback && <p role="status" className="mt-3 max-w-3xl rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-800">{emailFeedback}</p>}</div></Suspense>}
      {screen === "profile" && <ProfilePage user={currentUser} onLogout={() => logoutMutation.mutate()} />}
-      {screen === "history" && <HistoryPage role={currentUser.role} onUseAsBase={useHistoryAsBase} />}
+       {screen === "history" && <HistoryPage role={currentUser.role} onUseAsBase={useHistoryAsBase} openDocumentId={searchDocument?.id} onDocumentOpened={() => setSearchDocument(null)} />}
     {screen === "admin" && <AdminPage onNavigate={go} />}
     {["users", "companies", "agreements", "templates", "positioned-editor"].includes(screen) && adminContent}
   </AppLayout>;

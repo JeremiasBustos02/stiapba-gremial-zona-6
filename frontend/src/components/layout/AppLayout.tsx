@@ -1,13 +1,17 @@
 import { FileText, History, Home, LogOut, Menu, Plus, UserRound } from "lucide-react";
 import type { Screen } from "@/navigation";
 import { PageTransition } from "@/components/ui/page-transition";
+import { GlobalSearch } from "@/features/search/GlobalSearch";
+import type { DocumentHistoryRecord } from "@/features/documents/documentsApi";
 
-export function AppLayout({ children, screen, role, onNavigate, onLogout }: {
+export function AppLayout({ children, screen, role, onNavigate, onLogout, onOpenDocument, onPrefill }: {
   children: React.ReactNode;
   screen: Screen;
   role: "ADMIN" | "DELEGADO";
   onNavigate: (screen: Screen) => void;
   onLogout: () => void;
+  onOpenDocument: (document: DocumentHistoryRecord) => void;
+  onPrefill: (kind: 'company' | 'delegate' | 'agreement', id: string) => void;
 }) {
   const editor = screen === "positioned-editor";
   return (
@@ -19,7 +23,8 @@ export function AppLayout({ children, screen, role, onNavigate, onLogout }: {
             <BrandMark small />
             <span className="hidden lg:block"><strong className="typo-brand block uppercase">STIA PBA</strong><span className="typo-eyebrow text-slate-500">ZONA 6</span></span>
           </button>
-          <DesktopNavigation role={role} screen={screen} onNavigate={onNavigate} />
+           <DesktopNavigation role={role} screen={screen} onNavigate={onNavigate} />
+           <GlobalSearch role={role} onNavigate={onNavigate} onOpenDocument={onOpenDocument} onPrefill={onPrefill} />
           <button type="button" aria-label="Cerrar sesión" onClick={onLogout} className="typo-control ml-auto flex min-h-11 shrink-0 items-center gap-2 rounded-md px-2 text-slate-600 transition hover:bg-slate-100 hover:text-slate-950 sm:px-3">
             <span className="hidden sm:inline">Cerrar sesión</span><LogOut size={17} aria-hidden="true" />
           </button>
