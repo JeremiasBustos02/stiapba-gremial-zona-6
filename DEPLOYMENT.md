@@ -42,18 +42,15 @@ Vite solo incorpora variables con prefijo `VITE_` al bundle. No definir allí se
 | --- | --- |
 | `SPRING_PROFILES_ACTIVE` | `prod`. La imagen también lo establece por defecto. |
 | `PORT` | Lo proporciona Render. Spring escucha `server.port=${PORT:8080}`. |
-| `DB_HOST` | Host PostgreSQL proporcionado por Supabase. |
-| `DB_PORT` | Puerto PostgreSQL proporcionado por Supabase. |
-| `DB_NAME` | Base de datos proporcionada por Supabase. |
-| `DB_USERNAME` | Usuario PostgreSQL proporcionado por Supabase. |
-| `DB_PASSWORD` | Secreto PostgreSQL proporcionado por Supabase. |
-| `DB_SSL_MODE` | `require` para Supabase. El valor se aplica como `sslmode` JDBC. |
+| `SPRING_DATASOURCE_URL` | URL JDBC del Session Pooler de Supabase, con `sslmode=require`. |
+| `SPRING_DATASOURCE_USERNAME` | Usuario PostgreSQL proporcionado por Supabase. |
+| `SPRING_DATASOURCE_PASSWORD` | Secreto PostgreSQL proporcionado por Supabase. |
 | `DB_POOL_MAX_SIZE` | Máximo de conexiones Hikari por instancia Render. Default seguro: `3`. |
 | `DB_POOL_MIN_IDLE` | Conexiones Hikari inactivas mantenidas por instancia Render. Default seguro: `1`. |
 | `JWT_SECRET` | Secreto Base64 de al menos 32 bytes aleatorios, único por entorno. |
 | `JWT_EXPIRATION_SECONDS` | Duración positiva del JWT, por ejemplo `3600`. |
 | `AUTH_COOKIE_SECURE` | `true`. El perfil `prod` fuerza Secure igualmente. |
-| `AUTH_COOKIE_SAME_SITE` | El valor actual por defecto en producción es `None` y requiere HTTPS. Con el rewrite same-origin, `Lax` también es compatible y puede preferirse al configurar el entorno. |
+| `AUTH_COOKIE_SAME_SITE` | `Lax` es el valor por defecto y es compatible con el rewrite same-origin. |
 | `FRONTEND_URL` | Origen exacto de Vercel, por ejemplo `https://<app>.vercel.app`, sin barra final. |
 | `INITIAL_ADMIN_DNI` | DNI del ADMIN inicial, solo mientras aún no exista uno. |
 | `INITIAL_ADMIN_PASSWORD` | Contraseña temporal inicial, secreto de 10 a 72 caracteres. |
@@ -76,7 +73,7 @@ Vite solo incorpora variables con prefijo `VITE_` al bundle. No definir allí se
 
 El envío de documentos usa la API HTTPS de Resend (`https://api.resend.com/emails`). No se configura SMTP en Render Free, porque sus conexiones SMTP salientes están bloqueadas.
 
-`TEMPLATE_STORAGE_PATH` queda disponible solo para `TEMPLATE_STORAGE_TYPE=local`; no se configura ni se usa en Render. Si Supabase entrega una URL JDBC completa en vez de los componentes `DB_*`, se puede configurar como `SPRING_DATASOURCE_URL`; debe incluir `sslmode=require` o una política TLS más estricta compatible.
+`TEMPLATE_STORAGE_PATH` queda disponible solo para `TEMPLATE_STORAGE_TYPE=local`; no se configura ni se usa en Render. `SPRING_DATASOURCE_URL` debe usar el Session Pooler de Supabase e incluir `sslmode=require` o una política TLS más estricta compatible.
 
 ## Conexiones PostgreSQL
 
@@ -94,7 +91,7 @@ Con `TEMPLATE_SEED_ENABLED=false`, el primer ADMIN debe crear `Permiso Gremial` 
 
 ## Cookies, CSRF y CORS
 
-El navegador consume `/api/v1` en el mismo origen de Vercel y un rewrite nativo reenvía esas requests a Render. En producción se usa `AUTH_COOKIE_SECURE=true` y un `AUTH_COOKIE_SAME_SITE` compatible con ese acceso same-origin. El valor actual por defecto es `None`; `Lax` también es compatible con el proxy y puede preferirse al configurar el entorno. Ambos servicios deben estar detrás de HTTPS. `FRONTEND_URL` se registra como el único origen CORS permitido, con `allowCredentials=true`. No se usa `*` ni se permite un origen adicional por defecto.
+El navegador consume `/api/v1` en el mismo origen de Vercel y un rewrite nativo reenvía esas requests a Render. En producción se usa `AUTH_COOKIE_SECURE=true` y `AUTH_COOKIE_SAME_SITE=Lax`, compatible con ese acceso same-origin. Ambos servicios deben estar detrás de HTTPS. `FRONTEND_URL` se registra como el único origen CORS permitido, con `allowCredentials=true`. No se usa `*` ni se permite un origen adicional por defecto.
 
 La cookie JWT sigue siendo `HttpOnly`; no se mueve a `localStorage` ni `sessionStorage`. Como `Domain` se omite, el navegador almacena las cookies reenviadas como host-only del dominio de Vercel. CSRF permanece habilitado con double-submit: antes de cada operación que modifica estado, el frontend solicita `GET /api/v1/auth/csrf` con credenciales y envía el token recibido en `X-XSRF-TOKEN`. Login conserva la excepción CSRF existente.
 

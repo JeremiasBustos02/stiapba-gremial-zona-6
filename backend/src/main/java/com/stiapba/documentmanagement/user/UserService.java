@@ -71,6 +71,7 @@ public class UserService {
     public void deactivate(UUID id) {
         User user = findById(id);
         user.deactivate();
+        user.invalidateSessions();
     }
 
     @Transactional

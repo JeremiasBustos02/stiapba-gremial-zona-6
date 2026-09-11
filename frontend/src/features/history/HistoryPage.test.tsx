@@ -72,6 +72,7 @@ describe('HistoryPage', () => {
     await waitFor(() => expect(document.querySelector('#history-from-mobile')).not.toBeNull())
     const search = container.querySelector<HTMLInputElement>('#history-search')!
     const from = document.querySelector<HTMLInputElement>('#history-from-mobile')!
+    const to = document.querySelector<HTMLInputElement>('#history-to-mobile')!
     const setInputValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
     await act(async () => {
       setInputValue.call(search, 'PG-2026')
@@ -79,9 +80,15 @@ describe('HistoryPage', () => {
       setInputValue.call(from, '2026-01-01')
       from.dispatchEvent(new Event('input', { bubbles: true }))
       from.dispatchEvent(new Event('change', { bubbles: true }))
+      setInputValue.call(to, '2026-12-31')
+      to.dispatchEvent(new Event('input', { bubbles: true }))
+      to.dispatchEvent(new Event('change', { bubbles: true }))
     })
 
-    await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => String(input).includes('q=PG-2026') && String(input).includes('issueDateFrom=2026-01-01'))).toBe(true))
+    await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => {
+      const url = String(input)
+      return url.includes('q=PG-2026') && url.includes('issueDateFrom=2026-01-01') && url.includes('issueDateTo=2026-12-31') && !url.includes('issueDateFrom=2026-12-31')
+    })).toBe(true))
     expect(container.textContent).toContain('Limpiar filtros')
   })
 

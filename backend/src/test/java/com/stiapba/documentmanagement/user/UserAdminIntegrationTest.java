@@ -206,6 +206,26 @@ class UserAdminIntegrationTest {
                 .andExpect(status().isUnauthorized());
     }
 
+    @Test
+    void reactivatingUserDoesNotRestoreTheSessionIssuedBeforeDeactivation() throws Exception {
+        User admin = saveUser("30000006", Role.ADMIN, ADMIN_PASSWORD);
+        User delegate = saveUser("40123460", Role.DELEGADO, DELEGATE_PASSWORD);
+        MockMvcSession adminSession = authenticate(admin.getDni(), ADMIN_PASSWORD);
+        MockMvcSession delegateSession = authenticate(delegate.getDni(), DELEGATE_PASSWORD);
+
+        mockMvc.perform(patch("/api/v1/users/{id}/deactivate", delegate.getId())
+                        .cookie(adminSession.authCookie(), adminSession.csrfCookie())
+                        .header("X-XSRF-TOKEN", adminSession.csrfToken()))
+                .andExpect(status().isNoContent());
+        mockMvc.perform(patch("/api/v1/users/{id}/activate", delegate.getId())
+                        .cookie(adminSession.authCookie(), adminSession.csrfCookie())
+                        .header("X-XSRF-TOKEN", adminSession.csrfToken()))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/api/v1/auth/me").cookie(delegateSession.authCookie()))
+                .andExpect(status().isUnauthorized());
+    }
+
     private User saveUser(String dni, Role role, String password) {
         User user = new User("Test", "User", dni, passwordEncoder.encode(password), role);
         if (role == Role.ADMIN) user.completeFirstLogin();
