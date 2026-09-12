@@ -17,6 +17,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import com.stiapba.documentmanagement.security.UserPrincipal;
 
 import java.util.UUID;
 import com.stiapba.documentmanagement.user.entity.Role;
@@ -73,7 +75,7 @@ public class UserController {
     }
 
     @PostMapping("/{id}/reset-password")
-    public ResetPasswordResponse resetPassword(@PathVariable UUID id) {
-        return userService.resetPassword(id);
+    public ResetPasswordResponse resetPassword(@PathVariable UUID id, @AuthenticationPrincipal UserPrincipal principal) {
+        return userService.resetPassword(id, principal.id());
     }
 }

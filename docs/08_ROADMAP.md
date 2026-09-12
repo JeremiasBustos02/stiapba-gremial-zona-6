@@ -947,6 +947,15 @@ Exportaciones de empresas, delegados, convenios y usuarios
 Solo ADMIN
 ```
 
+## M23 — Recuperación de contraseña administrada
+
+```text
+Restablecimiento ADMIN de usuarios activos
+Contraseña temporal de un solo uso
+Cambio obligatorio e invalidación de sesiones previas
+Sin recuperación autónoma por email o token
+```
+
 ## Fase futura A — Google Drive
 
 ```text

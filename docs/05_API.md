@@ -506,6 +506,8 @@ El usuario deberá quedar con:
 firstLogin = true
 ```
 
+Solo ADMIN puede restablecer a otro usuario activo. El backend genera la contraseña con un CSPRNG, persiste únicamente su hash e invalida sesiones anteriores mediante la versión de sesión. La contraseña temporal solo se devuelve en esta respuesta y no puede consultarse luego. No existe recuperación autónoma por email o token en el MVP.
+
 La contraseña temporal solo podrá devolverse en el momento del restablecimiento.
 
 ---

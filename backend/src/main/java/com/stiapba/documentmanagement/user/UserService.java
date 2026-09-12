@@ -75,8 +75,14 @@ public class UserService {
     }
 
     @Transactional
-    public ResetPasswordResponse resetPassword(UUID id) {
+    public ResetPasswordResponse resetPassword(UUID id, UUID administratorId) {
         User user = findById(id);
+        if (!user.isActive()) {
+            throw new UserException(409, "USER_INACTIVE", "No podés restablecer la contraseña de un usuario inactivo.");
+        }
+        if (user.getId().equals(administratorId)) {
+            throw new UserException(400, "SELF_PASSWORD_RESET_NOT_ALLOWED", "Usá el cambio de contraseña desde tu perfil.");
+        }
         String temporaryPassword = generateTemporaryPassword();
         user.changePassword(passwordEncoder.encode(temporaryPassword));
         user.requireFirstLogin();

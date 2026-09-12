@@ -207,6 +207,22 @@ class UserAdminIntegrationTest {
     }
 
     @Test
+    void rejectsResetForInactiveUsersAndTheCurrentAdministrator() throws Exception {
+        User admin = saveUser("30000007", Role.ADMIN, ADMIN_PASSWORD);
+        User inactive = saveUser("40123461", Role.DELEGADO, DELEGATE_PASSWORD);
+        inactive.deactivate();
+        userRepository.saveAndFlush(inactive);
+        MockMvcSession session = authenticate(admin.getDni(), ADMIN_PASSWORD);
+
+        mockMvc.perform(post("/api/v1/users/{id}/reset-password", inactive.getId())
+                        .cookie(session.authCookie(), session.csrfCookie()).header("X-XSRF-TOKEN", session.csrfToken()))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("USER_INACTIVE"));
+        mockMvc.perform(post("/api/v1/users/{id}/reset-password", admin.getId())
+                        .cookie(session.authCookie(), session.csrfCookie()).header("X-XSRF-TOKEN", session.csrfToken()))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("SELF_PASSWORD_RESET_NOT_ALLOWED"));
+    }
+
+    @Test
     void reactivatingUserDoesNotRestoreTheSessionIssuedBeforeDeactivation() throws Exception {
         User admin = saveUser("30000006", Role.ADMIN, ADMIN_PASSWORD);
         User delegate = saveUser("40123460", Role.DELEGADO, DELEGATE_PASSWORD);

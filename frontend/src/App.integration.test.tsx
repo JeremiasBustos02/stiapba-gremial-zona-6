@@ -76,6 +76,16 @@ afterEach(() => {
 })
 
 describe('App critical integration flows', () => {
+  it('explains that password recovery is handled by administration', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response({}, 401)))
+    renderApp('/login')
+
+    await waitFor(() => {
+      expect(container.textContent).toContain('¿Olvidaste tu contraseña?')
+      expect(container.textContent).toContain('Comunicate con administración para restablecer el acceso.')
+    })
+  })
+
   it('allows an ADMIN to access the administration home', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response({ id: 'admin', nombre: 'Admin', apellido: 'STIA', dni: '1', role: 'ADMIN', firstLogin: false })))
     renderApp('/admin')
