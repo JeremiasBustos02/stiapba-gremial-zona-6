@@ -3,6 +3,12 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+vi.mock('react-pdf', async () => {
+  const { createElement } = await import('react')
+  return { Document: ({ children }: { children: React.ReactNode }) => createElement('div', null, children), Page: () => createElement('div'), pdfjs: { GlobalWorkerOptions: {} } }
+})
+
 import { HistoryPage } from './HistoryPage'
 
 let root: Root
@@ -32,6 +38,7 @@ beforeEach(() => {
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
+  globalThis.ResizeObserver = class { observe() {}; disconnect() {}; unobserve() {} }
 })
 
 afterEach(() => { act(() => root.unmount()); container.remove(); vi.unstubAllGlobals() })
@@ -50,12 +57,13 @@ describe('HistoryPage', () => {
     const documentType = [...container.querySelectorAll('[class*="whitespace-nowrap"]')]
       .find((element) => element.textContent?.includes('Permiso gremial'))
     expect(documentType).not.toBeUndefined()
-    const moreActions = container.querySelector<HTMLButtonElement>(
-      'button[aria-label="Más acciones de PG-2026-000001"]',
-    )
+    const moreActions = container.querySelector<HTMLButtonElement>('button[aria-label="Acciones"]')
     expect(moreActions).not.toBeNull()
-    expect(moreActions?.className).toContain('w-11')
-    expect(moreActions?.className).toContain('focus-visible:ring-2')
+    expect(moreActions?.getAttribute('aria-haspopup')).toBe('menu')
+    await act(async () => moreActions!.click())
+    expect(container.querySelector('[role="menu"]')?.textContent).toContain('Ver PDF')
+    expect(container.querySelector('[role="menu"]')?.textContent).toContain('Enviar')
+    expect([...container.querySelectorAll('button')].find((button) => button.textContent?.includes('Enviar'))?.getAttribute('aria-disabled')).toBe('true')
     const next = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes('Siguiente'))
     expect(next).toBeDefined()
     await act(async () => next!.click())
@@ -175,9 +183,10 @@ describe('HistoryPage', () => {
     vi.stubGlobal('fetch', fetchMock)
     renderPage()
 
-    await waitFor(() => expect(container.textContent).toContain('Enviar por mail'))
-    expect(container.querySelector('[role="group"]')).not.toBeNull()
-    const emailButton = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes('Enviar por mail'))
+    await waitFor(() => expect(container.querySelector('button[aria-label="Acciones"]')).not.toBeNull())
+    await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="Acciones"]')!.click())
+    const emailButton = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes('Enviar'))
+    expect(emailButton?.getAttribute('aria-disabled')).toBe('true')
     await act(async () => emailButton!.click())
     expect(document.body.textContent).toContain('Envío por correo temporalmente deshabilitado')
     expect(document.body.textContent).toContain('Estamos terminando de configurar esta función')
@@ -185,6 +194,44 @@ describe('HistoryPage', () => {
     expect(document.body.querySelector('[role="tooltip"]')).not.toBeNull()
     expect(document.querySelector('[role="dialog"]')).toBeNull()
     expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith('/documents/history/1/email'))).toBe(false)
+  })
+
+  it('loads the selected historical PDF once into the existing preview without generating a document', async () => {
+    let resolvePdf!: (value: Response) => void
+    const fetchMock = vi.fn((input: string | URL | Request) => {
+      const path = new URL(typeof input === 'string' ? input : input.toString(), 'http://localhost').pathname
+      if (path === '/api/v1/documents/history') return Promise.resolve(response({ content: [{ id: '1', publicNumber: 'PG-2026-000001', documentType: 'PERMISO_GREMIAL', createdAt: '2026-09-10T10:00:00-03:00', createdBy: 'Admin STIA', companyName: 'Empresa', delegateName: 'Ana Paz', issueDate: '2026-08-18' }], page: 0, size: 20, totalElements: 1, totalPages: 1 }))
+      if (path === '/api/v1/documents/history/1/pdf') return new Promise<Response>((resolve) => { resolvePdf = resolve })
+      throw new Error(`Unexpected request: ${path}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    renderPage()
+
+    await waitFor(() => expect(container.querySelector('button[aria-label="Acciones"]')).not.toBeNull())
+    await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="Acciones"]')!.click())
+    const viewButton = [...container.querySelectorAll('button')].find((button) => button.textContent === 'Ver PDF')!
+    await act(async () => { viewButton.click(); viewButton.click() })
+    expect(container.textContent).toContain('Preparando PDF...')
+    expect(fetchMock.mock.calls.filter(([input]) => String(input).endsWith('/documents/history/1/pdf'))).toHaveLength(1)
+    await act(async () => resolvePdf(new Response('pdf', { headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': 'inline; filename="historico.pdf"' } })))
+    await waitFor(() => expect(container.textContent).toContain('Vista previa'))
+    expect(fetchMock.mock.calls.some(([input]) => String(input).includes('/documents/permiso-gremial/generate'))).toBe(false)
+  })
+
+  it('shows a recovery message when the historical PDF cannot be loaded', async () => {
+    const fetchMock = vi.fn((input: string | URL | Request) => {
+      const path = new URL(typeof input === 'string' ? input : input.toString(), 'http://localhost').pathname
+      if (path === '/api/v1/documents/history') return Promise.resolve(response({ content: [{ id: '1', publicNumber: 'PG-2026-000001', documentType: 'PERMISO_GREMIAL', createdAt: '2026-09-10T10:00:00-03:00', createdBy: 'Admin STIA', companyName: 'Empresa', delegateName: 'Ana Paz', issueDate: '2026-08-18' }], page: 0, size: 20, totalElements: 1, totalPages: 1 }))
+      if (path === '/api/v1/documents/history/1/pdf') return Promise.reject(new Error('offline'))
+      throw new Error(`Unexpected request: ${path}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    renderPage()
+
+    await waitFor(() => expect(container.querySelector('button[aria-label="Acciones"]')).not.toBeNull())
+    await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="Acciones"]')!.click())
+    await act(async () => [...container.querySelectorAll('button')].find((button) => button.textContent === 'Ver PDF')!.click())
+    await waitFor(() => expect(container.querySelector('[role="alert"]')?.textContent).toContain('No pudimos abrir el PDF.'))
   })
 
   it('loads the detail and exposes the base action without generating a document', async () => {
