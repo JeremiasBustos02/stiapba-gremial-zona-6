@@ -1577,6 +1577,53 @@ Solo se devuelven entidades activas que todavía existen en el catálogo. Snapsh
 }
 ```
 
+## POST `/api/v1/documents/bulk`
+
+### Acceso
+
+ADMIN / DELEGADO, con la misma política de generación individual.
+
+Genera varios Permisos Gremiales con datos comunes. Cada delegado crea un `DocumentRecord` independiente con su número público, snapshot e historial habituales. `delegateIds` debe contener al menos un valor único.
+
+```json
+{
+  "provinceId": "uuid",
+  "issueDate": "2026-09-12",
+  "companyId": "uuid",
+  "permitDay": 18,
+  "agreementId": "uuid",
+  "variantId": "uuid",
+  "manualValues": {},
+  "delegateIds": ["uuid", "uuid"]
+}
+```
+
+La respuesta JSON puede ser parcial: un error de un delegado no revierte los documentos ya generados para otros delegados. El ítem fallido no crea un `DocumentRecord`.
+
+```json
+{
+  "requested": 2,
+  "successful": 1,
+  "failed": 1,
+  "items": [
+    { "delegateId": "uuid", "delegateName": "Juan Pérez", "status": "SUCCESS", "documentId": "uuid", "publicNumber": "PG-2026-000231", "filename": "pg-2026-000231_permiso-gremial_juan-perez.pdf" },
+    { "delegateId": "uuid", "delegateName": "Carlos Gómez", "status": "FAILED", "errorCode": "DELEGATE_NOT_FOUND", "message": "No encontramos un delegado activo." }
+  ]
+}
+```
+
+## POST `/api/v1/documents/bulk/zip`
+
+### Acceso
+
+ADMIN / DELEGADO. Recibe `documentIds` exitosos y devuelve `application/zip`. Cada PDF se regenera en memoria aplicando las reglas del historial: ADMIN puede incluir cualquier documento y DELEGADO únicamente documentos propios. Un ID no autorizado rechaza la solicitud y nunca se omite silenciosamente.
+
+```json
+{ "documentIds": ["uuid", "uuid"] }
+```
+
+No se persisten PDFs ni ZIPs. M25 no incluye reintento de fallidos, importación CSV/Excel, trabajos en segundo plano ni progreso porcentual.
+
 ## GET `/api/v1/documents/dashboard`
 
 ### Acceso

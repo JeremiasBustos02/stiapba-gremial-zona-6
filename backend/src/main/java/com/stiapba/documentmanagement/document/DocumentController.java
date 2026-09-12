@@ -34,13 +34,25 @@ public class DocumentController {
     private final DocumentHistoryService documentHistoryService;
     private final DocumentEmailService documentEmailService;
     private final DashboardService dashboardService;
+    private final DocumentBulkService documentBulkService;
 
     public DocumentController(DocumentGenerationService documentGenerationService, DocumentHistoryService documentHistoryService,
-                              DocumentEmailService documentEmailService, DashboardService dashboardService) {
+                               DocumentEmailService documentEmailService, DashboardService dashboardService) {
         this.documentGenerationService = documentGenerationService;
         this.documentHistoryService = documentHistoryService;
         this.documentEmailService = documentEmailService;
         this.dashboardService = dashboardService;
+        this.documentBulkService = null;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public DocumentController(DocumentGenerationService documentGenerationService, DocumentHistoryService documentHistoryService,
+                              DocumentEmailService documentEmailService, DashboardService dashboardService, DocumentBulkService documentBulkService) {
+        this.documentGenerationService = documentGenerationService;
+        this.documentHistoryService = documentHistoryService;
+        this.documentEmailService = documentEmailService;
+        this.dashboardService = dashboardService;
+        this.documentBulkService = documentBulkService;
     }
 
     @PostMapping(value = "/permiso-gremial/generate", produces = MediaType.APPLICATION_PDF_VALUE)
@@ -53,6 +65,21 @@ public class DocumentController {
                 .header("X-Document-Id", document.recordId().toString())
                 .header("X-Public-Number", document.publicNumber())
                 .body(document.content());
+    }
+
+    @PostMapping("/bulk")
+    public DocumentBulkDtos.BatchResponse generateBulk(@Valid @RequestBody PermisoGremialBatchRequest request,
+                                                        @AuthenticationPrincipal UserPrincipal principal) {
+        return documentBulkService.generate(request, principal);
+    }
+
+    @PostMapping(value = "/bulk/zip", produces = "application/zip")
+    public ResponseEntity<byte[]> downloadBulkZip(@Valid @RequestBody DocumentBulkDtos.ZipRequest request,
+                                                  @AuthenticationPrincipal UserPrincipal principal) {
+        DocumentBulkDtos.ZipArchive archive = documentBulkService.zip(request, principal);
+        return ResponseEntity.ok().contentType(MediaType.parseMediaType("application/zip"))
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment().filename(archive.filename()).build().toString())
+                .body(archive.content());
     }
 
     @GetMapping("/permiso-gremial/variants/{variantId}/manual-fields")

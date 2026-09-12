@@ -20,6 +20,9 @@ export type PermisoGremialRequest = {
 }
 export type ManualField = { id: string; label: string; type: 'TEXT' | 'DATE' | 'NUMBER'; required: boolean }
 export type GeneratedDocument = { blob: Blob; documentId: string; publicNumber: string; filename: string }
+export type PermisoGremialBatchRequest = Omit<PermisoGremialRequest, 'delegateId'> & { delegateIds: string[] }
+export type BatchDocumentItem = { delegateId: string; delegateName: string; status: 'SUCCESS' | 'FAILED'; documentId: string | null; publicNumber: string | null; filename: string | null; errorCode: string | null; message: string | null }
+export type BatchDocumentResult = { requested: number; successful: number; failed: number; items: BatchDocumentItem[] }
 
 export const getProvinces = () => apiRequest<Province[]>('/provinces')
 export const getDocumentCompanies = () => apiRequest<Company[]>('/companies?active=true')
@@ -125,6 +128,9 @@ export async function generatePermisoGremial(data: PermisoGremialRequest): Promi
     filename: filenameFromHeaders(result.headers),
   }
 }
+
+export const generatePermisoGremialBatch = (data: PermisoGremialBatchRequest) => apiRequest<BatchDocumentResult>('/documents/bulk', { method: 'POST', body: JSON.stringify(data) })
+export const downloadPermisoGremialBatch = (documentIds: string[]) => apiRequestBlobWithHeaders('/documents/bulk/zip', { method: 'POST', body: JSON.stringify({ documentIds }) })
 
 export function filenameFromHeaders(headers: Headers) {
   const value = headers.get('Content-Disposition')

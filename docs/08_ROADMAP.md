@@ -970,6 +970,17 @@ Sin @Scheduled, Render Cron ni scheduler propio
 
 M24 deja un único servicio de generación listo para que un cron futuro lo invoque, pero no agenda ni configura tareas automáticamente.
 
+## M25 — Generación masiva de permisos
+
+```text
+Generación secuencial de Permisos Gremiales con datos comunes
+Un DocumentRecord y número público normal por delegado exitoso
+Resultados parciales por delegado, sin rollback global
+Descarga individual y ZIP regenerado en memoria
+ADMIN y DELEGADO con la misma política de generación individual
+Sin entidad de lote, cola, scheduler, CSV/Excel ni progreso en tiempo real
+```
+
 ## Fase futura A — Google Drive
 
 ```text

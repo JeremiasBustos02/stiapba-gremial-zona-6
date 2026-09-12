@@ -1,4 +1,4 @@
-export type Screen = 'home' | 'new-document' | 'variants' | 'form' | 'preview' | 'history' | 'profile' | 'admin' | 'users' | 'companies' | 'agreements' | 'templates' | 'reports' | 'positioned-editor'
+export type Screen = 'home' | 'new-document' | 'bulk-document' | 'variants' | 'form' | 'preview' | 'history' | 'profile' | 'admin' | 'users' | 'companies' | 'agreements' | 'templates' | 'reports' | 'positioned-editor'
 
 export function screenForPath(pathname: string): Screen {
   if (/^\/admin\/plantillas\/[^/]+\/variantes\/[^/]+\/campos$/.test(pathname)) return 'positioned-editor'
@@ -10,6 +10,7 @@ export function screenForPath(pathname: string): Screen {
   if (pathname === '/admin') return 'admin'
   if (pathname === '/perfil') return 'profile'
   if (pathname === '/historial') return 'history'
+  if (pathname === '/documentos/generar-varios') return 'bulk-document'
   if (/^\/documentos\/nuevo\/[^/]+\/vista-previa$/.test(pathname)) return 'preview'
   if (/^\/documentos\/nuevo\/[^/]+\/formulario$/.test(pathname)) return 'form'
   if (/^\/documentos\/nuevo\/[^/]+\/variante$/.test(pathname)) return 'variants'
@@ -19,6 +20,7 @@ export function screenForPath(pathname: string): Screen {
 export function routeForScreen(screen: Screen, templateId: string | null) {
   if (screen === 'home') return '/'
   if (screen === 'new-document') return '/documentos/nuevo'
+  if (screen === 'bulk-document') return '/documentos/generar-varios'
   if (screen === 'variants') return templateId ? `/documentos/nuevo/${templateId}/variante` : '/documentos/nuevo'
   if (screen === 'form') return templateId ? `/documentos/nuevo/${templateId}/formulario` : '/documentos/nuevo'
   if (screen === 'preview') return templateId ? `/documentos/nuevo/${templateId}/vista-previa` : '/documentos/nuevo'
