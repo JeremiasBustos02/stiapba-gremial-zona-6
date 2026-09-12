@@ -41,6 +41,7 @@ import { getVariants } from "@/features/templates/templatesApi";
 import { HomePage } from "@/features/home/HomePage";
 import { ProfilePage } from "@/features/profile/ProfilePage";
 import { HistoryPage } from "@/features/history/HistoryPage";
+import { ReportsPage } from "@/features/reports/ReportsPage";
 import type { DocumentFormValues } from "@/features/documents/DocumentFlow";
 import { getDocumentVariants, type DocumentHistoryDetail, type GeneratedDocument } from "@/features/documents/documentsApi";
 import { PostGenerationActions } from "@/features/documents/PostGenerationActions";
@@ -162,7 +163,7 @@ function App() {
     saveDraft(detail.templateId, form);
     navigate(`/documentos/nuevo/${detail.templateId}/formulario`);
   };
-  const adminContent = screen === "users" ? <UserManagementPage /> : screen === "companies" ? <CatalogManagementPage<Company, CompanyForm> kind="companies" title="Empresas" description="Administrá las empresas disponibles para completar documentos." emptyForm={{ nombre: "", agreementId: "" }} getItems={getCompanies} createItem={createCompany} updateItem={updateCompany} setActive={setCompanyActive} /> : screen === "agreements" ? <CatalogManagementPage<Agreement, AgreementForm> kind="agreements" title="Convenios" description="Administrá los convenios disponibles para completar documentos." emptyForm={{ codigo: "", descripcion: "" }} getItems={getAgreements} createItem={createAgreement} updateItem={updateAgreement} setActive={setAgreementActive} /> : screen === "positioned-editor" ? <FieldEditorRoute /> : <TemplateManagementPage initialTemplateId={location.pathname.match(/^\/admin\/plantillas\/([^/]+)$/)?.[1]} onTemplateSelected={(id) => navigate(`/admin/plantillas/${id}`)} onDetailBack={() => navigate("/admin/plantillas")} onConfigureFields={(id, variant) => navigate(`/admin/plantillas/${id}/variantes/${variant.id}/campos`)} />;
+  const adminContent = screen === "reports" ? <ReportsPage /> : screen === "users" ? <UserManagementPage /> : screen === "companies" ? <CatalogManagementPage<Company, CompanyForm> kind="companies" title="Empresas" description="Administrá las empresas disponibles para completar documentos." emptyForm={{ nombre: "", agreementId: "" }} getItems={getCompanies} createItem={createCompany} updateItem={updateCompany} setActive={setCompanyActive} /> : screen === "agreements" ? <CatalogManagementPage<Agreement, AgreementForm> kind="agreements" title="Convenios" description="Administrá los convenios disponibles para completar documentos." emptyForm={{ codigo: "", descripcion: "" }} getItems={getAgreements} createItem={createAgreement} updateItem={updateAgreement} setActive={setAgreementActive} /> : screen === "positioned-editor" ? <FieldEditorRoute /> : <TemplateManagementPage initialTemplateId={location.pathname.match(/^\/admin\/plantillas\/([^/]+)$/)?.[1]} onTemplateSelected={(id) => navigate(`/admin/plantillas/${id}`)} onDetailBack={() => navigate("/admin/plantillas")} onConfigureFields={(id, variant) => navigate(`/admin/plantillas/${id}/variantes/${variant.id}/campos`)} />;
   const openSearchDocument = (document: DocumentHistoryDetail | { id: string }) => { setSearchDocument({ id: document.id }); navigate('/historial'); };
   const prefillFromSearch = (kind: 'company' | 'delegate' | 'agreement', id: string) => {
     const field = kind === 'company' ? 'companyId' : kind === 'delegate' ? 'delegateId' : 'agreementId';
@@ -171,7 +172,7 @@ function App() {
   };
   return <AppLayout screen={screen} role={currentUser.role} onNavigate={go} onLogout={() => logoutMutation.mutate()} onOpenDocument={openSearchDocument} onPrefill={prefillFromSearch}>
     {screen !== "positioned-editor" && <SecondaryNavigation screen={screen} onNavigate={go} />}
-    {["admin", "users", "companies", "agreements", "templates"].includes(screen) && <AdminModuleNavigation screen={screen} onNavigate={go} />}
+    {["admin", "users", "companies", "agreements", "templates", "reports"].includes(screen) && <AdminModuleNavigation screen={screen} onNavigate={go} />}
       {screen === "home" && <HomePage user={currentUser} onNavigate={go} />}
       {screen === "new-document" && <Suspense fallback={<LazyLoadingState />}><DocumentTemplateSelection onBack={() => navigate("/")} onSelect={(id) => { const form = { ...documentForm, ...documentPrefill, variantId: "", manualValues: {} }; setDocumentPrefill({}); saveDraft(id, form); navigate(`/documentos/nuevo/${id}/variante`); }} /></Suspense>}
      {screen === "variants" && <Suspense fallback={<LazyLoadingState />}><DocumentVariantSelection templateId={templateId} onBack={() => navigate("/documentos/nuevo")} onSelect={(variantId) => { if (!templateId) return; const form = { ...documentForm, variantId, manualValues: {} }; saveDraft(templateId, form); navigate(`/documentos/nuevo/${templateId}/formulario`); }} /></Suspense>}
@@ -180,7 +181,7 @@ function App() {
      {screen === "profile" && <ProfilePage user={currentUser} onLogout={() => logoutMutation.mutate()} />}
        {screen === "history" && <HistoryPage role={currentUser.role} onUseAsBase={useHistoryAsBase} openDocumentId={searchDocument?.id} onDocumentOpened={() => setSearchDocument(null)} />}
     {screen === "admin" && <AdminPage onNavigate={go} />}
-    {["users", "companies", "agreements", "templates", "positioned-editor"].includes(screen) && adminContent}
+     {["users", "companies", "agreements", "templates", "reports", "positioned-editor"].includes(screen) && adminContent}
   </AppLayout>;
 }
 
@@ -452,6 +453,12 @@ function AdminPage({ onNavigate }: { onNavigate: (screen: Screen) => void }) {
       description: "Tipos de documento y sus variantes PDF.",
       icon: FileText,
       screen: "templates",
+    },
+    {
+      title: "Reportes y exportaciones",
+      description: "Actividad por período y datos administrativos.",
+      icon: FileText,
+      screen: "reports",
     },
   ];
   return (

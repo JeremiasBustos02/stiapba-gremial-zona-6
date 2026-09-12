@@ -938,6 +938,15 @@ Destinatario individual
 Sin historial de emails
 ```
 
+## M22 — Centro de reportes y exportaciones
+
+```text
+Resumen administrativo por período de fecha del documento
+Reporte Excel bajo demanda
+Exportaciones de empresas, delegados, convenios y usuarios
+Solo ADMIN
+```
+
 ## Fase futura A — Google Drive
 
 ```text

@@ -9,6 +9,7 @@ const screenParents: Partial<Record<Screen, Screen>> = {
   companies: "admin",
   agreements: "admin",
   templates: "admin",
+  reports: "admin",
   "new-document": "home",
   variants: "new-document",
   form: "variants",
@@ -54,6 +55,7 @@ export function AdminModuleNavigation({
     { label: "Empresas", screen: "companies" },
     { label: "Convenios", screen: "agreements" },
     { label: "Plantillas", screen: "templates" },
+    { label: "Reportes", screen: "reports" },
   ];
   return (
     <nav

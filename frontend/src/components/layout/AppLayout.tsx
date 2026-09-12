@@ -49,7 +49,7 @@ function navigationItems(role: "ADMIN" | "DELEGADO") {
 }
 
 function navigationActive(screen: Screen, target: Screen) {
-  return target === "admin" ? ["admin", "users", "companies", "agreements", "templates", "positioned-editor"].includes(screen) : screen === target;
+  return target === "admin" ? ["admin", "users", "companies", "agreements", "templates", "reports", "positioned-editor"].includes(screen) : screen === target;
 }
 
 function DesktopNavigation({ role, screen, onNavigate }: { role: "ADMIN" | "DELEGADO"; screen: Screen; onNavigate: (screen: Screen) => void }) {

@@ -212,7 +212,7 @@ public class DocumentHistoryService {
         }
     }
 
-    static String safeExcelText(String value) {
+    public static String safeExcelText(String value) {
         if (value == null) return "";
         String trimmed = value.stripLeading();
         return !trimmed.isEmpty() && "=+-@".indexOf(trimmed.charAt(0)) >= 0 ? "'" + value : value;

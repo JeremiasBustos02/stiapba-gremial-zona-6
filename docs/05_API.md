@@ -1475,6 +1475,42 @@ Content-Disposition: attachment; filename="historial-documentos-YYYY-MM-DD.xlsx"
 
 La hoja `Documentos` contiene información administrativa del historial, sin snapshots JSON ni datos técnicos internos.
 
+## GET `/api/v1/admin/reports/summary`
+
+### Acceso
+
+ADMIN. Recibe `dateFrom` y `dateTo` obligatorios en formato ISO y calcula la actividad por `issueDate` del documento.
+
+### Response
+
+```json
+{
+  "dateFrom": "2026-09-01",
+  "dateTo": "2026-09-30",
+  "totalDocuments": 214,
+  "uniqueDelegates": 48,
+  "uniqueCompanies": 17,
+  "uniqueAgreements": 4
+}
+```
+
+## GET `/api/v1/admin/reports/export`
+
+### Acceso
+
+ADMIN. Recibe el mismo período obligatorio que el resumen y devuelve un `.xlsx` con las hojas `Resumen`, `Documentos`, `Empresas`, `Delegados` y `Convenios`.
+
+```http
+Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+Content-Disposition: attachment; filename="reporte-actividad-YYYY-MM-DD-a-YYYY-MM-DD.xlsx"
+```
+
+## GET `/api/v1/admin/exports/{catalog}`
+
+### Acceso
+
+ADMIN. `{catalog}` acepta `companies`, `delegates`, `agreements` o `users` y devuelve su exportación Excel administrativa. No incluye credenciales ni campos internos de autenticación.
+
 ## GET `/api/v1/documents/suggestions`
 
 ### Acceso

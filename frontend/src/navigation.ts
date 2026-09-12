@@ -1,4 +1,4 @@
-export type Screen = 'home' | 'new-document' | 'variants' | 'form' | 'preview' | 'history' | 'profile' | 'admin' | 'users' | 'companies' | 'agreements' | 'templates' | 'positioned-editor'
+export type Screen = 'home' | 'new-document' | 'variants' | 'form' | 'preview' | 'history' | 'profile' | 'admin' | 'users' | 'companies' | 'agreements' | 'templates' | 'reports' | 'positioned-editor'
 
 export function screenForPath(pathname: string): Screen {
   if (/^\/admin\/plantillas\/[^/]+\/variantes\/[^/]+\/campos$/.test(pathname)) return 'positioned-editor'
@@ -6,6 +6,7 @@ export function screenForPath(pathname: string): Screen {
   if (pathname === '/admin/usuarios') return 'users'
   if (pathname === '/admin/empresas') return 'companies'
   if (pathname === '/admin/convenios') return 'agreements'
+  if (pathname === '/admin/reportes') return 'reports'
   if (pathname === '/admin') return 'admin'
   if (pathname === '/perfil') return 'profile'
   if (pathname === '/historial') return 'history'
@@ -27,6 +28,7 @@ export function routeForScreen(screen: Screen, templateId: string | null) {
   if (screen === 'users') return '/admin/usuarios'
   if (screen === 'companies') return '/admin/empresas'
   if (screen === 'agreements') return '/admin/convenios'
+  if (screen === 'reports') return '/admin/reportes'
   return '/admin/plantillas'
 }
 
