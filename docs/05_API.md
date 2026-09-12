@@ -1507,6 +1507,43 @@ Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
 Content-Disposition: attachment; filename="reporte-actividad-YYYY-MM-DD-a-YYYY-MM-DD.xlsx"
 ```
 
+## Reportes mensuales persistentes
+
+Todos los endpoints siguientes requieren `ADMIN`.
+
+### GET `/api/v1/admin/reports/monthly`
+
+Lista los reportes mensuales generados, ordenados desde el período más reciente. El archivo Excel reside en el almacenamiento configurado; PostgreSQL conserva únicamente su metadata.
+
+### POST `/api/v1/admin/reports/monthly/{year}/{month}`
+
+Genera el reporte del período mensual solicitado o devuelve el reporte existente para ese mismo período. Solo puede existir un reporte por mes: la regla se protege tanto en servicio como con una restricción única sobre `periodStart` en la base de datos.
+
+Se rechazan meses inválidos y meses futuros. Se permiten meses anteriores; el mes actual se permite únicamente cuando ya existen documentos con `issueDate` dentro de ese mes. La actividad se calcula por `issueDate` y conserva el mismo Excel, snapshots históricos y protección contra inyección de fórmulas que `GET /reports/export`.
+
+### GET `/api/v1/admin/reports/monthly/{id}`
+
+Devuelve la metadata del reporte mensual.
+
+### GET `/api/v1/admin/reports/monthly/{id}/download`
+
+Descarga el Excel persistido con `Content-Disposition: attachment`. Si el objeto no está disponible en storage, responde con un error controlado sin exponer detalles del proveedor.
+
+Ejemplo de metadata:
+
+```json
+{
+  "id": "uuid",
+  "periodStart": "2026-09-01",
+  "periodEnd": "2026-09-30",
+  "generatedAt": "2026-10-01T00:03:00Z",
+  "filename": "reporte-2026-09.xlsx",
+  "status": "AVAILABLE"
+}
+```
+
+M24 no agenda tareas ni configura cron. Un scheduler futuro deberá invocar el mismo servicio de generación mensual.
+
 ## GET `/api/v1/admin/exports/{catalog}`
 
 ### Acceso

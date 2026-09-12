@@ -956,6 +956,20 @@ Cambio obligatorio e invalidación de sesiones previas
 Sin recuperación autónoma por email o token
 ```
 
+## M24 — Reportes mensuales persistentes
+
+```text
+Metadata histórica por período mensual
+Un reporte único e idempotente por mes
+Excel reutilizando la exportación M22
+Archivo XLSX en el storage S3/local existente bajo reports/YYYY/MM
+Consulta, detalle y descarga solo ADMIN
+Generación manual del último mes cerrado desde Reportes
+Sin @Scheduled, Render Cron ni scheduler propio
+```
+
+M24 deja un único servicio de generación listo para que un cron futuro lo invoque, pero no agenda ni configura tareas automáticamente.
+
 ## Fase futura A — Google Drive
 
 ```text

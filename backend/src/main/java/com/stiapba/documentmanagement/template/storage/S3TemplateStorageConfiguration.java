@@ -4,6 +4,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import com.stiapba.documentmanagement.report.storage.ReportFileStorage;
+import com.stiapba.documentmanagement.report.storage.S3ReportFileStorage;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
@@ -37,6 +39,14 @@ public class S3TemplateStorageConfiguration {
             @Value("${app.template.s3.bucket}") String bucket
     ) {
         return new S3TemplateFileStorage(templateS3Client, required("S3_BUCKET", bucket));
+    }
+
+    @Bean
+    ReportFileStorage s3ReportFileStorage(
+            S3Client templateS3Client,
+            @Value("${app.template.s3.bucket}") String bucket
+    ) {
+        return new S3ReportFileStorage(templateS3Client, required("S3_BUCKET", bucket));
     }
 
     private String required(String name, String value) {

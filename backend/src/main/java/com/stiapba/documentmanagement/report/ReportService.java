@@ -8,6 +8,9 @@ import com.stiapba.documentmanagement.document.DocumentException;
 import com.stiapba.documentmanagement.document.DocumentHistoryService;
 import com.stiapba.documentmanagement.document.entity.DocumentRecord;
 import com.stiapba.documentmanagement.document.repository.DocumentRecordRepository;
+import com.stiapba.documentmanagement.report.entity.MonthlyReport;
+import com.stiapba.documentmanagement.report.repository.MonthlyReportRepository;
+import com.stiapba.documentmanagement.report.storage.ReportFileStorage;
 import com.stiapba.documentmanagement.security.UserPrincipal;
 import com.stiapba.documentmanagement.user.entity.Role;
 import com.stiapba.documentmanagement.user.entity.User;
@@ -19,13 +22,17 @@ import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
-import java.util.Date;
+import java.time.YearMonth;
+import java.time.OffsetDateTime;
+import java.nio.file.NoSuchFileException;
+import java.util.UUID;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -39,9 +46,13 @@ public class ReportService {
     private final CompanyRepository companies;
     private final AgreementRepository agreements;
     private final UserRepository users;
+    private final MonthlyReportRepository monthlyReports;
+    private final ReportFileStorage reportFileStorage;
 
-    public ReportService(DocumentRecordRepository documents, CompanyRepository companies, AgreementRepository agreements, UserRepository users) {
+    public ReportService(DocumentRecordRepository documents, CompanyRepository companies, AgreementRepository agreements, UserRepository users,
+                         MonthlyReportRepository monthlyReports, ReportFileStorage reportFileStorage) {
         this.documents = documents; this.companies = companies; this.agreements = agreements; this.users = users;
+        this.monthlyReports = monthlyReports; this.reportFileStorage = reportFileStorage;
     }
 
     public ReportDtos.ReportSummary summary(UserPrincipal principal, LocalDate from, LocalDate to) {
@@ -81,11 +92,94 @@ public class ReportService {
         } catch (IOException exception) { throw new DocumentException(500, "CATALOG_EXPORT_FAILED", "No pudimos generar la exportación."); }
     }
 
+    public List<ReportDtos.MonthlyReportResponse> listMonthlyReports(UserPrincipal principal) {
+        requireAdmin(principal);
+        return monthlyReports.findAllByOrderByPeriodStartDesc().stream().map(this::monthlyResponse).toList();
+    }
+
+    public ReportDtos.MonthlyReportResponse monthlyReport(UserPrincipal principal, UUID id) {
+        requireAdmin(principal);
+        return monthlyResponse(findMonthlyReport(id));
+    }
+
+    public ReportDtos.MonthlyReportResponse generateMonthlyReport(UserPrincipal principal, int year, int month) {
+        requireAdmin(principal);
+        YearMonth period = period(year, month);
+        LocalDate periodStart = period.atDay(1);
+        MonthlyReport existing = monthlyReports.findByPeriodStart(periodStart).orElse(null);
+        if (existing != null) return monthlyResponse(existing);
+        if (period.equals(YearMonth.now()) && !hasDocuments(periodStart, period.atEndOfMonth())) {
+            throw new DocumentException(400, "MONTHLY_REPORT_EMPTY_CURRENT_PERIOD", "El mes actual todavía no tiene documentos para reportar.");
+        }
+
+        String filename = "reporte-" + period + ".xlsx";
+        String storageKey = "reports/%d/%02d/%s".formatted(year, month, filename);
+        byte[] content = exportReport(principal, periodStart, period.atEndOfMonth());
+        try {
+            reportFileStorage.store(storageKey, content);
+        } catch (IOException | RuntimeException exception) {
+            throw new DocumentException(500, "MONTHLY_REPORT_STORAGE_ERROR", "No pudimos guardar el reporte mensual.");
+        }
+        try {
+            MonthlyReport saved = monthlyReports.saveAndFlush(new MonthlyReport(periodStart, period.atEndOfMonth(), OffsetDateTime.now(ZoneOffset.UTC), filename, storageKey));
+            return monthlyResponse(saved);
+        } catch (DataIntegrityViolationException exception) {
+            return monthlyReports.findByPeriodStart(periodStart).map(this::monthlyResponse)
+                    .orElseThrow(() -> new DocumentException(500, "MONTHLY_REPORT_SAVE_ERROR", "No pudimos guardar el reporte mensual."));
+        } catch (RuntimeException exception) {
+            deleteQuietly(storageKey);
+            throw new DocumentException(500, "MONTHLY_REPORT_SAVE_ERROR", "No pudimos guardar el reporte mensual.");
+        }
+    }
+
+    public byte[] downloadMonthlyReport(UserPrincipal principal, UUID id) {
+        requireAdmin(principal);
+        MonthlyReport report = findMonthlyReport(id);
+        try {
+            return reportFileStorage.load(report.getStorageKey());
+        } catch (NoSuchFileException exception) {
+            throw new DocumentException(422, "MONTHLY_REPORT_FILE_UNAVAILABLE", "El archivo del reporte mensual no está disponible.");
+        } catch (IOException | RuntimeException exception) {
+            throw new DocumentException(500, "MONTHLY_REPORT_DOWNLOAD_ERROR", "No pudimos descargar el reporte mensual.");
+        }
+    }
+
     private List<DocumentRecord> records(UserPrincipal principal, LocalDate from, LocalDate to) {
         requireAdmin(principal);
         if (from == null || to == null || from.isAfter(to)) throw new DocumentException(400, "INVALID_DATE_RANGE", "La fecha desde no puede ser posterior a la fecha hasta.");
         Specification<DocumentRecord> specification = (root, query, builder) -> builder.between(root.get("issueDate"), from, to);
         return documents.findAll(specification, Sort.by("issueDate").ascending().and(Sort.by("createdAt").ascending()));
+    }
+
+    private boolean hasDocuments(LocalDate from, LocalDate to) {
+        Specification<DocumentRecord> specification = (root, query, builder) -> builder.between(root.get("issueDate"), from, to);
+        return documents.exists(specification);
+    }
+
+    private YearMonth period(int year, int month) {
+        try {
+            YearMonth period = YearMonth.of(year, month);
+            if (period.isAfter(YearMonth.now())) throw new DocumentException(400, "MONTHLY_REPORT_FUTURE_PERIOD", "No podés generar reportes de meses futuros.");
+            return period;
+        } catch (java.time.DateTimeException exception) {
+            throw new DocumentException(400, "INVALID_MONTHLY_REPORT_PERIOD", "El período mensual solicitado no es válido.");
+        }
+    }
+
+    private MonthlyReport findMonthlyReport(UUID id) {
+        return monthlyReports.findById(id).orElseThrow(() -> new DocumentException(404, "MONTHLY_REPORT_NOT_FOUND", "No encontramos el reporte mensual solicitado."));
+    }
+
+    private ReportDtos.MonthlyReportResponse monthlyResponse(MonthlyReport report) {
+        return new ReportDtos.MonthlyReportResponse(report.getId(), report.getPeriodStart(), report.getPeriodEnd(), report.getGeneratedAt(), report.getFilename(), report.getStatus().name());
+    }
+
+    private void deleteQuietly(String storageKey) {
+        try {
+            reportFileStorage.delete(storageKey);
+        } catch (IOException | RuntimeException ignored) {
+            // The database write failed, so an orphaned object is safer than masking the original failure.
+        }
     }
 
     private ReportDtos.ReportSummary summary(LocalDate from, LocalDate to, List<DocumentRecord> records) {

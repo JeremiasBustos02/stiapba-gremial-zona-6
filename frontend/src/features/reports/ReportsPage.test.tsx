@@ -19,7 +19,7 @@ afterEach(() => { act(() => root.unmount()); container.remove(); vi.useRealTimer
 
 describe('ReportsPage', () => {
   it('renders the ADMIN reports page with the current month and summary metrics', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(json(summary)); vi.stubGlobal('fetch', fetchMock); render()
+    const fetchMock = vi.fn((input: string | URL | Request) => Promise.resolve(String(input).includes('/reports/monthly') ? json([]) : json(summary))); vi.stubGlobal('fetch', fetchMock); render()
     await waitFor(() => expect(container.textContent).toContain('214'))
     expect(container.textContent).toContain('Reportes y exportaciones'); expect(container.textContent).toContain('48'); expect(container.textContent).toContain('17'); expect(container.textContent).toContain('4')
     expect(container.querySelector<HTMLInputElement>('#report-from')!.value).toBe('2026-09-01'); expect(container.querySelector<HTMLInputElement>('#report-to')!.value).toBe('2026-09-30')
@@ -27,15 +27,15 @@ describe('ReportsPage', () => {
   })
 
   it('blocks invalid date ranges without requesting another summary or export', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(json(summary)); vi.stubGlobal('fetch', fetchMock); render(); await waitFor(() => expect(container.textContent).toContain('214'))
+    const fetchMock = vi.fn((input: string | URL | Request) => Promise.resolve(String(input).includes('/reports/monthly') ? json([]) : json(summary))); vi.stubGlobal('fetch', fetchMock); render(); await waitFor(() => expect(container.textContent).toContain('214'))
     await act(async () => setValue(container.querySelector('#report-from')!, '2026-10-01'))
     expect(container.textContent).toContain('La fecha desde no puede ser posterior a la fecha hasta.')
     expect([...container.querySelectorAll('button')].find(button => button.textContent?.includes('Actualizar resumen'))?.disabled).toBe(true)
-    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
   it('shows the empty state, disables the period report, and keeps quick exports available', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json({ ...summary, totalDocuments: 0, uniqueDelegates: 0, uniqueCompanies: 0, uniqueAgreements: 0 }))); render()
+    vi.stubGlobal('fetch', vi.fn((input: string | URL | Request) => Promise.resolve(String(input).includes('/reports/monthly') ? json([]) : json({ ...summary, totalDocuments: 0, uniqueDelegates: 0, uniqueCompanies: 0, uniqueAgreements: 0 })))); render()
     await waitFor(() => expect(container.textContent).toContain('No hay actividad en este período.'))
     expect(container.querySelector('[aria-labelledby="summary-title"]')).toBeNull()
     expect([...container.querySelectorAll('button')].find(button => button.textContent?.includes('Descargar Excel'))?.disabled).toBe(true)
@@ -45,7 +45,7 @@ describe('ReportsPage', () => {
 
   it('downloads the report with current dates, supplied filename, and prevents duplicate submissions', async () => {
     let resolveExport: (value: Response) => void = () => {}; const clicks: string[] = []
-    const fetchMock = vi.fn((input: string | URL | Request) => String(input).includes('/reports/export') ? new Promise<Response>(resolve => { resolveExport = resolve }) : Promise.resolve(json(summary)))
+    const fetchMock = vi.fn((input: string | URL | Request) => String(input).includes('/reports/export') ? new Promise<Response>(resolve => { resolveExport = resolve }) : Promise.resolve(String(input).includes('/reports/monthly') ? json([]) : json(summary)))
     vi.stubGlobal('fetch', fetchMock); Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: vi.fn(() => 'blob:report') }); Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() }); vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) { clicks.push(this.download) }); render()
     await waitFor(() => expect(container.textContent).toContain('214')); const button = [...container.querySelectorAll('button')].find(item => item.textContent?.includes('Descargar Excel'))!
     await act(async () => button.click()); await waitFor(() => expect(button.disabled).toBe(true)); await act(async () => button.click())
@@ -55,11 +55,22 @@ describe('ReportsPage', () => {
   })
 
   it('uses a safe filename fallback and exports companies from the quick action', async () => {
-    const clicks: string[] = []; const fetchMock = vi.fn((input: string | URL | Request) => String(input).includes('/exports/companies') ? Promise.resolve(new Response('xlsx')) : Promise.resolve(json(summary)))
+    const clicks: string[] = []; const fetchMock = vi.fn((input: string | URL | Request) => String(input).includes('/exports/companies') ? Promise.resolve(new Response('xlsx')) : Promise.resolve(String(input).includes('/reports/monthly') ? json([]) : json(summary)))
     vi.stubGlobal('fetch', fetchMock); Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: vi.fn(() => 'blob:companies') }); Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() }); vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) { clicks.push(this.download) }); render()
     await waitFor(() => expect(container.textContent).toContain('214')); const companies = [...container.querySelectorAll('button')].find(button => button.closest('div')?.textContent?.includes('Empresas') && button.textContent?.includes('Exportar'))!
     await act(async () => companies.click()); await waitFor(() => expect(clicks).toEqual(['companies.xlsx'])); expect(fetchMock.mock.calls.some(([input]) => String(input).includes('/admin/exports/companies'))).toBe(true)
   })
 
-  it('keeps a recoverable error visible when the summary request fails', async () => { vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json({}, 500))); render(); await waitFor(() => expect(container.textContent).toContain('No pudimos completar la operación.')); expect(container.textContent).toContain('Reintentar') })
+  it('lists a monthly report, opens its detail, and downloads its stored Excel', async () => {
+    const monthly = { id: 'monthly-1', periodStart: '2026-08-01', periodEnd: '2026-08-31', generatedAt: '2026-09-01T03:03:00Z', filename: 'reporte-2026-08.xlsx', status: 'AVAILABLE' as const }
+    const clicks: string[] = []; const fetchMock = vi.fn((input: string | URL | Request) => String(input).includes('/monthly/monthly-1/download') ? Promise.resolve(new Response('xlsx')) : Promise.resolve(String(input).includes('/reports/monthly') ? json([monthly]) : json(summary)))
+    vi.stubGlobal('fetch', fetchMock); Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: vi.fn(() => 'blob:monthly') }); Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() }); vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) { clicks.push(this.download) }); render()
+    await waitFor(() => expect(container.textContent).toContain('Agosto de 2026'))
+    const view = [...container.querySelectorAll('button')].find(button => button.textContent?.includes('Ver'))!
+    await act(async () => view.click()); expect(document.body.textContent).toContain('Reporte mensual'); expect(document.body.textContent).toContain('reporte-2026-08.xlsx')
+    const download = [...document.body.querySelectorAll('[role="dialog"] button')].find(button => button.textContent?.includes('Descargar Excel'))!
+    await act(async () => (download as HTMLButtonElement).click()); await waitFor(() => expect(clicks).toEqual(['reporte-2026-08.xlsx']))
+  })
+
+  it('keeps a recoverable error visible when the summary request fails', async () => { vi.stubGlobal('fetch', vi.fn((input: string | URL | Request) => Promise.resolve(String(input).includes('/reports/monthly') ? json([]) : json({}, 500)))); render(); await waitFor(() => expect(container.textContent).toContain('No pudimos completar la operación.')); expect(container.textContent).toContain('Reintentar') })
 })
