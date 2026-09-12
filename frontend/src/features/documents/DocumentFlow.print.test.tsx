@@ -96,4 +96,17 @@ describe('PdfPreview print flow', () => {
     expect(container.textContent).toContain('Editar documento')
     expect(container.textContent).toContain('Finalizar')
   })
+
+  it('uses the supplied home action when finalizing', async () => {
+    const onHome = vi.fn()
+    await act(async () => {
+      root = createRoot(container)
+      root.render(<PdfPreview pdf={new Blob(['pdf'], { type: 'application/pdf' })} onEdit={vi.fn()} onHome={onHome} />)
+    })
+
+    await act(async () => {
+      ;[...container.querySelectorAll('button')].find((button) => button.textContent?.includes('Finalizar'))?.click()
+    })
+    expect(onHome).toHaveBeenCalledOnce()
+  })
 })

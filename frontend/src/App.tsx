@@ -171,15 +171,23 @@ function App() {
     setDocumentPrefill({ [field]: id });
     navigate('/documentos/nuevo');
   };
+  const finishDocument = () => {
+    clearDocumentDraft();
+    setDocumentForm(initialDocumentForm);
+    setGeneratedDocument(null);
+    setDocumentPrefill({});
+    setEmailFeedback('');
+    navigate(routeForScreen('home', null));
+  };
   return <AppLayout screen={screen} role={currentUser.role} onNavigate={go} onLogout={() => logoutMutation.mutate()} onOpenDocument={openSearchDocument} onPrefill={prefillFromSearch}>
     {screen !== "positioned-editor" && <SecondaryNavigation screen={screen} onNavigate={go} />}
     {["admin", "users", "companies", "agreements", "templates", "reports"].includes(screen) && <AdminModuleNavigation screen={screen} onNavigate={go} />}
       {screen === "home" && <HomePage user={currentUser} onNavigate={go} />}
-       {screen === "new-document" && <Suspense fallback={<LazyLoadingState />}><DocumentTemplateSelection onBack={() => navigate("/")} onSelect={(id) => { const form = { ...documentForm, ...documentPrefill, variantId: "", manualValues: {} }; setDocumentPrefill({}); saveDraft(id, form); navigate(`/documentos/nuevo/${id}/variante`); }} /></Suspense>}
-       {screen === "bulk-document" && <Suspense fallback={<LazyLoadingState />}><BulkPermisoPage onBack={() => navigate('/documentos/nuevo')} /></Suspense>}
+        {screen === "new-document" && <Suspense fallback={<LazyLoadingState />}><DocumentTemplateSelection onBack={() => navigate(routeForScreen('home', null))} onSelect={(id) => { const form = { ...documentForm, ...documentPrefill, variantId: "", manualValues: {} }; setDocumentPrefill({}); saveDraft(id, form); navigate(`/documentos/nuevo/${id}/variante`); }} /></Suspense>}
+        {screen === "bulk-document" && <Suspense fallback={<LazyLoadingState />}><BulkPermisoPage onBack={finishDocument} /></Suspense>}
      {screen === "variants" && <Suspense fallback={<LazyLoadingState />}><DocumentVariantSelection templateId={templateId} onBack={() => navigate("/documentos/nuevo")} onSelect={(variantId) => { if (!templateId) return; const form = { ...documentForm, variantId, manualValues: {} }; saveDraft(templateId, form); navigate(`/documentos/nuevo/${templateId}/formulario`); }} /></Suspense>}
        {screen === "form" && templateId && <Suspense fallback={<LazyLoadingState />}><PermisoGremialForm value={documentForm} onChange={(form) => saveDraft(templateId, form)} onBack={() => navigate(`/documentos/nuevo/${templateId}/variante`)} onGenerated={(document) => { setEmailFeedback(''); setGeneratedDocument(document); navigate(`/documentos/nuevo/${templateId}/vista-previa`); }} /></Suspense>}
-          {screen === "preview" && generatedDocument && <Suspense fallback={<LazyLoadingState />}><div className="preview-action-flow"><p className="typo-display-lg max-w-3xl tabular-nums text-blue-900">{generatedDocument.publicNumber}</p><PdfPreview pdf={generatedDocument.blob} filename={generatedDocument.filename} onEdit={() => { setGeneratedDocument(null); navigate(routeForScreen("form", templateId)); }} onHome={() => { clearDocumentDraft(); setGeneratedDocument(null); navigate("/"); }} postGenerationAction={<PostGenerationActions document={generatedDocument} inline />} />{emailFeedback && <p role="status" className="mt-3 max-w-3xl rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-800">{emailFeedback}</p>}</div></Suspense>}
+           {screen === "preview" && generatedDocument && <Suspense fallback={<LazyLoadingState />}><div className="preview-action-flow"><p className="typo-display-lg max-w-3xl tabular-nums text-blue-900">{generatedDocument.publicNumber}</p><PdfPreview pdf={generatedDocument.blob} filename={generatedDocument.filename} onEdit={() => { setGeneratedDocument(null); navigate(routeForScreen("form", templateId)); }} onHome={finishDocument} postGenerationAction={<PostGenerationActions document={generatedDocument} inline />} />{emailFeedback && <p role="status" className="mt-3 max-w-3xl rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-800">{emailFeedback}</p>}</div></Suspense>}
      {screen === "profile" && <ProfilePage user={currentUser} onLogout={() => logoutMutation.mutate()} />}
        {screen === "history" && <HistoryPage role={currentUser.role} onUseAsBase={useHistoryAsBase} openDocumentId={searchDocument?.id} onDocumentOpened={() => setSearchDocument(null)} />}
     {screen === "admin" && <AdminPage onNavigate={go} />}

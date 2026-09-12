@@ -10,6 +10,10 @@ const downloadBatch = vi.fn()
 const download = vi.fn()
 
 vi.mock('./documentActions', () => ({ downloadDocument: (...args: unknown[]) => download(...args) }))
+vi.mock('react-pdf', async () => {
+  const { createElement } = await import('react')
+  return { Document: ({ children }: { children: React.ReactNode }) => createElement('div', null, children), Page: () => createElement('div'), pdfjs: { GlobalWorkerOptions: {} } }
+})
 vi.mock('./documentsApi', () => ({
   getDocumentTemplates: () => Promise.resolve([{ id: 'template', nombre: 'Permiso Gremial', documentType: 'PERMISO_GREMIAL' }]),
   getDocumentVariants: () => Promise.resolve([{ id: 'variant', nombre: 'Firma A' }]),
@@ -33,7 +37,7 @@ const change = (element: HTMLInputElement | HTMLSelectElement, value: string) =>
 const button = (text: string) => [...container.querySelectorAll('button')].find(item => item.textContent?.includes(text)) as HTMLButtonElement
 const delegateInput = (name: string) => [...container.querySelectorAll('label')].find(label => label.textContent?.includes(name))?.querySelector('input') as HTMLInputElement
 
-beforeEach(() => { ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true; container = document.createElement('div'); document.body.appendChild(container); root = createRoot(container); generate.mockReset(); regenerate.mockReset(); downloadBatch.mockReset(); download.mockReset() })
+beforeEach(() => { ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true; globalThis.ResizeObserver = class { observe() {}; disconnect() {}; unobserve() {} }; container = document.createElement('div'); document.body.appendChild(container); root = createRoot(container); generate.mockReset(); regenerate.mockReset(); downloadBatch.mockReset(); download.mockReset() })
 afterEach(() => { act(() => root.unmount()); container.remove(); vi.restoreAllMocks() })
 
 async function render(onBack = vi.fn()) { await act(async () => root.render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><BulkPermisoPage onBack={onBack} /></QueryClientProvider>)); await act(async () => wait()); return onBack }
@@ -66,8 +70,17 @@ describe('BulkPermisoPage', () => {
   it('keeps partial successes visible, downloads one PDF, and archives only successful records', async () => {
     generate.mockResolvedValue({ ...success, successful: 1, failed: 1, items: [success.items[0], { delegateId: 'beto', delegateName: 'Beto Luna', status: 'FAILED', documentId: null, publicNumber: null, filename: null, errorCode: 'DELEGATE_NOT_FOUND', message: 'No encontramos un delegado activo.' }] }); regenerate.mockResolvedValue({ blob: new Blob(['pdf']), headers: new Headers({ 'Content-Disposition': 'inline; filename="ana.pdf"' }) }); downloadBatch.mockResolvedValue({ blob: new Blob(['zip']), headers: new Headers({ 'Content-Disposition': 'attachment; filename="permisos.zip"' }) }); await render(); await completeForm(['Ana Paz', 'Beto Luna']); await act(async () => button('Continuar').click()); await act(async () => button('Generar 2 permisos').click()); await act(async () => wait())
     expect(container.textContent).toContain('1 generados correctamente'); expect(container.textContent).toContain('No encontramos un delegado activo.')
+    await act(async () => button('Ver').click()); await act(async () => wait())
+    expect(regenerate).toHaveBeenCalledWith('record-ana'); expect(container.textContent).toContain('Vista previa'); expect(generate).toHaveBeenCalledOnce()
+    await act(async () => button('Editar documento').click())
     await act(async () => button('Descargar').click()); expect(regenerate).toHaveBeenCalledWith('record-ana'); expect(download).toHaveBeenCalledWith(expect.any(Blob), 'ana.pdf')
     await act(async () => button('Descargar todos').click()); expect(downloadBatch).toHaveBeenCalledWith(['record-ana']); expect(download).toHaveBeenCalledWith(expect.any(Blob), 'permisos.zip')
+  })
+
+  it('shows feedback when viewing an existing bulk document fails', async () => {
+    generate.mockResolvedValue(success); regenerate.mockRejectedValue(new Error('offline')); await render(); await completeForm(['Ana Paz']); await act(async () => button('Continuar').click()); await act(async () => button('Generar 1 permisos').click()); await act(async () => wait())
+    await act(async () => button('Ver').click()); await act(async () => wait())
+    expect(regenerate).toHaveBeenCalledWith('record-ana'); expect(container.querySelector('[role="alert"]')?.textContent).toContain('No pudimos abrir el permiso.')
   })
 
   it('does not offer ZIP when all items fail and preserves the form after a global error', async () => {

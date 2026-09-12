@@ -47,6 +47,15 @@ describe('HistoryPage', () => {
 
     await waitFor(() => expect(container.textContent).toContain('PG-2026-000001'))
     expect(container.textContent).toContain('Empresa')
+    const documentType = [...container.querySelectorAll('[class*="whitespace-nowrap"]')]
+      .find((element) => element.textContent?.includes('Permiso gremial'))
+    expect(documentType).not.toBeUndefined()
+    const moreActions = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Más acciones de PG-2026-000001"]',
+    )
+    expect(moreActions).not.toBeNull()
+    expect(moreActions?.className).toContain('w-11')
+    expect(moreActions?.className).toContain('focus-visible:ring-2')
     const next = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes('Siguiente'))
     expect(next).toBeDefined()
     await act(async () => next!.click())

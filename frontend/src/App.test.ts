@@ -9,6 +9,7 @@ describe('URL navigation', () => {
     expect(routeForScreen('variants', 'template-id')).toBe('/documentos/nuevo/template-id/variante')
     expect(screenForPath('/historial')).toBe('history')
     expect(routeForScreen('history', null)).toBe('/historial')
+    expect(routeForScreen('home', null)).toBe('/')
   })
 
   it('recognizes administration paths for role protection', () => {
