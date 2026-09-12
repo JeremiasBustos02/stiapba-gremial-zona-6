@@ -73,6 +73,22 @@ public class DocumentController {
         return documentHistoryService.list(principal, page, size, q, documentType, issueDateFrom, issueDateTo, createdBy, order);
     }
 
+    @GetMapping(value = "/history/export", produces = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    public ResponseEntity<byte[]> exportHistory(@AuthenticationPrincipal UserPrincipal principal,
+                                                 @RequestParam(required = false) String q,
+                                                 @RequestParam(required = false) DocumentType documentType,
+                                                 @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate issueDateFrom,
+                                                 @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate issueDateTo,
+                                                 @RequestParam(required = false) String createdBy,
+                                                 @RequestParam(defaultValue = "newest") String order) {
+        byte[] content = documentHistoryService.export(principal, q, documentType, issueDateFrom, issueDateTo, createdBy, order);
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
+                        .filename("historial-documentos-" + LocalDate.now() + ".xlsx").build().toString())
+                .body(content);
+    }
+
     @GetMapping("/dashboard")
     public DashboardResponse dashboard(@AuthenticationPrincipal UserPrincipal principal) {
         return dashboardService.getDashboard(principal);

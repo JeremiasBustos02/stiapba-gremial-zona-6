@@ -59,6 +59,54 @@ describe('HistoryPage', () => {
     renderPage('DELEGADO')
     await waitFor(() => expect(container.textContent).toContain('No hay documentos generados todavía.'))
     expect(container.textContent).toContain('Los documentos que generes aparecerán acá.')
+    const exportButton = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes('Exportar'))
+    expect(exportButton?.disabled).toBe(true)
+  })
+
+  it('exports every matching record using current filters without pagination parameters', async () => {
+    const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    const fetchMock = vi.fn((input: string | URL | Request) => {
+      const url = new URL(typeof input === 'string' ? input : input.toString(), 'http://localhost')
+      if (url.pathname.endsWith('/history/export')) return Promise.resolve(new Response('xlsx', { headers: { 'Content-Disposition': 'attachment; filename="historial.xlsx"' } }))
+      return Promise.resolve(response({ content: [{ id: '1', publicNumber: 'PG-2026-000001', documentType: 'PERMISO_GREMIAL', createdAt: '2026-09-10T10:00:00-03:00', createdBy: 'Admin STIA', companyName: 'Empresa', delegateName: 'Ana Paz', issueDate: '2026-09-10' }], page: 0, size: 20, totalElements: 237, totalPages: 12 }))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    renderPage()
+
+    await waitFor(() => expect(container.textContent).toContain('237 documentos'))
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: vi.fn(() => 'blob:export') })
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() })
+    const search = container.querySelector<HTMLInputElement>('#history-search')!
+    const setInputValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+    await act(async () => { setInputValue.call(search, 'PG-2026'); search.dispatchEvent(new Event('input', { bubbles: true })) })
+    await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => String(input).includes('q=PG-2026'))).toBe(true))
+    const exportButton = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes('Exportar'))!
+    await act(async () => exportButton.click())
+    await waitFor(() => expect(anchorClick).toHaveBeenCalled())
+    const exportRequest = fetchMock.mock.calls.map(([input]) => String(input)).find((input) => input.includes('/history/export'))!
+    expect(exportRequest).toContain('q=PG-2026')
+    expect(exportRequest).not.toContain('page=')
+    expect(exportRequest).not.toContain('size=')
+  })
+
+  it('prevents duplicate exports while the download is in progress and shows an error on failure', async () => {
+    let rejectExport: (reason?: unknown) => void = () => {}
+    const fetchMock = vi.fn((input: string | URL | Request) => {
+      const path = new URL(typeof input === 'string' ? input : input.toString(), 'http://localhost').pathname
+      if (path.endsWith('/history/export')) return new Promise<Response>((_, reject) => { rejectExport = reject })
+      return Promise.resolve(response({ content: [{ id: '1', publicNumber: 'PG-2026-000001', documentType: 'PERMISO_GREMIAL', createdAt: '2026-09-10T10:00:00-03:00', createdBy: 'Admin STIA', companyName: 'Empresa', delegateName: 'Ana Paz', issueDate: '2026-09-10' }], page: 0, size: 20, totalElements: 1, totalPages: 1 }))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    renderPage()
+
+    await waitFor(() => expect(container.textContent).toContain('PG-2026-000001'))
+    const exportButton = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes('Exportar'))!
+    await act(async () => exportButton.click())
+    await waitFor(() => expect(container.textContent).toContain('Exportando...'))
+    expect(exportButton.disabled).toBe(true)
+    await act(async () => rejectExport(new Error('network')))
+    await waitFor(() => expect(container.textContent).toContain('No pudimos exportar el historial.'))
+    expect(fetchMock.mock.calls.filter(([input]) => String(input).includes('/history/export'))).toHaveLength(1)
   })
 
   it('sends debounced search and date filters to the paginated endpoint', async () => {

@@ -1447,6 +1447,34 @@ ADMIN recibe todos los registros. DELEGADO recibe únicamente los creados por su
 }
 ```
 
+## GET `/api/v1/documents/history/export`
+
+### Acceso
+
+ADMIN / DELEGADO. Exporta un archivo Excel (`.xlsx`) con todos los registros que coinciden con los filtros; no está paginado.
+
+Acepta los mismos filtros de historial, excepto `page` y `size`:
+
+```text
+q=PG-2026
+documentType=PERMISO_GREMIAL
+issueDateFrom=2026-01-01
+issueDateTo=2026-12-31
+createdBy=juan          solo ADMIN
+order=newest|oldest
+```
+
+ADMIN exporta resultados globales y puede filtrar por `createdBy`. DELEGADO exporta exclusivamente registros creados por su usuario autenticado, independientemente de los parámetros enviados.
+
+### Response — 200
+
+```http
+Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+Content-Disposition: attachment; filename="historial-documentos-YYYY-MM-DD.xlsx"
+```
+
+La hoja `Documentos` contiene información administrativa del historial, sin snapshots JSON ni datos técnicos internos.
+
 ## GET `/api/v1/documents/suggestions`
 
 ### Acceso

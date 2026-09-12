@@ -23,8 +23,18 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellStyle;
+import org.apache.poi.ss.usermodel.FillPatternType;
+import org.apache.poi.ss.usermodel.HorizontalAlignment;
+import org.apache.poi.ss.util.CellRangeAddress;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.util.Date;
 import java.util.Map;
 import java.util.List;
 import java.util.Set;
@@ -56,25 +66,20 @@ public class DocumentHistoryService {
         if (page < 0 || size < 1 || size > 100) {
             throw new DocumentException(400, "INVALID_PAGINATION", "Los parámetros de paginación no son válidos.");
         }
-        if (issueDateFrom != null && issueDateTo != null && issueDateFrom.isAfter(issueDateTo)) {
-            throw new DocumentException(400, "INVALID_DATE_RANGE", "La fecha desde no puede ser posterior a la fecha hasta.");
-        }
-        Sort sort = switch (order == null ? "newest" : order) {
-            case "newest" -> Sort.by("createdAt").descending();
-            case "oldest" -> Sort.by("createdAt").ascending();
-            default -> throw new DocumentException(400, "INVALID_HISTORY_ORDER", "El orden del historial no es válido.");
-        };
-        Pageable pageable = PageRequest.of(page, size, sort);
-        Specification<DocumentRecord> specification = Specification.allOf(
-                principal.role() == Role.ADMIN ? null : (root, ignoredQuery, builder) -> builder.equal(root.get("createdByUserId"), principal.id()),
-                documentType == null ? null : (root, ignoredQuery, builder) -> builder.equal(root.get("documentType"), documentType),
-                issueDateFrom == null ? null : (root, ignoredQuery, builder) -> builder.greaterThanOrEqualTo(root.get("issueDate"), issueDateFrom),
-                issueDateTo == null ? null : (root, ignoredQuery, builder) -> builder.lessThanOrEqualTo(root.get("issueDate"), issueDateTo),
-                contains("createdByName", principal.role() == Role.ADMIN ? normalize(createdBy) : null),
-                search(normalize(query)));
+        validateDateRange(issueDateFrom, issueDateTo);
+        Pageable pageable = PageRequest.of(page, size, historySort(order));
+        Specification<DocumentRecord> specification = historySpecification(principal, query, documentType, issueDateFrom, issueDateTo, createdBy);
         Page<DocumentRecord> records = documentRecordRepository.findAll(specification, pageable);
         return new DocumentHistoryPageResponse(records.getContent().stream().map(this::toResponse).toList(),
                 records.getNumber(), records.getSize(), records.getTotalElements(), records.getTotalPages());
+    }
+
+    public byte[] export(UserPrincipal principal, String query, DocumentType documentType, LocalDate issueDateFrom,
+                         LocalDate issueDateTo, String createdBy, String order) {
+        validateDateRange(issueDateFrom, issueDateTo);
+        List<DocumentRecord> records = documentRecordRepository.findAll(
+                historySpecification(principal, query, documentType, issueDateFrom, issueDateTo, createdBy), historySort(order));
+        return workbook(records);
     }
 
     public DocumentHistoryDetailResponse detail(UUID id, UserPrincipal principal) {
@@ -129,6 +134,100 @@ public class DocumentHistoryService {
     private String agreementLabel(Agreement agreement) {
         return agreement.getCodigo() == null || agreement.getCodigo().isBlank()
                 ? agreement.getDescripcion() : agreement.getCodigo() + " - " + agreement.getDescripcion();
+    }
+
+    private Specification<DocumentRecord> historySpecification(UserPrincipal principal, String query, DocumentType documentType,
+                                                                 LocalDate issueDateFrom, LocalDate issueDateTo, String createdBy) {
+        return Specification.allOf(
+                principal.role() == Role.ADMIN ? null : (root, ignoredQuery, builder) -> builder.equal(root.get("createdByUserId"), principal.id()),
+                documentType == null ? null : (root, ignoredQuery, builder) -> builder.equal(root.get("documentType"), documentType),
+                issueDateFrom == null ? null : (root, ignoredQuery, builder) -> builder.greaterThanOrEqualTo(root.get("issueDate"), issueDateFrom),
+                issueDateTo == null ? null : (root, ignoredQuery, builder) -> builder.lessThanOrEqualTo(root.get("issueDate"), issueDateTo),
+                contains("createdByName", principal.role() == Role.ADMIN ? normalize(createdBy) : null),
+                search(normalize(query)));
+    }
+
+    private Sort historySort(String order) {
+        return switch (order == null ? "newest" : order) {
+            case "newest" -> Sort.by("createdAt").descending();
+            case "oldest" -> Sort.by("createdAt").ascending();
+            default -> throw new DocumentException(400, "INVALID_HISTORY_ORDER", "El orden del historial no es válido.");
+        };
+    }
+
+    private void validateDateRange(LocalDate issueDateFrom, LocalDate issueDateTo) {
+        if (issueDateFrom != null && issueDateTo != null && issueDateFrom.isAfter(issueDateTo)) {
+            throw new DocumentException(400, "INVALID_DATE_RANGE", "La fecha desde no puede ser posterior a la fecha hasta.");
+        }
+    }
+
+    private byte[] workbook(List<DocumentRecord> records) {
+        try (XSSFWorkbook workbook = new XSSFWorkbook(); ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            var sheet = workbook.createSheet("Documentos");
+            CellStyle headerStyle = workbook.createCellStyle();
+            headerStyle.setFillForegroundColor(org.apache.poi.ss.usermodel.IndexedColors.DARK_BLUE.getIndex());
+            headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+            var headerFont = workbook.createFont();
+            headerFont.setBold(true);
+            headerFont.setColor(org.apache.poi.ss.usermodel.IndexedColors.WHITE.getIndex());
+            headerStyle.setFont(headerFont);
+            headerStyle.setAlignment(HorizontalAlignment.CENTER);
+            CellStyle dateStyle = workbook.createCellStyle();
+            dateStyle.setDataFormat(workbook.createDataFormat().getFormat("dd/mm/yyyy"));
+            CellStyle dateTimeStyle = workbook.createCellStyle();
+            dateTimeStyle.setDataFormat(workbook.createDataFormat().getFormat("dd/mm/yyyy hh:mm"));
+            String[] headers = {"Número", "Tipo de documento", "Fecha del documento / permiso", "Empresa", "Delegado", "DNI", "Convenio", "Generado por", "Fecha de generación"};
+            var header = sheet.createRow(0);
+            for (int column = 0; column < headers.length; column++) {
+                Cell cell = header.createCell(column);
+                cell.setCellValue(headers[column]);
+                cell.setCellStyle(headerStyle);
+            }
+            int rowIndex = 1;
+            for (DocumentRecord record : records) {
+                Map<String, String> snapshot = record.getSnapshot();
+                var row = sheet.createRow(rowIndex++);
+                text(row.createCell(0), record.getPublicNumber());
+                text(row.createCell(1), documentTypeLabel(record.getDocumentType()));
+                date(row.createCell(2), record.getIssueDate(), dateStyle);
+                text(row.createCell(3), record.getCompanyName());
+                text(row.createCell(4), record.getDelegateName());
+                text(row.createCell(5), snapshot.get("delegateDni"));
+                text(row.createCell(6), value(snapshot, "agreementCode", snapshot.get("agreement")));
+                text(row.createCell(7), record.getCreatedByName());
+                if (record.getCreatedAt() != null) {
+                    Cell createdAt = row.createCell(8);
+                    createdAt.setCellValue(Date.from(record.getCreatedAt().toInstant()));
+                    createdAt.setCellStyle(dateTimeStyle);
+                }
+            }
+            sheet.setAutoFilter(new CellRangeAddress(0, Math.max(0, records.size()), 0, headers.length - 1));
+            sheet.createFreezePane(0, 1);
+            int[] widths = {20, 24, 25, 30, 28, 16, 22, 28, 24};
+            for (int column = 0; column < widths.length; column++) sheet.setColumnWidth(column, widths[column] * 256);
+            workbook.write(output);
+            return output.toByteArray();
+        } catch (IOException exception) {
+            throw new DocumentException(500, "HISTORY_EXPORT_FAILED", "No pudimos exportar el historial.");
+        }
+    }
+
+    static String safeExcelText(String value) {
+        if (value == null) return "";
+        String trimmed = value.stripLeading();
+        return !trimmed.isEmpty() && "=+-@".indexOf(trimmed.charAt(0)) >= 0 ? "'" + value : value;
+    }
+
+    private void text(Cell cell, String value) { cell.setCellValue(safeExcelText(value)); }
+
+    private void date(Cell cell, LocalDate value, CellStyle style) {
+        if (value == null) return;
+        cell.setCellValue(Date.from(value.atStartOfDay().toInstant(ZoneOffset.UTC)));
+        cell.setCellStyle(style);
+    }
+
+    private String documentTypeLabel(DocumentType type) {
+        return type == DocumentType.PERMISO_GREMIAL ? "Permiso gremial" : type.name();
     }
 
     private String value(Map<String, String> snapshot, String key) { return value(snapshot, key, ""); }

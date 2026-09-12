@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
-import { AlertCircle, ChevronLeft, ChevronRight, Download, FileText, LoaderCircle, MoreHorizontal, Printer, Search, SlidersHorizontal, X } from 'lucide-react'
+import { AlertCircle, ChevronLeft, ChevronRight, Download, FileSpreadsheet, FileText, LoaderCircle, MoreHorizontal, Printer, Search, SlidersHorizontal, X } from 'lucide-react'
 import { useDeferredValue, useEffect, useState } from 'react'
-import { filenameFromHeaders, getDocumentHistory, getDocumentHistoryDetail, regenerateDocument, type DocumentHistoryDetail, type DocumentHistoryFilters, type DocumentHistoryRecord } from '@/features/documents/documentsApi'
+import { exportDocumentHistory, filenameFromHeaders, getDocumentHistory, getDocumentHistoryDetail, regenerateDocument, type DocumentHistoryDetail, type DocumentHistoryFilters, type DocumentHistoryRecord } from '@/features/documents/documentsApi'
 import { DisabledEmailAction } from '@/features/documents/DisabledEmailAction'
 import { downloadDocument, printDocument } from '@/features/documents/documentActions'
 import { ApiError } from '@/lib/api'
@@ -26,6 +26,7 @@ export function HistoryPage({ role, onUseAsBase, openDocumentId, onDocumentOpene
   const deferredQuery = useDeferredValue(filters.q ?? '')
   const [selected, setSelected] = useState<DocumentHistoryRecord | null>(null)
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
+  const [exporting, setExporting] = useState(false)
   const [downloadError, setDownloadError] = useState('')
   const requestFilters = { ...filters, q: deferredQuery }
   const hasFilters = Boolean(filters.q || filters.issueDateFrom || filters.issueDateTo || filters.createdBy || filters.order === 'oldest')
@@ -60,11 +61,20 @@ export function HistoryPage({ role, onUseAsBase, openDocumentId, onDocumentOpene
     catch { popup?.close(); setDownloadError('No pudimos abrir el PDF. Intentá nuevamente.') }
     finally { setDownloadingId(null) }
   }
+  const exportHistory = async () => {
+    if (!historyQuery.data || historyQuery.data.totalElements === 0 || exporting) return
+    setExporting(true); setDownloadError('')
+    try {
+      const result = await exportDocumentHistory(requestFilters)
+      downloadDocument(result.blob, filenameFromHeaders(result.headers) || 'historial-documentos.xlsx')
+    } catch { setDownloadError('No pudimos exportar el historial. Intentá nuevamente.') }
+    finally { setExporting(false) }
+  }
 
   return <section className="max-w-[82rem]">
     <header className="border-b border-slate-200 pb-6 sm:flex sm:items-end sm:justify-between sm:gap-8">
       <div><p className="typo-eyebrow text-blue-700">Documentos emitidos</p><h1 className="typo-display-xl mt-2 uppercase">Historial</h1><p className="typo-body-sm mt-3 max-w-xl text-slate-600">Buscá, filtrá y recuperá los documentos generados.</p></div>
-      {historyQuery.data && <p aria-live="polite" className="typo-meta mt-4 tabular-nums text-slate-600 sm:mt-0">{historyQuery.data.totalElements} {historyQuery.data.totalElements === 1 ? 'documento' : 'documentos'}</p>}
+      <div className="mt-4 flex flex-wrap items-center gap-3 sm:mt-0 sm:justify-end"><p aria-live="polite" className="typo-meta tabular-nums text-slate-600">{historyQuery.data ? `${historyQuery.data.totalElements} ${historyQuery.data.totalElements === 1 ? 'documento' : 'documentos'}` : ''}</p><div><Button variant="outline" className="min-h-11" onClick={() => void exportHistory()} disabled={!historyQuery.data || historyQuery.data.totalElements === 0 || exporting}><FileSpreadsheet size={17} aria-hidden="true" /> {exporting ? <><LoaderCircle className="animate-spin" size={17} aria-hidden="true" /> Exportando...</> : 'Exportar'}</Button><p className="typo-meta mt-1 max-w-56 text-slate-500">Se exportarán todos los documentos que coinciden con los filtros actuales.</p></div></div>
     </header>
     <section aria-label="Buscar y filtrar historial" className="mt-6 border-y border-slate-200 py-4">
       <div className="flex items-end gap-3 lg:hidden"><div className="min-w-0 flex-1"><Label htmlFor="history-search">Buscar</Label><div className="relative mt-2"><Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} aria-hidden="true" /><Input id="history-search" value={filters.q} onChange={(event) => updateFilters({ q: event.target.value })} placeholder="Número, empresa o delegado" className="pl-10" /></div></div><Button variant="outline" className="min-h-12 shrink-0 px-3" aria-expanded={filtersOpen} onClick={() => setFiltersOpen(true)}><SlidersHorizontal size={18} aria-hidden="true" /> Filtros</Button></div>
