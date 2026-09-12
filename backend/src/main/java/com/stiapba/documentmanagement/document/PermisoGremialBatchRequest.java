@@ -5,6 +5,7 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PastOrPresent;
+import jakarta.validation.constraints.Size;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -19,6 +20,6 @@ public record PermisoGremialBatchRequest(
         @NotNull(message = "El convenio es obligatorio.") UUID agreementId,
         @NotNull(message = "La variante es obligatoria.") UUID variantId,
         Map<UUID, String> manualValues,
-        @NotEmpty(message = "Seleccioná al menos un delegado.") List<@NotNull(message = "El delegado es obligatorio.") UUID> delegateIds
+        @NotEmpty(message = "Seleccioná al menos un delegado.") @Size(max = 100, message = "Podés generar hasta 100 permisos por vez.") List<@NotNull(message = "El delegado es obligatorio.") UUID> delegateIds
 ) {
 }

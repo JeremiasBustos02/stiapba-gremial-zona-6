@@ -1,6 +1,8 @@
 package com.stiapba.documentmanagement.document;
 
 import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 import java.util.List;
 import java.util.UUID;
@@ -23,7 +25,7 @@ public final class DocumentBulkDtos {
         }
     }
 
-    public record ZipRequest(@NotEmpty(message = "Seleccioná al menos un documento.") List<UUID> documentIds) {
+    public record ZipRequest(@NotEmpty(message = "Seleccioná al menos un documento.") @Size(max = 100, message = "Podés descargar hasta 100 permisos por vez.") List<@NotNull(message = "El documento es obligatorio.") UUID> documentIds) {
     }
 
     public record ZipArchive(byte[] content, String filename) {

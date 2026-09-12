@@ -1583,7 +1583,7 @@ Solo se devuelven entidades activas que todavía existen en el catálogo. Snapsh
 
 ADMIN / DELEGADO, con la misma política de generación individual.
 
-Genera varios Permisos Gremiales con datos comunes. Cada delegado crea un `DocumentRecord` independiente con su número público, snapshot e historial habituales. `delegateIds` debe contener al menos un valor único.
+Genera varios Permisos Gremiales con datos comunes. Cada delegado crea un `DocumentRecord` independiente con su número público, snapshot e historial habituales. `delegateIds` debe contener entre uno y 100 valores únicos.
 
 ```json
 {
@@ -1616,7 +1616,7 @@ La respuesta JSON puede ser parcial: un error de un delegado no revierte los doc
 
 ### Acceso
 
-ADMIN / DELEGADO. Recibe `documentIds` exitosos y devuelve `application/zip`. Cada PDF se regenera en memoria aplicando las reglas del historial: ADMIN puede incluir cualquier documento y DELEGADO únicamente documentos propios. Un ID no autorizado rechaza la solicitud y nunca se omite silenciosamente.
+ADMIN / DELEGADO. Recibe entre uno y 100 `documentIds` exitosos y devuelve `application/zip`. Cada PDF se regenera en memoria aplicando las reglas del historial: ADMIN puede incluir cualquier documento y DELEGADO únicamente documentos propios. Un ID no autorizado rechaza la solicitud y nunca se omite silenciosamente.
 
 ```json
 { "documentIds": ["uuid", "uuid"] }
