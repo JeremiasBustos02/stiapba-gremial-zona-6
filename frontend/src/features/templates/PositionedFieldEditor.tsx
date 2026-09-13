@@ -256,7 +256,7 @@ export function PositionedFieldEditor({
         queryKey: ["template-fields", variant.id],
       });
       void client.invalidateQueries({
-        queryKey: ["documents", "manual-fields", variant.id],
+        queryKey: ["documents", "generation-fields", variant.id],
       });
     },
     onError: () => setSaveFeedback(""),

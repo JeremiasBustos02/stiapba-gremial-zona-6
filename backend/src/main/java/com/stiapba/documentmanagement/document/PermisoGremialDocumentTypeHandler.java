@@ -69,7 +69,15 @@ public class PermisoGremialDocumentTypeHandler implements DocumentTypeHandler {
     @Override
     @Transactional
     public DocumentGenerationService.GeneratedDocument generate(DocumentGenerationRequest request, UserPrincipal principal) {
-        PermisoGremialRequest permiso = toPermisoRequest(request);
+        TemplateVariant variant = activeVariant(request.variantId());
+        if (variant.getFields().isEmpty()) {
+            return generateLegacy(toPermisoRequest(request), variant, principal);
+        }
+        return generateConfigured(request, variant, principal);
+    }
+
+    private DocumentGenerationService.GeneratedDocument generateLegacy(PermisoGremialRequest permiso, TemplateVariant variant,
+                                                                        UserPrincipal principal) {
         if (permiso.issueDate().isAfter(LocalDate.now())) {
             throw new DocumentException(400, "INVALID_ISSUE_DATE", "La fecha de emisión no puede ser futura.");
         }
@@ -87,11 +95,6 @@ public class PermisoGremialDocumentTypeHandler implements DocumentTypeHandler {
         if (agreement.getCodigo() == null || agreement.getCodigo().isBlank()) {
             throw new DocumentException(422, "AGREEMENT_CODE_REQUIRED", "El convenio seleccionado no tiene código para imprimir.");
         }
-        TemplateVariant variant = variantRepository.findById(permiso.variantId()).filter(value -> value.isActive() && value.getTemplate().isActive())
-                .orElseThrow(() -> notFound("TEMPLATE_VARIANT_NOT_FOUND", "No encontramos una variante activa de Permiso Gremial."));
-        if (variant.getTemplate().getDocumentType() != documentType()) {
-            throw new DocumentException(422, "TEMPLATE_DOCUMENT_TYPE_UNSUPPORTED", "La plantilla seleccionada no corresponde a Permiso Gremial.");
-        }
         Map<String, String> values = new LinkedHashMap<>(logicalValues(province, company, delegate, agreement, permiso));
         addManualValues(variant, permiso.manualValues(), values);
         byte[] pdf = render(variant, values);
@@ -102,6 +105,46 @@ public class PermisoGremialDocumentTypeHandler implements DocumentTypeHandler {
         DocumentRecord record = documentRecordRepository.save(new DocumentRecord(publicNumber, documentType(), createdBy.getId(),
                 createdBy.getNombre() + " " + createdBy.getApellido(), variant.getTemplate().getId(), variant.getId(), permiso.issueDate(),
                 company.getNombre(), delegateName, values));
+        return new DocumentGenerationService.GeneratedDocument(pdf, record.getId(), publicNumber, filename(publicNumber, delegateName));
+    }
+
+    private DocumentGenerationService.GeneratedDocument generateConfigured(DocumentGenerationRequest request, TemplateVariant variant,
+                                                                            UserPrincipal principal) {
+        Map<String, String> baseValues = request.baseValues() == null ? Map.of() : request.baseValues();
+        Map<String, String> values = new LinkedHashMap<>();
+        List<TemplateField> fields = variant.getFields();
+        Province province = hasSource(fields, FieldSourceType.PROVINCE) ? province(baseValues, "provinceId", hasRequiredSource(fields, FieldSourceType.PROVINCE)) : null;
+        Company company = hasSource(fields, FieldSourceType.COMPANY) ? company(baseValues, "companyId", hasRequiredSource(fields, FieldSourceType.COMPANY)) : null;
+        User delegate = hasSource(fields, FieldSourceType.DELEGATE) ? delegate(baseValues, "delegateId", hasRequiredSource(fields, FieldSourceType.DELEGATE)) : null;
+        Agreement agreement = hasSource(fields, FieldSourceType.AGREEMENT) ? agreement(baseValues, "agreementId", hasRequiredSource(fields, FieldSourceType.AGREEMENT)) : null;
+        LocalDate issueDate = requiresIssueDate(fields) ? date(baseValues, "issueDate", hasRequiredDerivedField(fields, false)) : null;
+        Integer permitDay = requiresPermitDay(fields) ? integer(baseValues, "permitDay", hasRequiredDerivedField(fields, true)) : null;
+        if (issueDate != null && issueDate.isAfter(LocalDate.now())) throw new DocumentException(400, "INVALID_ISSUE_DATE", "La fecha de emisión no puede ser futura.");
+        if (permitDay != null && (permitDay < 1 || permitDay > 31)) throw new DocumentException(400, "INVALID_PERMIT_DAY", "El día de permiso debe estar entre 1 y 31.");
+
+        for (TemplateField field : fields) {
+            FieldDefinition definition = field.getFieldDefinition();
+            String value = switch (definition.getSourceType()) {
+                case PROVINCE -> province == null ? null : province.getName();
+                case COMPANY -> company == null ? null : company.getNombre();
+                case DELEGATE -> delegate == null ? null : delegateValue(definition.getKey(), delegate);
+                case AGREEMENT -> agreement == null ? null : agreementValue(definition.getKey(), agreement);
+                case DERIVED -> derivedValue(definition.getKey(), issueDate, permitDay);
+                case MANUAL -> null;
+            };
+            if (value != null) values.put(definition.getKey(), value);
+        }
+        addManualValues(variant, request.manualValues(), values);
+        byte[] pdf = render(variant, values);
+        User createdBy = userRepository.findById(principal.id()).filter(User::isActive)
+                .orElseThrow(() -> new DocumentException(401, "SESSION_INVALID", "La sesión no es válida o expiró."));
+        String delegateName = delegate == null ? "Documento" : delegate.getNombre() + " " + delegate.getApellido();
+        LocalDate recordIssueDate = issueDate == null ? LocalDate.now() : issueDate;
+        String companyName = company == null ? "" : company.getNombre();
+        String publicNumber = documentNumberService.nextPermisoGremialNumber();
+        DocumentRecord record = documentRecordRepository.save(new DocumentRecord(publicNumber, documentType(), createdBy.getId(),
+                createdBy.getNombre() + " " + createdBy.getApellido(), variant.getTemplate().getId(), variant.getId(), recordIssueDate,
+                companyName, delegateName, values));
         return new DocumentGenerationService.GeneratedDocument(pdf, record.getId(), publicNumber, filename(publicNumber, delegateName));
     }
 
@@ -117,13 +160,17 @@ public class PermisoGremialDocumentTypeHandler implements DocumentTypeHandler {
     @Override
     @Transactional
     public List<DocumentGenerationService.ManualFieldResponse> manualFields(UUID variantId) {
-        TemplateVariant variant = variantRepository.findById(variantId)
-                .filter(value -> value.isActive() && value.getTemplate().isActive() && value.getTemplate().getDocumentType() == documentType())
-                .orElseThrow(() -> notFound("TEMPLATE_VARIANT_NOT_FOUND", "No encontramos una variante activa de Permiso Gremial."));
+        TemplateVariant variant = activeVariant(variantId);
         return variant.getFields().stream().filter(field -> field.getFieldDefinition().getSourceType() == FieldSourceType.MANUAL)
                 .collect(java.util.stream.Collectors.toMap(field -> field.getFieldDefinition().getId(), this::manualFieldResponse,
                         (first, second) -> new DocumentGenerationService.ManualFieldResponse(first.id(), first.label(), first.type(), first.required() || second.required()), LinkedHashMap::new))
                 .values().stream().toList();
+    }
+
+    @Override
+    @Transactional
+    public List<DocumentGenerationService.GenerationFieldResponse> generationFields(UUID variantId) {
+        return activeVariant(variantId).getFields().stream().map(this::generationFieldResponse).toList();
     }
 
     private PermisoGremialRequest toPermisoRequest(DocumentGenerationRequest request) {
@@ -137,13 +184,89 @@ public class PermisoGremialDocumentTypeHandler implements DocumentTypeHandler {
         }
     }
 
-    private UUID requiredUuid(Map<String, String> values, String key) { return UUID.fromString(required(values, key)); }
-    private LocalDate requiredDate(Map<String, String> values, String key) { return LocalDate.parse(required(values, key)); }
-    private Integer requiredInteger(Map<String, String> values, String key) { return Integer.valueOf(required(values, key)); }
+    private UUID requiredUuid(Map<String, String> values, String key) {
+        try { return UUID.fromString(required(values, key)); }
+        catch (IllegalArgumentException exception) { throw invalidBaseValue(); }
+    }
+    private UUID uuid(Map<String, String> values, String key, boolean required) {
+        String value = values.get(key);
+        if (value == null || value.isBlank()) {
+            if (required) throw invalidBaseValue();
+            return null;
+        }
+        try { return UUID.fromString(value); }
+        catch (IllegalArgumentException exception) { throw invalidBaseValue(); }
+    }
+    private LocalDate requiredDate(Map<String, String> values, String key) {
+        try { return LocalDate.parse(required(values, key)); }
+        catch (RuntimeException exception) { throw invalidBaseValue(); }
+    }
+    private Integer requiredInteger(Map<String, String> values, String key) {
+        try { return Integer.valueOf(required(values, key)); }
+        catch (RuntimeException exception) { throw invalidBaseValue(); }
+    }
+    private LocalDate date(Map<String, String> values, String key, boolean required) {
+        String value = values.get(key);
+        if (value == null || value.isBlank()) {
+            if (required) throw invalidBaseValue();
+            return null;
+        }
+        try { return LocalDate.parse(value); }
+        catch (RuntimeException exception) { throw invalidBaseValue(); }
+    }
+    private Integer integer(Map<String, String> values, String key, boolean required) {
+        String value = values.get(key);
+        if (value == null || value.isBlank()) {
+            if (required) throw invalidBaseValue();
+            return null;
+        }
+        try { return Integer.valueOf(value); }
+        catch (RuntimeException exception) { throw invalidBaseValue(); }
+    }
     private String required(Map<String, String> values, String key) {
         String value = values.get(key);
         if (value == null || value.isBlank()) throw new IllegalArgumentException(key);
         return value;
+    }
+    private DocumentException invalidBaseValue() { return new DocumentException(400, "DOCUMENT_BASE_VALUE_INVALID", "Los datos base del documento no tienen el formato esperado."); }
+
+    private TemplateVariant activeVariant(UUID variantId) {
+        TemplateVariant variant = variantRepository.findById(variantId)
+                .filter(value -> value.isActive() && value.getTemplate().isActive())
+                .orElseThrow(() -> notFound("TEMPLATE_VARIANT_NOT_FOUND", "No encontramos una variante activa de Permiso Gremial."));
+        if (variant.getTemplate().getDocumentType() != documentType()) {
+            throw new DocumentException(422, "TEMPLATE_DOCUMENT_TYPE_UNSUPPORTED", "La plantilla seleccionada no corresponde a Permiso Gremial.");
+        }
+        return variant;
+    }
+
+    private Province province(UUID id) { return provinceRepository.findById(id).filter(Province::isActive).orElseThrow(() -> notFound("PROVINCE_NOT_FOUND", "No encontramos una provincia activa.")); }
+    private Province province(Map<String, String> values, String key, boolean required) { UUID id = uuid(values, key, required); return id == null ? null : province(id); }
+    private Company company(UUID id) { return companyRepository.findById(id).filter(Company::isActive).orElseThrow(() -> notFound("COMPANY_NOT_FOUND", "No encontramos una empresa activa.")); }
+    private Company company(Map<String, String> values, String key, boolean required) { UUID id = uuid(values, key, required); return id == null ? null : company(id); }
+    private User delegate(UUID id) { return userRepository.findById(id).filter(user -> user.isActive() && user.getRole() == Role.DELEGADO).orElseThrow(() -> notFound("DELEGATE_NOT_FOUND", "No encontramos un delegado activo.")); }
+    private User delegate(Map<String, String> values, String key, boolean required) { UUID id = uuid(values, key, required); return id == null ? null : delegate(id); }
+    private Agreement agreement(UUID id) {
+        Agreement agreement = agreementRepository.findById(id).filter(Agreement::isActive).orElseThrow(() -> notFound("AGREEMENT_NOT_FOUND", "No encontramos un convenio activo."));
+        if (agreement.getCodigo() == null || agreement.getCodigo().isBlank()) throw new DocumentException(422, "AGREEMENT_CODE_REQUIRED", "El convenio seleccionado no tiene código para imprimir.");
+        return agreement;
+    }
+    private Agreement agreement(Map<String, String> values, String key, boolean required) { UUID id = uuid(values, key, required); return id == null ? null : agreement(id); }
+    private boolean hasSource(List<TemplateField> fields, FieldSourceType source) { return fields.stream().anyMatch(field -> field.getFieldDefinition().getSourceType() == source); }
+    private boolean hasRequiredSource(List<TemplateField> fields, FieldSourceType source) { return fields.stream().anyMatch(field -> field.getFieldDefinition().getSourceType() == source && field.isRequired()); }
+    private boolean requiresIssueDate(List<TemplateField> fields) { return fields.stream().anyMatch(field -> field.getFieldDefinition().getSourceType() == FieldSourceType.DERIVED && !field.getFieldDefinition().getKey().equals("permitDay")); }
+    private boolean requiresPermitDay(List<TemplateField> fields) { return fields.stream().anyMatch(field -> field.getFieldDefinition().getSourceType() == FieldSourceType.DERIVED && field.getFieldDefinition().getKey().equals("permitDay")); }
+    private boolean hasRequiredDerivedField(List<TemplateField> fields, boolean permitDay) { return fields.stream().anyMatch(field -> field.getFieldDefinition().getSourceType() == FieldSourceType.DERIVED && field.getFieldDefinition().getKey().equals("permitDay") == permitDay && field.isRequired()); }
+    private String delegateValue(String key, User delegate) { return key.equals("delegateDni") ? delegate.getDni() : delegate.getNombre() + " " + delegate.getApellido() + " DNI " + delegate.getDni(); }
+    private String agreementValue(String key, Agreement agreement) { return agreement.getCodigo().trim(); }
+    private String derivedValue(String key, LocalDate issueDate, Integer permitDay) {
+        return switch (key) {
+            case "issueDay" -> issueDate == null ? null : Integer.toString(issueDate.getDayOfMonth());
+            case "issueMonth" -> issueDate == null ? null : issueDate.getMonth().getDisplayName(TextStyle.FULL, Locale.forLanguageTag("es-AR"));
+            case "issueYear" -> issueDate == null ? null : String.format("%02d", issueDate.getYear() % 100);
+            case "permitDay" -> permitDay == null ? null : Integer.toString(permitDay);
+            default -> null;
+        };
     }
 
     private Map<String, String> logicalValues(Province province, Company company, User delegate, Agreement agreement, PermisoGremialRequest request) {
@@ -193,6 +316,20 @@ public class PermisoGremialDocumentTypeHandler implements DocumentTypeHandler {
     private DocumentGenerationService.ManualFieldResponse manualFieldResponse(TemplateField field) {
         FieldDefinition definition = field.getFieldDefinition();
         return new DocumentGenerationService.ManualFieldResponse(definition.getId(), definition.getLabel(), definition.getType(), field.isRequired());
+    }
+
+    private DocumentGenerationService.GenerationFieldResponse generationFieldResponse(TemplateField field) {
+        FieldDefinition definition = field.getFieldDefinition();
+        String inputKey = switch (definition.getSourceType()) {
+            case MANUAL -> "manualValues." + definition.getId();
+            case PROVINCE -> "baseValues.provinceId";
+            case COMPANY -> "baseValues.companyId";
+            case DELEGATE -> "baseValues.delegateId";
+            case AGREEMENT -> "baseValues.agreementId";
+            case DERIVED -> definition.getKey().equals("permitDay") ? "baseValues.permitDay" : "baseValues.issueDate";
+        };
+        return new DocumentGenerationService.GenerationFieldResponse(definition.getId(), definition.getKey(), definition.getLabel(),
+                definition.getType(), definition.getSourceType(), field.isRequired(), field.getDisplayOrder(), inputKey);
     }
 
     private String idValue(UUID id) { return id == null ? "" : id.toString(); }

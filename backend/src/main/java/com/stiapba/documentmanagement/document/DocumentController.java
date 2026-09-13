@@ -110,6 +110,12 @@ public class DocumentController {
         return documentGenerationService.manualFields(documentType, variantId);
     }
 
+    @GetMapping("/{documentType}/variants/{variantId}/generation-fields")
+    public List<DocumentGenerationService.GenerationFieldResponse> generationFields(@PathVariable DocumentType documentType,
+                                                                                       @PathVariable UUID variantId) {
+        return documentGenerationService.generationFields(documentType, variantId);
+    }
+
     @GetMapping("/history")
     public DocumentHistoryPageResponse history(@AuthenticationPrincipal UserPrincipal principal,
                                                  @RequestParam(defaultValue = "0") int page,

@@ -187,7 +187,7 @@ describe('App critical integration flows', () => {
       if (path === '/api/v1/companies') return response([{ id: 'company-1', nombre: 'Empresa', agreementId: 'agreement-1' }])
       if (path === '/api/v1/delegates') return response([{ id: 'delegate-1', nombre: 'Delegado', apellido: 'STIA', dni: '4' }])
       if (path === '/api/v1/agreements') return response([{ id: 'agreement-1', codigo: 'CCT', descripcion: 'Convenio' }])
-      if (path.endsWith('/manual-fields')) return response([])
+      if (path.endsWith('/generation-fields')) return response([{ id: 'province-field', key: 'province', label: 'Provincia', type: 'TEXT', sourceType: 'PROVINCE', required: true, displayOrder: 0, inputKey: 'baseValues.provinceId' }, { id: 'company-field', key: 'company', label: 'Empresa', type: 'TEXT', sourceType: 'COMPANY', required: true, displayOrder: 1, inputKey: 'baseValues.companyId' }, { id: 'delegate-field', key: 'delegate', label: 'Delegado', type: 'TEXT', sourceType: 'DELEGATE', required: true, displayOrder: 2, inputKey: 'baseValues.delegateId' }, { id: 'agreement-field', key: 'agreement', label: 'Convenio', type: 'TEXT', sourceType: 'AGREEMENT', required: true, displayOrder: 3, inputKey: 'baseValues.agreementId' }, { id: 'issue-field', key: 'issueDay', label: 'Fecha de emisión', type: 'DATE', sourceType: 'DERIVED', required: true, displayOrder: 4, inputKey: 'baseValues.issueDate' }, { id: 'permit-field', key: 'permitDay', label: 'Día de permiso gremial', type: 'NUMBER', sourceType: 'DERIVED', required: true, displayOrder: 5, inputKey: 'baseValues.permitDay' }])
       throw new Error(`Unexpected request: ${path}`)
     }))
     renderApp('/documentos/nuevo/template-1/vista-previa')

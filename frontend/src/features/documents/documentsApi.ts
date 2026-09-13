@@ -20,6 +20,7 @@ export type PermisoGremialRequest = {
   manualValues: Record<string, string>
 }
 export type ManualField = { id: string; label: string; type: 'TEXT' | 'DATE' | 'NUMBER'; required: boolean }
+export type GenerationField = { id: string; key: string; label: string; type: 'TEXT' | 'DATE' | 'NUMBER'; sourceType: 'MANUAL' | 'COMPANY' | 'DELEGATE' | 'PROVINCE' | 'AGREEMENT' | 'DERIVED'; required: boolean; displayOrder: number; inputKey: string }
 export type GeneratedDocument = { blob: Blob; documentId: string; publicNumber: string; filename: string }
 export type PermisoGremialBatchRequest = Omit<PermisoGremialRequest, 'delegateId'> & { delegateIds: string[] }
 export type DocumentGenerationRequest = {
@@ -40,6 +41,7 @@ export const getDocumentSuggestions = () => apiRequest<DocumentSuggestions>('/do
 export const getDocumentTemplates = () => apiRequest<Template[]>('/templates?active=true')
 export const getDocumentVariants = (templateId: string) => apiRequest<TemplateVariant[]>(`/templates/${templateId}/variants?active=true`)
 export const getManualFields = (documentType: DocumentType, variantId: string) => apiRequest<ManualField[]>(`/documents/${documentType}/variants/${variantId}/manual-fields`)
+export const getGenerationFields = (documentType: DocumentType, variantId: string) => apiRequest<GenerationField[]>(`/documents/${documentType}/variants/${variantId}/generation-fields`)
 
 export type DocumentHistoryRecord = {
   id: string

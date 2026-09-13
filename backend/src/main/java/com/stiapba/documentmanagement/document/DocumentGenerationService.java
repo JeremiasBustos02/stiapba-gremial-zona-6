@@ -5,6 +5,7 @@ import com.stiapba.documentmanagement.document.repository.DocumentRecordReposito
 import com.stiapba.documentmanagement.security.UserPrincipal;
 import com.stiapba.documentmanagement.template.entity.DocumentType;
 import com.stiapba.documentmanagement.template.entity.FieldType;
+import com.stiapba.documentmanagement.template.entity.FieldSourceType;
 import com.stiapba.documentmanagement.user.entity.Role;
 import org.springframework.stereotype.Service;
 
@@ -53,6 +54,10 @@ public class DocumentGenerationService {
         return handler(documentType).manualFields(variantId);
     }
 
+    public List<GenerationFieldResponse> generationFields(DocumentType documentType, UUID variantId) {
+        return handler(documentType).generationFields(variantId);
+    }
+
     static String filename(String publicNumber, String delegateName) { return PermisoGremialDocumentTypeHandler.filename(publicNumber, delegateName); }
 
     private DocumentTypeHandler handler(DocumentType type) {
@@ -64,4 +69,7 @@ public class DocumentGenerationService {
     public record GeneratedDocument(byte[] content, UUID recordId, String publicNumber, String filename) { }
 
     public record ManualFieldResponse(UUID id, String label, FieldType type, boolean required) { }
+
+    public record GenerationFieldResponse(UUID id, String key, String label, FieldType type, FieldSourceType sourceType,
+                                          boolean required, int displayOrder, String inputKey) { }
 }

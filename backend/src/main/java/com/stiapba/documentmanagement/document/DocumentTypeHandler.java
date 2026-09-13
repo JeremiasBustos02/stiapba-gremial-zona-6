@@ -15,4 +15,6 @@ public interface DocumentTypeHandler {
     DocumentGenerationService.GeneratedDocument regenerate(DocumentRecord record);
 
     List<DocumentGenerationService.ManualFieldResponse> manualFields(UUID variantId);
+
+    List<DocumentGenerationService.GenerationFieldResponse> generationFields(UUID variantId);
 }

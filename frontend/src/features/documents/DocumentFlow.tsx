@@ -22,16 +22,14 @@ import {
   getDocumentSuggestions,
   getDocumentTemplates,
   getDocumentVariants,
-  getManualFields,
+  getGenerationFields,
   getProvinces,
   type Delegate,
   type DocumentSuggestionCategory,
   type GeneratedDocument,
+  type GenerationField,
   type ManualField,
 } from "./documentsApi";
-import { documentTypeDefinition } from "./documentTypeDefinition";
-import { DocumentBaseFields } from "./DocumentBaseFields";
-import type { DocumentBaseField } from "./documentTypeDefinition";
 import type { DocumentType } from "@/features/templates/types";
 import { downloadDocument, printDocument } from "./documentActions";
 import { Input } from "@/components/ui/input";
@@ -372,9 +370,9 @@ export function DocumentForm({
     queryFn: getDocumentAgreements,
   });
   const documentType = value.documentType ?? "PERMISO_GREMIAL";
-  const manualFieldsQuery = useQuery({
-    queryKey: ["documents", "manual-fields", documentType, value.variantId],
-    queryFn: () => getManualFields(documentType, value.variantId),
+  const generationFieldsQuery = useQuery({
+    queryKey: ["documents", "generation-fields", documentType, value.variantId],
+    queryFn: () => getGenerationFields(documentType, value.variantId),
     enabled: Boolean(value.variantId),
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -413,7 +411,7 @@ export function DocumentForm({
     companiesQuery,
     delegatesQuery,
     agreementsQuery,
-    manualFieldsQuery,
+    generationFieldsQuery,
   ];
   const loading = queries.some((query) => query.isPending);
   const catalogError = queries.find((query) => query.isError);
@@ -454,18 +452,10 @@ export function DocumentForm({
 
   const submit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const definition = documentTypeDefinition(documentType);
-    const baseErrors = requiredBaseFieldErrors(definition.fields, value);
+    const fields = generationFieldsQuery.data ?? [];
+    const baseErrors = requiredGenerationFieldErrors(fields, value);
     if (Object.keys(baseErrors).length) {
       setErrors(baseErrors);
-      return;
-    }
-    const manualErrors = requiredManualFieldErrors(
-      manualFieldsQuery.data ?? [],
-      value.manualValues,
-    );
-    if (Object.keys(manualErrors).length) {
-      setErrors(manualErrors);
       return;
     }
     if (generationInFlight.current || generationStage !== "idle") return;
@@ -477,9 +467,7 @@ export function DocumentForm({
     mutation.mutate({
       documentType,
       variantId: value.variantId,
-      baseValues: Object.fromEntries(
-        definition.fields.map((field) => [field.key, value[field.key]]),
-      ),
+      baseValues: Object.fromEntries(fields.filter((field) => field.sourceType !== "MANUAL").map((field) => [field.inputKey.replace("baseValues.", ""), String(value[field.inputKey.replace("baseValues.", "") as keyof DocumentFormValues] ?? "")])),
       manualValues: value.manualValues,
     });
   };
@@ -493,21 +481,18 @@ export function DocumentForm({
           "No pudimos generar el documento. Intentá nuevamente.",
         );
 
-  const renderBaseField = (field: DocumentBaseField) => {
-    const fieldValue = value[field.key as keyof DocumentFormValues] as string;
-    const change = (next: string) => set(field.key as Exclude<keyof DocumentFormValues, "manualValues">, next);
-    if (field.input === "select") {
-      const options = field.catalog === "provinces" ? (provincesQuery.data ?? []).map((item) => [item.id, item.name])
-        : field.catalog === "companies" ? (companiesQuery.data ?? []).map((item) => [item.id, item.nombre])
-        : field.catalog === "delegates" ? (delegatesQuery.data ?? []).map((item) => [item.id, `${item.nombre} ${item.apellido}`])
-        : (agreementsQuery.data ?? []).map((item) => [item.id, `${item.codigo ? `${item.codigo} — ` : ""}${item.descripcion}`]);
-      const placeholder = field.catalog === "provinces" ? "Seleccioná una provincia"
-        : field.catalog === "companies" ? "Seleccioná una empresa"
-        : field.catalog === "delegates" ? "Seleccioná un delegado" : "Seleccioná un convenio";
-      return <><SelectField label={field.label} value={fieldValue} onChange={change} options={options} placeholder={placeholder} error={errors[field.key]} />
-        {field.key === "delegateId" && <div className="mt-4 rounded-xl bg-slate-100 px-4 py-3"><p className="typo-caption font-semibold uppercase tracking-wide text-slate-500">DNI del delegado</p><p className="mt-1 font-medium text-slate-800">{delegate?.dni ?? "Se completa al seleccionar un delegado"}</p></div>}</>;
+  const visibleFields = (generationFieldsQuery.data ?? []).filter((field, index, fields) => fields.findIndex((candidate) => candidate.inputKey === field.inputKey) === index);
+  const renderGenerationField = (field: GenerationField) => {
+    if (field.sourceType === "MANUAL") return <ManualFieldInput field={field} value={value.manualValues[field.id] ?? ""} error={errors[`manual-${field.id}`]} onChange={(next) => onChange({ ...value, manualValues: { ...value.manualValues, [field.id]: next } })} />;
+    const key = field.inputKey.replace("baseValues.", "") as Exclude<keyof DocumentFormValues, "manualValues">;
+    const change = (next: string) => set(key, next);
+    const fieldValue = value[key] as string;
+    if (field.sourceType === "PROVINCE" || field.sourceType === "COMPANY" || field.sourceType === "DELEGATE" || field.sourceType === "AGREEMENT") {
+      const options = field.sourceType === "PROVINCE" ? (provincesQuery.data ?? []).map((item) => [item.id, item.name]) : field.sourceType === "COMPANY" ? (companiesQuery.data ?? []).map((item) => [item.id, item.nombre]) : field.sourceType === "DELEGATE" ? (delegatesQuery.data ?? []).map((item) => [item.id, `${item.nombre} ${item.apellido}`]) : (agreementsQuery.data ?? []).map((item) => [item.id, `${item.codigo ? `${item.codigo} — ` : ""}${item.descripcion}`]);
+      return <><SelectField label={field.label} value={fieldValue} onChange={change} options={options} placeholder={`Seleccioná ${field.label.toLowerCase()}`} error={errors[key]} />{field.sourceType === "DELEGATE" && <div className="mt-4 rounded-xl bg-slate-100 px-4 py-3"><p className="typo-caption font-semibold uppercase tracking-wide text-slate-500">DNI del delegado</p><p className="mt-1 font-medium text-slate-800">{delegate?.dni ?? "Se completa al seleccionar un delegado"}</p></div>}</>;
     }
-    return <label className="mt-4 block text-sm font-semibold">{field.label}<input required={field.required} type={field.input} min={field.key === "permitDay" ? "1" : undefined} max={field.key === "permitDay" ? "31" : undefined} value={fieldValue} onChange={(event) => change(event.target.value)} className="mt-2 h-12 w-full rounded-xl border border-slate-300 bg-white px-3 outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100" />{errors[field.key] && <span className="mt-1 block text-sm text-rose-700">{errors[field.key]}</span>}</label>;
+    const inputType = field.inputKey.endsWith("issueDate") ? "date" : field.type === "NUMBER" ? "number" : "text";
+    return <label className="mt-4 block text-sm font-semibold">{field.label}<input required={field.required} type={inputType} min={key === "permitDay" ? "1" : undefined} max={key === "permitDay" ? "31" : undefined} value={fieldValue} onChange={(event) => change(event.target.value)} className="mt-2 h-12 w-full rounded-xl border border-slate-300 bg-white px-3 outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100" />{errors[key] && <span className="mt-1 block text-sm text-rose-700">{errors[key]}</span>}</label>;
   };
 
   if (generationStage !== "idle") {
@@ -573,29 +558,7 @@ export function DocumentForm({
       )}
       <form onSubmit={submit} className="mt-6 max-w-3xl">
         <fieldset disabled={disabled} className="disabled:opacity-60">
-          {([['institutional', 'Contexto institucional'], ['recipient', 'Información del delegado'], ['details', 'Datos del permiso']] as const).map(([section, title]) => <FormSection key={section} title={title}><DocumentBaseFields fields={documentTypeDefinition(documentType).fields.filter((field) => field.section === section)} renderField={renderBaseField} />
-            {section === 'details' && <>
-            <div className="mt-4 rounded-xl bg-slate-100 px-4 py-3">
-              <p className="typo-caption font-semibold uppercase tracking-wide text-slate-500">
-                Versión del documento
-              </p>
-              <p className="mt-1 font-medium text-slate-800">Seleccionada</p>
-            </div>
-            {(manualFieldsQuery.data ?? []).map((field) => (
-              <ManualFieldInput
-                key={field.id}
-                field={field}
-                value={value.manualValues[field.id] ?? ""}
-                error={errors[`manual-${field.id}`]}
-                onChange={(next) =>
-                  onChange({
-                    ...value,
-                    manualValues: { ...value.manualValues, [field.id]: next },
-                  })
-                }
-              />
-            ))}
-            </>}</FormSection>)}
+          <FormSection title="Datos del documento">{visibleFields.map((field) => <div key={field.inputKey}>{renderGenerationField(field)}</div>)}</FormSection>
         </fieldset>
         {mutation.error && (
           <p
@@ -854,6 +817,22 @@ export function requiredManualFieldErrors(
       .filter((field) => field.required && !values[field.id]?.trim())
       .map((field) => [`manual-${field.id}`, `${field.label} es obligatorio.`]),
   );
+}
+
+export function requiredGenerationFieldErrors(fields: GenerationField[], values: DocumentFormValues) {
+  const errors: Record<string, string> = {}
+  for (const field of fields) {
+    if (field.sourceType === 'MANUAL') {
+      if (field.required && !values.manualValues[field.id]?.trim()) errors[`manual-${field.id}`] = `${field.label} es obligatorio.`
+      continue
+    }
+    const key = field.inputKey.replace('baseValues.', '') as keyof DocumentFormValues
+    const fieldValue = values[key]
+    if (field.required && (!fieldValue || typeof fieldValue !== 'string' || !fieldValue.trim())) errors[key] = `${field.label} es obligatorio.`
+    if (key === 'permitDay' && fieldValue && (Number(fieldValue) < 1 || Number(fieldValue) > 31 || !Number.isInteger(Number(fieldValue)))) errors[key] = 'El día debe estar entre 1 y 31.'
+  }
+  if (!values.variantId) errors.variantId = 'Seleccioná una versión del documento.'
+  return errors
 }
 
 export function requiredBaseFieldErrors(

@@ -5,7 +5,14 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const generate = vi.fn()
-const getManualFields = vi.fn()
+const getGenerationFields = vi.fn()
+const configuredPermisoFields = [
+  { id: 'province-field', key: 'province', label: 'Provincia', type: 'TEXT', sourceType: 'PROVINCE', required: true, displayOrder: 0, inputKey: 'baseValues.provinceId' },
+  { id: 'company-field', key: 'company', label: 'Empresa', type: 'TEXT', sourceType: 'COMPANY', required: true, displayOrder: 1, inputKey: 'baseValues.companyId' },
+  { id: 'delegate-field', key: 'delegate', label: 'Delegado', type: 'TEXT', sourceType: 'DELEGATE', required: true, displayOrder: 2, inputKey: 'baseValues.delegateId' },
+  { id: 'agreement-field', key: 'agreement', label: 'Convenio', type: 'TEXT', sourceType: 'AGREEMENT', required: true, displayOrder: 3, inputKey: 'baseValues.agreementId' },
+  { id: 'permit-field', key: 'permitDay', label: 'Día de permiso gremial', type: 'NUMBER', sourceType: 'DERIVED', required: true, displayOrder: 4, inputKey: 'baseValues.permitDay' },
+]
 vi.mock('react-pdf', async () => {
   const { createElement } = await import('react')
   return { Document: ({ children }: { children: React.ReactNode }) => createElement('div', null, children), Page: () => createElement('div'), pdfjs: { GlobalWorkerOptions: {} } }
@@ -17,20 +24,19 @@ vi.mock('./documentsApi', () => ({
   getDelegates: () => Promise.resolve([{ id: 'delegate', nombre: 'Ana', apellido: 'Paz', dni: '123' }]),
   getDocumentAgreements: () => Promise.resolve([{ id: 'agreement', codigo: '771/10', descripcion: 'Convenio' }]),
   getDocumentSuggestions: () => Promise.resolve({ companies: { recent: [], frequent: [] }, delegates: { recent: [], frequent: [] }, agreements: { recent: [], frequent: [] } }),
-  getManualFields: (...args: unknown[]) => getManualFields(...args),
+  getGenerationFields: (...args: unknown[]) => getGenerationFields(...args),
   getDocumentTemplates: () => Promise.resolve([]),
   getDocumentVariants: () => Promise.resolve([]),
 }))
 
 import { PermisoGremialForm, type DocumentFormValues } from './DocumentFlow'
-import { documentTypeDefinitions } from './documentTypeDefinition'
 
 let root: Root
 let container: HTMLDivElement
 const value: DocumentFormValues = { provinceId: 'province', issueDate: '2026-09-11', companyId: 'company', delegateId: 'delegate', permitDay: '15', agreementId: 'agreement', variantId: 'variant', manualValues: {} }
 const wait = () => new Promise((resolve) => window.setTimeout(resolve, 0))
 
-beforeEach(() => { ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true; container = document.createElement('div'); document.body.appendChild(container); root = createRoot(container); generate.mockReset(); getManualFields.mockReset(); getManualFields.mockResolvedValue([]) })
+beforeEach(() => { ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true; container = document.createElement('div'); document.body.appendChild(container); root = createRoot(container); generate.mockReset(); getGenerationFields.mockReset(); getGenerationFields.mockResolvedValue(configuredPermisoFields) })
 afterEach(() => { act(() => root.unmount()); container.remove(); vi.useRealTimers() })
 
 describe('PermisoGremialForm generation experience', () => {
@@ -66,7 +72,7 @@ describe('PermisoGremialForm generation experience', () => {
   })
 
   it('renders and validates configured manual fields with the base descriptor', async () => {
-    getManualFields.mockResolvedValue([{ id: 'reason', label: 'Motivo', type: 'TEXT', required: true }])
+    getGenerationFields.mockResolvedValue([{ id: 'reason', key: 'reason', label: 'Motivo', type: 'TEXT', sourceType: 'MANUAL', required: true, displayOrder: 0, inputKey: 'manualValues.reason' }])
     await act(async () => root.render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><PermisoGremialForm value={value} onChange={vi.fn()} onBack={vi.fn()} onGenerated={vi.fn()} /></QueryClientProvider>))
     await act(async () => { await wait() })
     expect(container.textContent).toContain('Motivo')
@@ -75,17 +81,13 @@ describe('PermisoGremialForm generation experience', () => {
     expect(container.textContent).toContain('Motivo es obligatorio.')
   })
 
-  it('renders only the fields supplied by the document type definition', async () => {
-    const definition = documentTypeDefinitions.PERMISO_GREMIAL
-    documentTypeDefinitions.PERMISO_GREMIAL = { ...definition, fields: [{ ...definition.fields[0], label: 'Provincia de prueba' }] }
-    try {
-      await act(async () => root.render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><PermisoGremialForm value={value} onChange={vi.fn()} onBack={vi.fn()} onGenerated={vi.fn()} /></QueryClientProvider>))
-      await act(async () => { await wait() })
-      expect(container.textContent).toContain('Provincia de prueba')
-      expect(container.textContent).not.toContain('Empresa')
-      expect(container.textContent).not.toContain('Día de permiso gremial')
-    } finally {
-      documentTypeDefinitions.PERMISO_GREMIAL = definition
-    }
+  it('renders only fields configured on the selected variant', async () => {
+    getGenerationFields.mockResolvedValue([{ id: 'custom-a', key: 'customFieldA', label: 'Campo A', type: 'TEXT', sourceType: 'MANUAL', required: true, displayOrder: 0, inputKey: 'manualValues.custom-a' }, { id: 'custom-b', key: 'customFieldB', label: 'Campo B', type: 'TEXT', sourceType: 'MANUAL', required: false, displayOrder: 1, inputKey: 'manualValues.custom-b' }])
+    await act(async () => root.render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><PermisoGremialForm value={value} onChange={vi.fn()} onBack={vi.fn()} onGenerated={vi.fn()} /></QueryClientProvider>))
+    await act(async () => { await wait() })
+    expect(container.textContent).toContain('Campo A')
+    expect(container.textContent).toContain('Campo B')
+    expect(container.textContent).not.toContain('Empresa')
+    expect(container.textContent).not.toContain('Delegado')
   })
 })

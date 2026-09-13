@@ -21,21 +21,17 @@ import {
   getDocumentCompanies,
   getDocumentTemplates,
   getDocumentVariants,
-  getManualFields,
+  getGenerationFields,
   getProvinces,
   regenerateDocument,
   type BatchDocumentResult,
-  type ManualField,
+  type GenerationField,
 } from "./documentsApi";
-import { documentTypeDefinition } from "./documentTypeDefinition";
-import { DocumentBaseFields } from "./DocumentBaseFields";
-import type { DocumentBaseField } from "./documentTypeDefinition";
 import type { DocumentType } from "@/features/templates/types";
 import { filenameFromHeaders } from "./documentsApi";
 import {
   ManualFieldInput,
   PdfPreview,
-  requiredManualFieldErrors,
 } from "./DocumentFlow";
 
 export function BulkDocumentPage({ onBack }: { onBack: () => void }) {
@@ -74,9 +70,9 @@ export function BulkDocumentPage({ onBack }: { onBack: () => void }) {
     queryFn: () => getDocumentVariants(templateId),
     enabled: Boolean(templateId),
   });
-  const manualFields = useQuery({
-    queryKey: ["documents", "bulk-manual-fields", documentType, variantId],
-    queryFn: () => getManualFields(documentType!, variantId),
+  const generationFields = useQuery({
+    queryKey: ["documents", "bulk-generation-fields", documentType, variantId],
+    queryFn: () => getGenerationFields(documentType!, variantId),
     enabled: Boolean(documentType && variantId),
   });
   const provinces = useQuery({
@@ -110,23 +106,20 @@ export function BulkDocumentPage({ onBack }: { onBack: () => void }) {
     agreements,
     delegates,
     ...(templateId ? [variants] : []),
-    ...(variantId ? [manualFields] : []),
+    ...(variantId ? [generationFields] : []),
   ].some((query) => query.isError);
-  const definition = documentType ? documentTypeDefinition(documentType) : null;
   const commonValues: Record<string, string> = { provinceId, companyId, agreementId, issueDate, permitDay };
-  const baseFieldsComplete = definition?.fields.filter((field) => field.sharedInBulk).every((field) => Boolean(commonValues[field.key]?.trim()));
+  const visibleFields = (generationFields.data ?? []).filter((field, index, fields) => field.sourceType !== "DELEGATE" && fields.findIndex((candidate) => candidate.inputKey === field.inputKey) === index);
+  const baseFieldsComplete = visibleFields.every((field) => field.sourceType === "MANUAL" ? !field.required || Boolean(manualValues[field.id]?.trim()) : !field.required || Boolean(commonValues[field.inputKey.replace("baseValues.", "")]?.trim()));
   const valid = Boolean(
-    definition &&
+    documentType &&
     variantId &&
     baseFieldsComplete &&
     delegateIds.length > 0 &&
-    !manualFields.isPending &&
-    !manualFields.isError &&
-    Object.keys(
-      requiredManualFieldErrors(manualFields.data ?? [], manualValues),
-    ).length === 0,
+    !generationFields.isPending &&
+    !generationFields.isError,
   );
-  const setCommonValue = (key: DocumentBaseField["key"], next: string) => {
+  const setCommonValue = (key: string, next: string) => {
     if (key === "companyId") {
       setCompanyId(next);
       setAgreementId(agreementForCompany(companies.data ?? [], next, agreementId));
@@ -137,16 +130,15 @@ export function BulkDocumentPage({ onBack }: { onBack: () => void }) {
     if (key === "issueDate") setIssueDate(next);
     if (key === "permitDay") setPermitDay(next);
   };
-  const renderCommonField = (field: DocumentBaseField) => {
-    const fieldValue = commonValues[field.key] ?? "";
-    if (field.input === "select") {
-      const options = field.catalog === "provinces" ? (provinces.data ?? []).map((item) => [item.id, item.name])
-        : field.catalog === "companies" ? (companies.data ?? []).map((item) => [item.id, item.nombre])
-        : (agreements.data ?? []).map((item) => [item.id, `${item.codigo} - ${item.descripcion}`]);
-      const placeholder = field.catalog === "provinces" ? "Seleccioná una provincia" : field.catalog === "companies" ? "Seleccioná una empresa" : "Seleccioná un convenio";
-      return <Field label={field.label}><select value={fieldValue} onChange={(event) => setCommonValue(field.key, event.target.value)}><option value="">{placeholder}</option>{options.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></Field>;
+  const renderCommonField = (field: GenerationField) => {
+    if (field.sourceType === "MANUAL") return <ManualFieldInput field={field} value={manualValues[field.id] ?? ""} error={manualErrors[`manual-${field.id}`]} onChange={(next) => setManualValues((values) => ({ ...values, [field.id]: next }))} />;
+    const key = field.inputKey.replace("baseValues.", "");
+    const fieldValue = commonValues[key] ?? "";
+    if (["PROVINCE", "COMPANY", "AGREEMENT"].includes(field.sourceType)) {
+      const options = field.sourceType === "PROVINCE" ? (provinces.data ?? []).map((item) => [item.id, item.name]) : field.sourceType === "COMPANY" ? (companies.data ?? []).map((item) => [item.id, item.nombre]) : (agreements.data ?? []).map((item) => [item.id, `${item.codigo} - ${item.descripcion}`]);
+      return <Field label={field.label}><select value={fieldValue} onChange={(event) => setCommonValue(key, event.target.value)}><option value="">{`Seleccioná ${field.label.toLowerCase()}`}</option>{options.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></Field>;
     }
-    return <Field label={field.label}><Input type={field.input} min={field.key === "permitDay" ? "1" : undefined} max={field.key === "permitDay" ? "31" : undefined} value={fieldValue} onChange={(event) => setCommonValue(field.key, event.target.value)} /></Field>;
+    return <Field label={field.label}><Input type={key === "issueDate" ? "date" : field.type === "NUMBER" ? "number" : "text"} min={key === "permitDay" ? "1" : undefined} max={key === "permitDay" ? "31" : undefined} value={fieldValue} onChange={(event) => setCommonValue(key, event.target.value)} /></Field>;
   };
   const toggle = (id: string) =>
     setDelegateIds((ids) =>
@@ -154,10 +146,7 @@ export function BulkDocumentPage({ onBack }: { onBack: () => void }) {
     );
   const generate = async () => {
     if (generationInFlight.current) return;
-    const nextManualErrors = requiredManualFieldErrors(
-      manualFields.data ?? [],
-      manualValues,
-    );
+    const nextManualErrors = Object.fromEntries((generationFields.data ?? []).filter((field) => field.sourceType === "MANUAL" && field.required && !manualValues[field.id]?.trim()).map((field) => [`manual-${field.id}`, `${field.label} es obligatorio.`]));
     if (Object.keys(nextManualErrors).length) {
       setManualErrors(nextManualErrors);
       setConfirming(false);
@@ -171,7 +160,7 @@ export function BulkDocumentPage({ onBack }: { onBack: () => void }) {
         await generateDocumentBatch({
           documentType: documentType!,
           variantId,
-          baseValues: Object.fromEntries((definition?.fields ?? []).filter((field) => field.sharedInBulk).map((field) => [field.key, commonValues[field.key] ?? ""])),
+          baseValues: Object.fromEntries((generationFields.data ?? []).filter((field) => field.sourceType !== "MANUAL" && field.sourceType !== "DELEGATE").map((field) => [field.inputKey.replace("baseValues.", ""), commonValues[field.inputKey.replace("baseValues.", "")] ?? ""])),
           manualValues,
           delegateIds,
         }),
@@ -311,6 +300,10 @@ export function BulkDocumentPage({ onBack }: { onBack: () => void }) {
                     setTemplateId(event.target.value);
                     setDocumentType(templates.data?.find((template) => template.id === event.target.value)?.documentType ?? null);
                     setVariantId("");
+                    setProvinceId("");
+                    setCompanyId("");
+                    setAgreementId("");
+                    setPermitDay("");
                     setManualValues({});
                     setManualErrors({});
                   }}
@@ -329,6 +322,10 @@ export function BulkDocumentPage({ onBack }: { onBack: () => void }) {
                   disabled={!templateId}
                   onChange={(event) => {
                     setVariantId(event.target.value);
+                    setProvinceId("");
+                    setCompanyId("");
+                    setAgreementId("");
+                    setPermitDay("");
                     setManualValues({});
                     setManualErrors({});
                   }}
@@ -341,25 +338,7 @@ export function BulkDocumentPage({ onBack }: { onBack: () => void }) {
                   ))}
                 </select>
               </Field>
-              <DocumentBaseFields fields={(definition?.fields ?? []).filter((field) => field.sharedInBulk)} renderField={renderCommonField} />
-              {(manualFields.data ?? []).map((field: ManualField) => (
-                <ManualFieldInput
-                  key={field.id}
-                  field={field}
-                  value={manualValues[field.id] ?? ""}
-                  error={manualErrors[`manual-${field.id}`]}
-                  onChange={(nextValue) => {
-                    setManualValues((values) => ({
-                      ...values,
-                      [field.id]: nextValue,
-                    }));
-                    setManualErrors((errors) => {
-                      const { [`manual-${field.id}`]: _, ...remaining } = errors;
-                      return remaining;
-                    });
-                  }}
-                />
-              ))}
+              {visibleFields.map((field) => <div key={field.inputKey}>{renderCommonField(field)}</div>)}
             </FormSection>
             <FormSection
               title={`Delegados (${delegateIds.length} seleccionados)`}

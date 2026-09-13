@@ -380,7 +380,7 @@ function App() {
             onBack={() => navigate("/documentos/nuevo")}
             onSelect={(variantId) => {
               if (!templateId) return;
-              const form = { ...documentForm, variantId, manualValues: {} };
+              const form = { ...initialDocumentForm, documentType: documentForm.documentType, variantId, manualValues: {} };
               saveDraft(templateId, form);
               navigate(`/documentos/nuevo/${templateId}/formulario`);
             }}

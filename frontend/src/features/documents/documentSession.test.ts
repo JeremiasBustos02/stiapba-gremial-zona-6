@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiError, setUnauthorizedHandler } from '@/lib/api'
-import { getDelegates, getDocumentAgreements, getDocumentCompanies, getDocumentTemplates, getDocumentVariants, getManualFields, getProvinces } from './documentsApi'
+import { getDelegates, getDocumentAgreements, getDocumentCompanies, getDocumentTemplates, getDocumentVariants, getGenerationFields, getProvinces } from './documentsApi'
 
 function jsonResponse(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
@@ -35,7 +35,7 @@ describe('new document session', () => {
       getDocumentCompanies(),
       getDelegates(),
       getDocumentAgreements(),
-      getManualFields('PERMISO_GREMIAL', 'variant-id'),
+      getGenerationFields('PERMISO_GREMIAL', 'variant-id'),
     ])
 
     expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
@@ -45,7 +45,7 @@ describe('new document session', () => {
       '/api/v1/companies?active=true',
       '/api/v1/delegates',
       '/api/v1/agreements?active=true',
-      '/api/v1/documents/PERMISO_GREMIAL/variants/variant-id/manual-fields',
+      '/api/v1/documents/PERMISO_GREMIAL/variants/variant-id/generation-fields',
     ])
     expect(fetchMock.mock.calls.every(([, options]) => options.credentials === 'include')).toBe(true)
     expect(sessionInvalid).not.toHaveBeenCalled()

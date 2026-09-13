@@ -96,6 +96,52 @@ class DocumentGenerationServiceTest {
     }
 
     @Test
+    void generatesConfiguredVariantWithoutLegacyBaseValues() throws Exception {
+        FieldDefinition definition = new FieldDefinition("reference", "Referencia", FieldType.TEXT, FieldSourceType.MANUAL, true);
+        TemplateVariant variant = new TemplateVariant(new Template("Permiso Gremial", "Descripción"), "Configurada", "template.pdf");
+        variant.addField(new TemplateField(variant, definition, TemplateFieldMode.ACROFORM, "reference", true, 3));
+        when(variantRepository.findById(request.variantId())).thenReturn(Optional.of(variant));
+        when(fileStorage.load("template.pdf")).thenReturn(new byte[]{1});
+        when(pdfTemplateRenderer.render(eq(variant), argThat(values -> "REF-42".equals(values.get("reference"))), any())).thenReturn(new byte[]{3});
+        Map<UUID, String> manualValues = new java.util.HashMap<>();
+        manualValues.put(null, "REF-42");
+
+        assertThat(service.generate(new DocumentGenerationRequest(DocumentType.PERMISO_GREMIAL, request.variantId(), Map.of(), manualValues), principal).content())
+                .containsExactly(3);
+        verify(documentRecordRepository).save(argThat(record -> record.getIssueDate() != null && record.getCompanyName() != null
+                && record.getDelegateName() != null && "REF-42".equals(record.getSnapshot().get("reference"))));
+    }
+
+    @Test
+    void allowsAnOptionalConfiguredSourceWithoutSubmittingItsValue() throws Exception {
+        FieldDefinition definition = new FieldDefinition("company", "Empresa", FieldType.TEXT, FieldSourceType.COMPANY, false);
+        TemplateVariant variant = new TemplateVariant(new Template("Permiso Gremial", "Descripción"), "Configurada", "template.pdf");
+        variant.addField(new TemplateField(variant, definition, TemplateFieldMode.ACROFORM, "company", false, 1));
+        when(variantRepository.findById(request.variantId())).thenReturn(Optional.of(variant));
+        when(fileStorage.load("template.pdf")).thenReturn(new byte[]{1});
+        when(pdfTemplateRenderer.render(eq(variant), argThat(Map::isEmpty), any())).thenReturn(new byte[]{3});
+
+        assertThat(service.generate(new DocumentGenerationRequest(DocumentType.PERMISO_GREMIAL, request.variantId(), Map.of(), Map.of()), principal).content())
+                .containsExactly(3);
+    }
+
+    @Test
+    void exposesAllConfiguredGenerationFields() {
+        TemplateVariant variant = new TemplateVariant(new Template("Permiso Gremial", "Descripción"), "Configurada", "template.pdf");
+        variant.addField(new TemplateField(variant,
+                new FieldDefinition("company", "Empresa", FieldType.TEXT, FieldSourceType.COMPANY, true), TemplateFieldMode.ACROFORM, "company", true, 2));
+        variant.addField(new TemplateField(variant,
+                new FieldDefinition("reference", "Referencia", FieldType.TEXT, FieldSourceType.MANUAL, false), TemplateFieldMode.ACROFORM, "reference", false, 1));
+        when(variantRepository.findById(request.variantId())).thenReturn(Optional.of(variant));
+
+        assertThat(service.generationFields(DocumentType.PERMISO_GREMIAL, request.variantId()))
+                .extracting(DocumentGenerationService.GenerationFieldResponse::key,
+                        DocumentGenerationService.GenerationFieldResponse::inputKey)
+                .containsExactly(org.assertj.core.groups.Tuple.tuple("reference", "manualValues.null"),
+                        org.assertj.core.groups.Tuple.tuple("company", "baseValues.companyId"));
+    }
+
+    @Test
     void rejectsAnUnregisteredDocumentTypeWithControlledError() {
         DocumentGenerationService emptyRegistry = new DocumentGenerationService(documentRecordRepository, List.of());
         assertThatThrownBy(() -> emptyRegistry.generate(new DocumentGenerationRequest(DocumentType.PERMISO_GREMIAL,
@@ -127,10 +173,6 @@ class DocumentGenerationServiceTest {
 
     @Test
     void preservesDynamicManualValuesInSnapshot() throws Exception {
-        stubProvince();
-        stubCompany();
-        stubDelegate();
-        stubAgreement();
         TemplateVariant variant = new TemplateVariant(new Template("Permiso Gremial", "Descripción"), "Bruna", "template.pdf");
         variant.addField(new TemplateField(variant,
                 new FieldDefinition("reference", "Referencia", FieldType.TEXT, FieldSourceType.MANUAL, false),
@@ -195,12 +237,14 @@ class DocumentGenerationServiceTest {
 
     @Test
     void rejectsMissingProvince() {
+        stubLegacyVariant();
         when(provinceRepository.findById(request.provinceId())).thenReturn(Optional.empty());
         assertCode("PROVINCE_NOT_FOUND");
     }
 
     @Test
     void rejectsMissingCompany() {
+        stubLegacyVariant();
         stubProvince();
         when(companyRepository.findById(request.companyId())).thenReturn(Optional.empty());
         assertCode("COMPANY_NOT_FOUND");
@@ -208,6 +252,7 @@ class DocumentGenerationServiceTest {
 
     @Test
     void rejectsMissingOrNonDelegateUser() {
+        stubLegacyVariant();
         stubProvince();
         stubCompany();
         when(userRepository.findById(request.delegateId())).thenReturn(Optional.of(new User("Admin", "User", "1", "hash", Role.ADMIN)));
@@ -216,6 +261,7 @@ class DocumentGenerationServiceTest {
 
     @Test
     void rejectsMissingAgreementAndAgreementWithoutCode() {
+        stubLegacyVariant();
         stubProvince();
         stubCompany();
         stubDelegate();
@@ -242,6 +288,7 @@ class DocumentGenerationServiceTest {
 
     @Test
     void rejectsInvalidPermitDay() {
+        stubLegacyVariant();
         request = new PermisoGremialRequest(request.provinceId(), request.issueDate(), request.companyId(), request.delegateId(),
                 32, request.agreementId(), request.variantId());
         assertCode("INVALID_PERMIT_DAY");
@@ -249,10 +296,7 @@ class DocumentGenerationServiceTest {
 
     @Test
     void generatesAcroformVariantWithLogicalValues() throws Exception {
-        stubProvince();
-        stubCompany();
         stubDelegate();
-        stubAgreement();
         TemplateVariant variant = new TemplateVariant(new Template("Permiso Gremial", "Descripción"), "Bruna AcroForm", "template.pdf");
         variant.addField(new TemplateField(variant,
                 new FieldDefinition("delegate", "Delegado", FieldType.TEXT, FieldSourceType.DELEGATE, true), TemplateFieldMode.ACROFORM,
@@ -260,8 +304,7 @@ class DocumentGenerationServiceTest {
         when(variantRepository.findById(request.variantId())).thenReturn(Optional.of(variant));
         when(fileStorage.load("template.pdf")).thenReturn(new byte[]{1});
         when(pdfTemplateRenderer.render(eq(variant), argThat(values ->
-                "Ana Pérez DNI 40123456".equals(values.get("delegate"))
-                        && "40123456".equals(values.get("delegateDni"))), any(byte[].class))).thenReturn(new byte[]{3});
+                "Ana Pérez DNI 40123456".equals(values.get("delegate"))), any(byte[].class))).thenReturn(new byte[]{3});
 
         assertThat(service.generatePermisoGremial(request, principal).content()).containsExactly(3);
     }
@@ -281,6 +324,12 @@ class DocumentGenerationServiceTest {
         when(variantRepository.findById(request.variantId())).thenReturn(Optional.of(variant));
         when(fileStorage.load("template.pdf")).thenReturn(new byte[]{1});
         when(generator.generate(any(), any())).thenReturn(new byte[]{2});
+    }
+
+    private void stubLegacyVariant() {
+        TemplateVariant variant = new TemplateVariant(new Template("Permiso Gremial", "Descripción"), "Bruna", "template.pdf");
+        variant.markLegacyPositioned();
+        when(variantRepository.findById(request.variantId())).thenReturn(Optional.of(variant));
     }
 
     private void stubProvince() { when(provinceRepository.findById(request.provinceId())).thenReturn(Optional.of(new Province("Buenos Aires"))); }
