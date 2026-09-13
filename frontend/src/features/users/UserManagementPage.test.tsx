@@ -102,6 +102,20 @@ describe('UserManagementPage password reset', () => {
     expect(fetchMock.mock.calls.some(([input]) => String(input).includes('/reset-password'))).toBe(false)
   })
 
+  it('keeps focus in confirmation dialogs and closes them with Escape', async () => {
+    vi.stubGlobal('fetch', usersFetchMock())
+    renderPage()
+    await waitFor(() => expect(container.textContent).toContain('Juan Pérez'))
+
+    await openActions(activeUser)
+    await click('Restablecer contraseña')
+    const dialog = container.querySelector<HTMLElement>('[role="dialog"]')
+    expect(dialog).not.toBeNull()
+    expect(dialog?.contains(document.activeElement)).toBe(true)
+    await act(async () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })))
+    expect(container.querySelector('[role="dialog"]')).toBeNull()
+  })
+
   it('calls the reset endpoint once while the confirmation is pending', async () => {
     let resolveReset!: (value: Response) => void
     const fetchMock = usersFetchMock(() => new Promise<Response>((resolve) => { resolveReset = resolve }))

@@ -85,6 +85,20 @@ describe('PdfPreview print flow', () => {
     expect(document.body.contains(createdFrame)).toBe(false)
   })
 
+  it('keeps the PDF available while the native print dialog is open', async () => {
+    await act(async () => {
+      root = createRoot(container)
+      root.render(<PdfPreview pdf={new Blob(['pdf'], { type: 'application/pdf' })} onEdit={vi.fn()} onHome={vi.fn()} />)
+    })
+
+    await act(async () => [...container.querySelectorAll('button')].find((button) => button.textContent?.includes('Imprimir'))?.click())
+    await act(async () => createdFrame.dispatchEvent(new Event('load')))
+    await act(async () => vi.advanceTimersByTimeAsync(1_000))
+
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled()
+    expect(document.body.contains(createdFrame)).toBe(true)
+  })
+
   it('keeps the non-email actions below the preview', async () => {
     await act(async () => {
       root = createRoot(container)

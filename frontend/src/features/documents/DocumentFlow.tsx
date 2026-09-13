@@ -109,7 +109,7 @@ export function PermisoGremialForm({ value, onChange, onBack, onGenerated, editi
     event.preventDefault()
     const result = formSchema.safeParse(value)
     if (!result.success) { setErrors(Object.fromEntries(result.error.issues.map((issue) => [String(issue.path[0]), issue.message]))); return }
-    const manualErrors = Object.fromEntries((manualFieldsQuery.data ?? []).filter((field) => field.required && !value.manualValues[field.id]?.trim()).map((field) => [`manual-${field.id}`, `${field.label} es obligatorio.`]))
+    const manualErrors = requiredManualFieldErrors(manualFieldsQuery.data ?? [], value.manualValues)
     if (Object.keys(manualErrors).length) { setErrors(manualErrors); return }
     if (generationInFlight.current || generationStage !== 'idle') return
     generationInFlight.current = true
@@ -149,7 +149,11 @@ function SuggestionQuickAccess({ category, options, onSelect }: { category?: Doc
   if (!recent.length && !frequent.length) return null
   return <div className="mt-3 space-y-2" aria-label="Accesos rápidos"><p className="typo-caption text-slate-500">{recent.length ? 'Usados recientemente' : 'Usados con frecuencia'}</p><div className="flex flex-wrap gap-2">{recent.map((item) => <button key={item.id} type="button" className="min-h-11 rounded-lg border border-blue-200 bg-blue-50 px-3 text-left text-sm font-semibold text-blue-800 hover:border-blue-400" onClick={() => onSelect(item.id)}>{item.label}</button>)}{!recent.length && frequent.map((item) => <button key={item.id} type="button" className="min-h-11 rounded-lg border border-blue-200 bg-blue-50 px-3 text-left text-sm font-semibold text-blue-800 hover:border-blue-400" onClick={() => onSelect(item.id)}>{item.label}</button>)}</div></div>
 }
-function ManualFieldInput({ field, value, error, onChange }: { field: ManualField; value: string; error?: string; onChange: (value: string) => void }) {
+export function requiredManualFieldErrors(fields: ManualField[], values: Record<string, string>) {
+  return Object.fromEntries(fields.filter((field) => field.required && !values[field.id]?.trim()).map((field) => [`manual-${field.id}`, `${field.label} es obligatorio.`]))
+}
+
+export function ManualFieldInput({ field, value, error, onChange }: { field: ManualField; value: string; error?: string; onChange: (value: string) => void }) {
   const id = `manual-${field.id}`
   const errorId = `${id}-error`
   const type = field.type === 'NUMBER' ? 'number' : field.type === 'DATE' ? 'date' : 'text'

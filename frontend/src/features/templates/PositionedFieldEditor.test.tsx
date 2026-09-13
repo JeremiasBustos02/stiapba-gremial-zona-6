@@ -1,0 +1,108 @@
+// @vitest-environment jsdom
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("react-pdf", async () => {
+  const { createElement, useEffect } = await import("react");
+  return {
+    Document: ({ children, onLoadSuccess }: { children: React.ReactNode; onLoadSuccess: (value: { numPages: number }) => void }) => {
+      useEffect(() => onLoadSuccess({ numPages: 1 }), []);
+      return createElement("div", null, children);
+    },
+    Page: ({ onLoadSuccess }: { onLoadSuccess: (page: { getViewport: (options: { scale: number }) => { width: number; height: number } }) => void }) => {
+      useEffect(() => onLoadSuccess({ getViewport: () => ({ width: 400, height: 600 }) }), []);
+      return createElement("div");
+    },
+    pdfjs: { GlobalWorkerOptions: {} },
+  };
+});
+
+vi.mock("./templatesApi", () => ({
+  getVariantPdf: () => Promise.resolve(new Blob(["pdf"])),
+  getTemplateFields: () => Promise.resolve([{ id: "field-1", fieldDefinitionId: "definition-1", mode: "POSITIONED", acroFieldName: null, required: true, displayOrder: 0, pageNumber: 1, x: 10, y: 570, width: 100, height: 20, fontSize: 12, minFontSize: 7, maxFontSize: 12, alignment: "LEFT", multiline: false }]),
+  getFieldDefinitions: () => Promise.resolve([{ id: "definition-1", label: "Motivo", type: "TEXT", sourceType: "MANUAL", required: true }]),
+  getAcroformFields: () => Promise.resolve([]),
+  replaceTemplateFields: vi.fn(),
+  createFieldDefinition: vi.fn(),
+}));
+
+import { PositionedFieldEditor } from "./PositionedFieldEditor";
+
+let root: Root;
+let container: HTMLDivElement;
+const wait = () => new Promise((resolve) => window.setTimeout(resolve, 0));
+const field = () => container.querySelector<HTMLButtonElement>('button[aria-label^="Campo 1: Motivo"]')!;
+const key = (element: HTMLElement, value: string, shiftKey = false) => element.dispatchEvent(new KeyboardEvent("keydown", { key: value, shiftKey, bubbles: true }));
+const positionedFields = () => [...container.querySelectorAll<HTMLButtonElement>("button[data-positioned-field-id]")];
+const addField = () => [...container.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent?.includes("Agregar campo"))!;
+
+beforeEach(() => {
+  (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  globalThis.ResizeObserver = class { observe() {}; disconnect() {}; unobserve() {} };
+  Object.defineProperty(HTMLElement.prototype, "setPointerCapture", { configurable: true, value: vi.fn() });
+  Object.defineProperty(URL, "createObjectURL", { configurable: true, value: vi.fn(() => "blob:preview") });
+  Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: vi.fn() });
+  Object.defineProperty(HTMLElement.prototype, "clientWidth", { configurable: true, get: () => 400 });
+  container = document.createElement("div"); document.body.appendChild(container); root = createRoot(container);
+});
+afterEach(() => { act(() => root.unmount()); container.remove(); vi.restoreAllMocks(); });
+
+async function render() {
+  await act(async () => root.render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><PositionedFieldEditor templateId="template-1" variant={{ id: "variant-1", templateId: "template-1", nombre: "Firma A", active: true, legacyPositioned: false, createdAt: "", updatedAt: "" }} onBack={vi.fn()} /></QueryClientProvider>));
+  await act(async () => wait()); await act(async () => wait());
+}
+
+describe("PositionedFieldEditor accessibility", () => {
+  it("focuses and selects a field with Enter or Space while preserving pointer selection", async () => {
+    await render(); field().focus(); expect(document.activeElement).toBe(field());
+    await act(async () => key(field(), "Enter")); expect(field().getAttribute("aria-label")).toContain("Seleccionado"); expect(container.querySelector('[role="dialog"]')).not.toBeNull();
+    await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))); expect(document.activeElement).toBe(field());
+    await act(async () => field().click()); expect(field().getAttribute("aria-label")).toContain("Seleccionado");
+  });
+
+  it("moves selected fields with arrows, uses Shift for a larger step, and respects bounds", async () => {
+    await render(); field().focus(); await act(async () => key(field(), " ")); await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    const initial = field().style.left; await act(async () => key(field(), "ArrowRight")); expect(field().style.left).not.toBe(initial);
+    await act(async () => key(field(), "ArrowRight", true)); expect(Number.parseFloat(field().style.left)).toBeGreaterThan(Number.parseFloat(initial) + 1);
+    await act(async () => key(field(), "ArrowLeft", true)); await act(async () => key(field(), "ArrowLeft", true)); await act(async () => key(field(), "ArrowLeft", true)); expect(Number.parseFloat(field().style.left)).toBe(0);
+  });
+
+  it("resizes from the keyboard and traps, closes, and returns focus from the mobile sheet", async () => {
+    await render(); field().focus(); await act(async () => key(field(), "Enter"));
+    const sheet = container.querySelector<HTMLElement>('[role="dialog"]')!; const controls = [...sheet.querySelectorAll<HTMLButtonElement>("button:not([disabled])")]; controls.at(-1)!.focus(); await act(async () => key(controls.at(-1)!, "Tab")); expect(document.activeElement).toBe(controls[0]);
+    await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))); expect(document.activeElement).toBe(field());
+    const handle = container.querySelector<HTMLButtonElement>('button[aria-label="Redimensionar campo"]')!; const width = field().style.width; handle.focus(); await act(async () => key(handle, "ArrowRight", true)); expect(Number.parseFloat(field().style.width)).toBeGreaterThan(Number.parseFloat(width));
+  });
+
+  it("returns focus to the PDF preview after deleting the selected field", async () => {
+    await render(); field().focus(); await act(async () => key(field(), "Enter"));
+    const remove = [...container.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find((button) => button.textContent === "Eliminar campo")!; await act(async () => remove.click()); await act(async () => wait());
+    expect(document.activeElement).toBe(container.querySelector('[aria-label="Vista previa del PDF"]'));
+  });
+
+  it("keeps the mobile sheet open when Escape closes its nested new-data dialog", async () => {
+    await render(); field().focus(); await act(async () => key(field(), "Enter"));
+    const create = [...container.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find((button) => button.textContent === "+ Crear nuevo dato")!; await act(async () => create.click());
+    expect(container.querySelectorAll('[role="dialog"]')).toHaveLength(2);
+    await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    expect(container.querySelectorAll('[role="dialog"]')).toHaveLength(1); expect(container.textContent).toContain("Campo seleccionado");
+  });
+
+  it("creates a centered valid field with Enter and keeps its keyboard configuration flow available", async () => {
+    await render(); addField().focus(); await act(async () => key(addField(), "Enter")); await act(async () => wait());
+    const created = positionedFields()[1]; expect(positionedFields()).toHaveLength(2); expect(created.getAttribute("aria-label")).toContain("Seleccionado");
+    expect(Number.parseFloat(created.style.left)).toBeGreaterThanOrEqual(0); expect(Number.parseFloat(created.style.top)).toBeGreaterThanOrEqual(0); expect(Number.parseFloat(created.style.width)).toBeGreaterThanOrEqual(8); expect(Number.parseFloat(created.style.height)).toBeGreaterThanOrEqual(8);
+    expect(container.querySelector('[role="dialog"]')).not.toBeNull(); await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))); expect(document.activeElement).toBe(created);
+    const left = created.style.left; await act(async () => key(created, "ArrowRight")); expect(created.style.left).not.toBe(left);
+    const handle = container.querySelector<HTMLButtonElement>('button[aria-label="Redimensionar campo"]')!; const width = created.style.width; handle.focus(); await act(async () => key(handle, "ArrowRight")); expect(created.style.width).not.toBe(width);
+  });
+
+  it("keeps pointer drawing available after adding keyboard creation", async () => {
+    await render(); vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({ left: 0, top: 0, width: 400, height: 600 } as DOMRect);
+    await act(async () => addField().click()); const canvas = container.querySelector<HTMLElement>('[aria-label="Vista previa del PDF"]')!; const drawingLayer = container.querySelector<HTMLElement>('[aria-label="Área para dibujar un campo"]')!;
+    await act(async () => drawingLayer.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, clientX: 20, clientY: 20 }))); await act(async () => canvas.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, clientX: 140, clientY: 80 }))); await act(async () => canvas.dispatchEvent(new MouseEvent("pointerup", { bubbles: true, clientX: 140, clientY: 80 })));
+    expect(positionedFields()).toHaveLength(2);
+  });
+});

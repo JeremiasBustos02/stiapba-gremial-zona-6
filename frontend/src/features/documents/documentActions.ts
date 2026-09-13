@@ -28,7 +28,8 @@ export function printDocument(blob: Blob) {
   frame.onload = () => {
     frame.contentWindow?.addEventListener('afterprint', cleanup, { once: true })
     frame.contentWindow?.print()
-    timeout = window.setTimeout(cleanup, 1_000)
+    // Some browsers dispatch afterprint only after the native dialog closes.
+    timeout = window.setTimeout(cleanup, 30_000)
   }
   frame.onerror = cleanup
   frame.src = url

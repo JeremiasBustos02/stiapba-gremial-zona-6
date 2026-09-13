@@ -8,6 +8,8 @@ const generate = vi.fn()
 const regenerate = vi.fn()
 const downloadBatch = vi.fn()
 const download = vi.fn()
+const manualFields = vi.fn()
+const variants = vi.fn()
 
 vi.mock('./documentActions', () => ({ downloadDocument: (...args: unknown[]) => download(...args) }))
 vi.mock('react-pdf', async () => {
@@ -16,7 +18,8 @@ vi.mock('react-pdf', async () => {
 })
 vi.mock('./documentsApi', () => ({
   getDocumentTemplates: () => Promise.resolve([{ id: 'template', nombre: 'Permiso Gremial', documentType: 'PERMISO_GREMIAL' }]),
-  getDocumentVariants: () => Promise.resolve([{ id: 'variant', nombre: 'Firma A' }]),
+  getDocumentVariants: (...args: unknown[]) => variants(...args),
+  getManualFields: (...args: unknown[]) => manualFields(...args),
   getProvinces: () => Promise.resolve([{ id: 'province', name: 'Buenos Aires' }]),
   getDocumentCompanies: () => Promise.resolve([{ id: 'company', nombre: 'INFRIBA', agreementId: 'agreement' }]),
   getDocumentAgreements: () => Promise.resolve([{ id: 'agreement', codigo: '771/10', descripcion: 'Convenio' }]),
@@ -37,11 +40,11 @@ const change = (element: HTMLInputElement | HTMLSelectElement, value: string) =>
 const button = (text: string) => [...container.querySelectorAll('button')].find(item => item.textContent?.includes(text)) as HTMLButtonElement
 const delegateInput = (name: string) => [...container.querySelectorAll('label')].find(label => label.textContent?.includes(name))?.querySelector('input') as HTMLInputElement
 
-beforeEach(() => { ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true; globalThis.ResizeObserver = class { observe() {}; disconnect() {}; unobserve() {} }; container = document.createElement('div'); document.body.appendChild(container); root = createRoot(container); generate.mockReset(); regenerate.mockReset(); downloadBatch.mockReset(); download.mockReset() })
+beforeEach(() => { ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true; globalThis.ResizeObserver = class { observe() {}; disconnect() {}; unobserve() {} }; container = document.createElement('div'); document.body.appendChild(container); root = createRoot(container); generate.mockReset(); regenerate.mockReset(); downloadBatch.mockReset(); download.mockReset(); manualFields.mockReset(); manualFields.mockResolvedValue([]); variants.mockReset(); variants.mockResolvedValue([{ id: 'variant', nombre: 'Firma A' }, { id: 'variant-b', nombre: 'Firma B' }]) })
 afterEach(() => { act(() => root.unmount()); container.remove(); vi.restoreAllMocks() })
 
 async function render(onBack = vi.fn()) { await act(async () => root.render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><BulkPermisoPage onBack={onBack} /></QueryClientProvider>)); await act(async () => wait()); return onBack }
-async function completeForm(delegates = ['Ana Paz']) { await act(async () => { const selects = container.querySelectorAll('select'); change(selects[0], 'template') }); await act(async () => wait()); await act(async () => { const selects = container.querySelectorAll('select'); change(selects[1], 'variant'); change(selects[2], 'company'); change(selects[4], 'province'); change(container.querySelector('input[type="number"]')!, '18'); delegates.forEach(name => delegateInput(name)?.click()) }) }
+async function completeForm(delegates = ['Ana Paz']) { await act(async () => { const selects = container.querySelectorAll('select'); change(selects[0], 'template') }); await act(async () => wait()); await act(async () => { const selects = container.querySelectorAll('select'); change(selects[1], 'variant'); change(selects[2], 'company'); change(selects[4], 'province'); change(container.querySelector('input[type="number"]')!, '18'); delegates.forEach(name => delegateInput(name)?.click()) }); await act(async () => wait()) }
 
 describe('BulkPermisoPage', () => {
   it('loads common catalogs, filters delegates by name and DNI, and maintains a unique selection count', async () => {
@@ -62,9 +65,23 @@ describe('BulkPermisoPage', () => {
     await act(async () => button('Continuar').click())
     expect(container.textContent).toContain('Generar 2 permisos'); expect(generate).not.toHaveBeenCalled()
     await act(async () => button('Generar 2 permisos').click())
-    expect(generate).toHaveBeenCalledWith(expect.objectContaining({ variantId: 'variant', provinceId: 'province', companyId: 'company', agreementId: 'agreement', permitDay: 18, delegateIds: ['ana', 'beto'] }))
+    expect(generate).toHaveBeenCalledWith(expect.objectContaining({ variantId: 'variant', provinceId: 'province', companyId: 'company', agreementId: 'agreement', permitDay: 18, manualValues: {}, delegateIds: ['ana', 'beto'] }))
     await act(async () => wait())
     expect(container.textContent).toContain('2 permisos procesados'); expect(container.textContent).toContain('PG-2026-000231')
+  })
+
+  it('requires configured manual values and sends the common values for every selected delegate', async () => {
+    manualFields.mockResolvedValue([{ id: 'reason', label: 'Motivo', type: 'TEXT', required: true }]); generate.mockResolvedValue(success); await render(); await completeForm(['Ana Paz', 'Beto Luna']); await act(async () => wait())
+    expect(container.textContent).toContain('Motivo'); expect(button('Continuar').disabled).toBe(true)
+    await act(async () => change(container.querySelector('#manual-reason')!, 'Asamblea'))
+    expect(button('Continuar').disabled).toBe(false)
+    await act(async () => button('Continuar').click()); await act(async () => button('Generar 2 permisos').click())
+    expect(generate).toHaveBeenCalledWith(expect.objectContaining({ manualValues: { reason: 'Asamblea' }, delegateIds: ['ana', 'beto'] }))
+  })
+
+  it('clears manual values when the selected variant changes', async () => {
+    manualFields.mockImplementation((variantId: string) => Promise.resolve(variantId === 'variant' ? [{ id: 'reason', label: 'Motivo', type: 'TEXT', required: true }] : [{ id: 'place', label: 'Lugar', type: 'TEXT', required: true }])); await render(); await completeForm(); await act(async () => change(container.querySelector('#manual-reason')!, 'Asamblea')); await act(async () => { change(container.querySelectorAll('select')[1], 'variant-b'); await wait(); await wait() })
+    expect(container.querySelector('#manual-reason')).toBeNull(); expect(container.querySelector('#manual-place')).not.toBeNull(); expect(button('Continuar').disabled).toBe(true)
   })
 
   it('keeps partial successes visible, downloads one PDF, and archives only successful records', async () => {

@@ -54,6 +54,54 @@ type Interaction = {
 } | null;
 
 const minimumSize = 8;
+const keyboardStep = 1;
+const keyboardLargeStep = 10;
+const initialFieldWidthRatio = 0.25;
+const initialFieldHeightRatio = 0.06;
+
+function useOverlayFocus(
+  open: boolean,
+  content: React.RefObject<HTMLElement | null>,
+  onClose: () => void,
+  canClose = true,
+) {
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  useEffect(() => {
+    if (!open) return;
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    const focusable = () =>
+      [
+        ...(content.current?.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+        ) ?? []),
+      ];
+    focusable()[0]?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && canClose) {
+        event.preventDefault();
+        onCloseRef.current();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const items = focusable();
+      if (!items.length) return;
+      const index = items.indexOf(document.activeElement as HTMLElement);
+      if (event.shiftKey && index <= 0) {
+        event.preventDefault();
+        items.at(-1)?.focus();
+      } else if (!event.shiftKey && index === items.length - 1) {
+        event.preventDefault();
+        items[0].focus();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      previouslyFocused?.focus();
+    };
+  }, [canClose, content, open]);
+}
 
 function fieldFromResponse(field: TemplateField): EditableField {
   return { ...field, clientId: field.id };
@@ -116,6 +164,8 @@ export function PositionedFieldEditor({
   const [discardPromptOpen, setDiscardPromptOpen] = useState(false);
   const previewHost = useRef<HTMLDivElement>(null);
   const container = useRef<HTMLDivElement>(null);
+  const pendingFieldFocus = useRef<string | null>(null);
+  const focusCreatedFieldOnSheetClose = useRef<string | null>(null);
   const pdfQuery = useQuery({
     queryKey: ["variant-pdf", variant.id],
     queryFn: () => getVariantPdf(templateId, variant.id),
@@ -173,6 +223,17 @@ export function PositionedFieldEditor({
     setFields(next);
     setSavedSnapshot(snapshot(next));
   }, [dirty, fieldsQuery.data]);
+  useEffect(() => {
+    const clientId = pendingFieldFocus.current;
+    if (!clientId) return;
+    const field = container.current?.querySelector<HTMLButtonElement>(
+      `[data-positioned-field-id="${clientId}"]`,
+    );
+    if (field) {
+      field.focus();
+      pendingFieldFocus.current = null;
+    }
+  }, [fields]);
 
   const saveMutation = useMutation({
     mutationFn: () => {
@@ -269,18 +330,26 @@ export function PositionedFieldEditor({
       current.filter((field) => field.clientId !== clientId),
     );
     setSelectedId(null);
+    window.setTimeout(() => container.current?.focus());
   }
   function selectPositionedField(
     event: React.PointerEvent<HTMLButtonElement>,
     field: EditableField,
     rect: PdfRect,
   ) {
+    focusCreatedFieldOnSheetClose.current = null;
     const isSelected = selectedId === field.clientId;
     setSelectedId(field.clientId);
     setSelectedDocumentField(null);
     setMobileConfigOpen(true);
     if (canStartFieldMove(isSelected, drawingMode))
       begin(event, "move", rect, field.clientId);
+  }
+  function selectPositionedFieldWithKeyboard(field: EditableField) {
+    focusCreatedFieldOnSheetClose.current = null;
+    setSelectedId(field.clientId);
+    setSelectedDocumentField(null);
+    setMobileConfigOpen(true);
   }
   function previewRect(field: EditableField) {
     return pdfToPreview(
@@ -367,33 +436,172 @@ export function PositionedFieldEditor({
   }
   function finishInteraction() {
     if (interaction?.kind === "create" && drawingRect && container.current) {
-      if (canCreatePositionedField(drawingRect, minimumSize)) {
-        const field = blankPositionedField(pageNumber);
-        setFields((current) => [
-          ...current,
-          {
-            ...field,
-            ...previewToPdf(
-              drawingRect,
-              previewSize.width,
-              previewSize.height,
-              pageSize.width,
-              pageSize.height,
-            ),
-          },
-        ]);
-        setSelectedId(field.clientId);
-        setMobileConfigOpen(true);
-      }
+      addPositionedField(drawingRect);
       setDrawingMode(false);
       setDrawingRect(null);
     }
     setInteraction(null);
   }
+  function addPositionedField(rect: PdfRect, focusField = false) {
+    if (!canCreatePositionedField(rect, minimumSize)) return;
+    const field = blankPositionedField(pageNumber);
+    setFields((current) => [
+      ...current,
+      {
+        ...field,
+        ...previewToPdf(
+          rect,
+          previewSize.width,
+          previewSize.height,
+          pageSize.width,
+          pageSize.height,
+        ),
+      },
+    ]);
+    setSelectedId(field.clientId);
+    setSelectedDocumentField(null);
+    setMobileConfigOpen(true);
+    if (focusField) pendingFieldFocus.current = field.clientId;
+    if (focusField) focusCreatedFieldOnSheetClose.current = field.clientId;
+  }
+  function createPositionedFieldWithKeyboard() {
+    if (
+      previewSize.width < minimumSize ||
+      previewSize.height < minimumSize
+    )
+      return;
+    const width = Math.max(
+      minimumSize,
+      Math.min(previewSize.width, previewSize.width * initialFieldWidthRatio),
+    );
+    const height = Math.max(
+      minimumSize,
+      Math.min(
+        previewSize.height,
+        previewSize.height * initialFieldHeightRatio,
+      ),
+    );
+    addPositionedField(
+      {
+        x: (previewSize.width - width) / 2,
+        y: (previewSize.height - height) / 2,
+        width,
+        height,
+      },
+      true,
+    );
+  }
+  function movePositionedField(
+    field: EditableField,
+    deltaX: number,
+    deltaY: number,
+  ) {
+    const rect = previewRect(field);
+    const next = {
+      ...rect,
+      x: Math.max(0, Math.min(previewSize.width - rect.width, rect.x + deltaX)),
+      y: Math.max(0, Math.min(previewSize.height - rect.height, rect.y + deltaY)),
+    };
+    updateField(
+      field.clientId,
+      previewToPdf(
+        next,
+        previewSize.width,
+        previewSize.height,
+        pageSize.width,
+        pageSize.height,
+      ),
+    );
+  }
+  function resizePositionedField(
+    field: EditableField,
+    deltaWidth: number,
+    deltaHeight: number,
+  ) {
+    const rect = previewRect(field);
+    const next = {
+      ...rect,
+      width: Math.max(
+        minimumSize,
+        Math.min(previewSize.width - rect.x, rect.width + deltaWidth),
+      ),
+      height: Math.max(
+        minimumSize,
+        Math.min(previewSize.height - rect.y, rect.height + deltaHeight),
+      ),
+    };
+    updateField(
+      field.clientId,
+      previewToPdf(
+        next,
+        previewSize.width,
+        previewSize.height,
+        pageSize.width,
+        pageSize.height,
+      ),
+    );
+  }
+  function moveWithKeyboard(
+    event: React.KeyboardEvent<HTMLButtonElement>,
+    field: EditableField,
+  ) {
+    if (selectedId !== field.clientId) return;
+    const step = event.shiftKey ? keyboardLargeStep : keyboardStep;
+    const deltas = {
+      ArrowLeft: [-step, 0],
+      ArrowRight: [step, 0],
+      ArrowUp: [0, -step],
+      ArrowDown: [0, step],
+    } as const;
+    const delta = deltas[event.key as keyof typeof deltas];
+    if (!delta) return;
+    event.preventDefault();
+    movePositionedField(field, delta[0], delta[1]);
+  }
+  function resizeWithKeyboard(
+    event: React.KeyboardEvent<HTMLButtonElement>,
+    field: EditableField,
+  ) {
+    const step = event.shiftKey ? keyboardLargeStep : keyboardStep;
+    const deltas = {
+      ArrowLeft: [-step, 0],
+      ArrowRight: [step, 0],
+      ArrowUp: [0, -step],
+      ArrowDown: [0, step],
+    } as const;
+    const delta = deltas[event.key as keyof typeof deltas];
+    if (!delta) return;
+    event.preventDefault();
+    resizePositionedField(field, delta[0], delta[1]);
+  }
+  function handlePositionedFieldKeyDown(
+    event: React.KeyboardEvent<HTMLButtonElement>,
+    field: EditableField,
+  ) {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      selectPositionedFieldWithKeyboard(field);
+      return;
+    }
+    moveWithKeyboard(event, field);
+  }
   function labelFor(id: string) {
     return overlayLabel(
       definitionsQuery.data?.find((definition) => definition.id === id)?.label,
     );
+  }
+  function closeMobileConfiguration() {
+    setMobileConfigOpen(false);
+    const clientId = focusCreatedFieldOnSheetClose.current;
+    if (!clientId) return;
+    window.setTimeout(() => {
+      container.current
+        ?.querySelector<HTMLButtonElement>(
+          `[data-positioned-field-id="${clientId}"]`,
+        )
+        ?.focus();
+      focusCreatedFieldOnSheetClose.current = null;
+    });
   }
 
   const positioned = fields.filter(
@@ -473,6 +681,10 @@ export function PositionedFieldEditor({
               )}
               <button
                 type="button"
+                disabled={
+                  previewSize.width < minimumSize ||
+                  previewSize.height < minimumSize
+                }
                 onClick={() => {
                   if (drawingMode) {
                     setDrawingMode(false);
@@ -481,10 +693,26 @@ export function PositionedFieldEditor({
                   } else setDrawingMode(true);
                   setSaveFeedback("");
                 }}
-                className={`min-h-11 rounded-lg px-4 py-2 text-sm font-semibold ${drawingMode ? "border border-blue-700 bg-white text-blue-700" : "bg-blue-700 text-white"}`}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter" && event.key !== " ") return;
+                  event.preventDefault();
+                  if (drawingMode) {
+                    setDrawingMode(false);
+                    setDrawingRect(null);
+                    setInteraction(null);
+                    return;
+                  }
+                  createPositionedFieldWithKeyboard();
+                }}
+                aria-describedby="add-positioned-field-help"
+                className={`min-h-11 rounded-lg px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60 ${drawingMode ? "border border-blue-700 bg-white text-blue-700" : "bg-blue-700 text-white"}`}
               >
                 {drawingMode ? "Cancelar agregar" : "+ Agregar campo"}
               </button>
+              <p id="add-positioned-field-help" className="sr-only">
+                Con teclado se agrega un campo centrado. Con mouse o touch podés
+                dibujar su tamaño y posición.
+              </p>
             </div>
             {drawingMode && (
               <p
@@ -495,6 +723,10 @@ export function PositionedFieldEditor({
                 documento.
               </p>
             )}
+            <p id="positioned-field-keyboard-help" className="sr-only">
+              Usá las flechas para mover el campo seleccionado. Mantené Shift
+              para moverlo de a diez pasos.
+            </p>
             {pdfQuery.isPending && (
               <p className="p-12 text-center">Cargando PDF...</p>
             )}
@@ -513,6 +745,8 @@ export function PositionedFieldEditor({
                 >
                   <div
                     ref={container}
+                    tabIndex={-1}
+                    aria-label="Vista previa del PDF"
                     onPointerMove={move}
                     onPointerUp={finishInteraction}
                     onPointerCancel={finishInteraction}
@@ -607,9 +841,14 @@ export function PositionedFieldEditor({
                       return (
                         <button
                           key={field.clientId}
+                          data-positioned-field-id={field.clientId}
                           type="button"
                           onPointerDown={(event) =>
                             selectPositionedField(event, field, rect)
+                          }
+                          onClick={() => selectPositionedFieldWithKeyboard(field)}
+                          onKeyDown={(event) =>
+                            handlePositionedFieldKeyDown(event, field)
                           }
                           style={{
                             left: rect.x,
@@ -618,8 +857,9 @@ export function PositionedFieldEditor({
                             height: rect.height,
                             touchAction: selectedField ? "none" : "auto",
                           }}
-                          className={`absolute z-20 border-2 ${selectedField ? "border-blue-800 bg-blue-500/30 ring-2 ring-blue-300" : unassigned ? "border-amber-600 border-dashed bg-amber-300/20" : "border-blue-600 bg-blue-500/15"}`}
-                          aria-label={`Campo ${index + 1}: ${labelFor(field.fieldDefinitionId)}. ${selectedField ? "Seleccionado" : "Tocá para seleccionar"}`}
+                          className={`absolute z-20 border-2 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-700 focus-visible:ring-offset-1 ${selectedField ? "border-blue-800 bg-blue-500/30 ring-2 ring-blue-300" : unassigned ? "border-amber-600 border-dashed bg-amber-300/20" : "border-blue-600 bg-blue-500/15"}`}
+                          aria-label={`Campo ${index + 1}: ${labelFor(field.fieldDefinitionId)}${selectedField ? ". Seleccionado." : ". Presioná Enter para seleccionar."}`}
+                          aria-describedby="positioned-field-keyboard-help"
                         >
                           {/* Canvas-only field marker: it scales with the PDF overlay, not the application UI. */}
                           <span
@@ -642,12 +882,15 @@ export function PositionedFieldEditor({
                             onPointerDown={(event) =>
                               begin(event, "resize", rect, selected.clientId)
                             }
+                            onKeyDown={(event) =>
+                              resizeWithKeyboard(event, selected)
+                            }
                             style={{
                               left: rect.x + rect.width - 22,
                               top: rect.y + rect.height - 22,
                               touchAction: "none",
                             }}
-                            className="absolute z-30 grid h-11 w-11 place-items-center"
+                            className="absolute z-30 grid h-11 w-11 place-items-center focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-700 focus-visible:ring-offset-1"
                           >
                             <span className="h-4 w-4 rounded-sm border-2 border-white bg-blue-700 shadow" />
                           </button>
@@ -740,11 +983,12 @@ export function PositionedFieldEditor({
         open={mobileSheetOpen}
         selected={selected}
         selectedDocumentField={selectedDocumentField}
+        suspended={Boolean(newDataFor)}
         hasDetectedFields={hasDetectedFields}
         names={discovered}
         fields={fields}
         definitions={definitionsQuery.data ?? []}
-        onClose={() => setMobileConfigOpen(false)}
+        onClose={closeMobileConfiguration}
         onChange={updateField}
         onCreate={(clientId, acroFieldName) =>
           setNewDataFor({ clientId, acroFieldName })
@@ -930,6 +1174,7 @@ function MobileConfigurationSheet({
   open,
   selected,
   selectedDocumentField,
+  suspended,
   hasDetectedFields,
   names,
   fields,
@@ -945,6 +1190,7 @@ function MobileConfigurationSheet({
   open: boolean;
   selected: EditableField | null;
   selectedDocumentField: string | null;
+  suspended: boolean;
   hasDetectedFields: boolean;
   names: AcroformField[];
   fields: EditableField[];
@@ -957,12 +1203,21 @@ function MobileConfigurationSheet({
   onUpsert: (field: EditableField) => void;
   onRemove: (id: string) => void;
 }) {
+  const content = useRef<HTMLElement>(null);
+  const isMobileViewport =
+    typeof window === "undefined" ||
+    !window.matchMedia ||
+    window.matchMedia("(max-width: 1023px)").matches;
+  useOverlayFocus(open && isMobileViewport && !suspended, content, onClose);
   if (!open) return null;
   const selectedName =
     names.find((field) => field.acroFieldName === selectedDocumentField)
       ?.displayName || "Campo seleccionado";
   return (
     <section
+      ref={content}
+      inert={suspended || undefined}
+      aria-hidden={suspended || undefined}
       role="dialog"
       aria-modal="true"
       aria-labelledby="field-configuration-title"
@@ -1181,6 +1436,7 @@ function NewDataDialog({
   onCancel: () => void;
   onCreate: (input: FieldDefinitionInput) => void;
 }) {
+  const content = useRef<HTMLFormElement>(null);
   const [label, setLabel] = useState("");
   const [type, setType] = useState<FieldDefinitionInput["type"]>("TEXT");
   const [required, setRequired] = useState(true);
@@ -1190,6 +1446,7 @@ function NewDataDialog({
       : error
         ? "No pudimos crear el dato."
         : "";
+  useOverlayFocus(true, content, onCancel, !pending);
   return (
     <div
       role="dialog"
@@ -1198,6 +1455,7 @@ function NewDataDialog({
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4"
     >
       <form
+        ref={content}
         onSubmit={(event) => {
           event.preventDefault();
           onCreate({ label, type, sourceType: "MANUAL", required });
@@ -1257,6 +1515,7 @@ function NewDataDialog({
           <button
             type="button"
             onClick={onCancel}
+            disabled={pending}
             className="min-h-11 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold"
           >
             Cancelar
