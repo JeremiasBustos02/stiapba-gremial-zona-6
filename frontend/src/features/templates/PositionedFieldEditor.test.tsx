@@ -35,6 +35,11 @@ let container: HTMLDivElement;
 const wait = () => new Promise((resolve) => window.setTimeout(resolve, 0));
 const field = () => container.querySelector<HTMLButtonElement>('button[aria-label^="Campo 1: Motivo"]')!;
 const key = (element: HTMLElement, value: string, shiftKey = false) => element.dispatchEvent(new KeyboardEvent("keydown", { key: value, shiftKey, bubbles: true }));
+const pointer = (type: string, pointerId: number, clientX: number, clientY: number) => {
+  const event = new MouseEvent(type, { bubbles: true, clientX, clientY });
+  Object.defineProperty(event, "pointerId", { value: pointerId });
+  return event;
+};
 const positionedFields = () => [...container.querySelectorAll<HTMLButtonElement>("button[data-positioned-field-id]")];
 const addField = () => [...container.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent?.includes("Agregar campo"))!;
 
@@ -107,6 +112,20 @@ describe("PositionedFieldEditor accessibility", () => {
     await act(async () => addField().click()); const canvas = container.querySelector<HTMLElement>('[aria-label="Vista previa del PDF"]')!; const drawingLayer = container.querySelector<HTMLElement>('[aria-label="Área para dibujar un campo"]')!;
     await act(async () => drawingLayer.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, clientX: 20, clientY: 20 }))); await act(async () => canvas.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, clientX: 140, clientY: 80 }))); await act(async () => canvas.dispatchEvent(new MouseEvent("pointerup", { bubbles: true, clientX: 140, clientY: 80 })));
     expect(positionedFields()).toHaveLength(2);
+  });
+
+  it("creates a field without opening mobile configuration, then opens it on tap", async () => {
+    await render();
+    await act(async () => addField().click());
+    const canvas = container.querySelector<HTMLElement>('[aria-label="Vista previa del PDF"]')!;
+    const drawingLayer = container.querySelector<HTMLElement>('[aria-label="Área para dibujar un campo"]')!;
+    await act(async () => drawingLayer.dispatchEvent(pointer("pointerdown", 1, 20, 20)));
+    await act(async () => canvas.dispatchEvent(pointer("pointermove", 1, 140, 80)));
+    await act(async () => canvas.dispatchEvent(pointer("pointerup", 1, 140, 80)));
+    expect(positionedFields()).toHaveLength(2);
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+    await act(async () => positionedFields()[1].click());
+    expect(container.querySelector('[role="dialog"]')).not.toBeNull();
   });
 
   it("opens configuration on a real tap", async () => {
@@ -183,5 +202,78 @@ describe("PositionedFieldEditor accessibility", () => {
     await act(async () => canvas.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, clientX: 100, clientY: 140 })));
     await act(async () => canvas.dispatchEvent(new MouseEvent("pointerup", { bubbles: true, clientX: 100, clientY: 140 })));
     expect(field().style.top).not.toBe(initialTop);
+  });
+
+  it("closes the mobile sheet when its handle is dragged down", async () => {
+    await render();
+    await act(async () => field().click());
+    const handle = container.querySelector<HTMLButtonElement>('button[aria-label="Expandir configuración"]')!;
+    expect(container.querySelector<HTMLButtonElement>('button[aria-label="Cerrar configuración"]')?.className).toContain("h-12");
+    await act(async () => handle.dispatchEvent(pointer("pointerdown", 1, 200, 100)));
+    await act(async () => handle.dispatchEvent(pointer("pointermove", 1, 200, 170)));
+    await act(async () => handle.dispatchEvent(pointer("pointerup", 1, 200, 170)));
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it("expands the mobile sheet when its handle is dragged up", async () => {
+    await render();
+    await act(async () => field().click());
+    const handle = container.querySelector<HTMLButtonElement>('button[aria-label="Expandir configuración"]')!;
+    await act(async () => handle.dispatchEvent(pointer("pointerdown", 1, 200, 170)));
+    await act(async () => handle.dispatchEvent(pointer("pointermove", 1, 200, 100)));
+    await act(async () => handle.dispatchEvent(pointer("pointerup", 1, 200, 100)));
+    expect(container.querySelector('[role="dialog"]')?.className).toContain("max-h-[90dvh]");
+  });
+
+  it("updates zoom with visible controls and respects its limits", async () => {
+    await render();
+    const decrease = () => container.querySelector<HTMLButtonElement>('button[aria-label="Reducir zoom"]')!;
+    const increase = () => container.querySelector<HTMLButtonElement>('button[aria-label="Aumentar zoom"]')!;
+    expect(container.textContent).toContain("Zoom 100%");
+    await act(async () => increase().click());
+    expect(container.textContent).toContain("Zoom 125%");
+    await act(async () => Array.from({ length: 10 }, () => increase().click()));
+    expect(container.textContent).toContain("Zoom 250%");
+    expect(increase().disabled).toBe(true);
+    await act(async () => Array.from({ length: 10 }, () => decrease().click()));
+    expect(container.textContent).toContain("Zoom 75%");
+    expect(decrease().disabled).toBe(true);
+  });
+
+  it("pinches to zoom without moving or configuring a field", async () => {
+    await render();
+    field().focus();
+    await act(async () => key(field(), "Enter"));
+    await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    const canvas = container.querySelector<HTMLElement>('[aria-label="Vista previa del PDF"]')!;
+    const initialLeft = field().style.left;
+    await act(async () => field().dispatchEvent(pointer("pointerdown", 1, 100, 100)));
+    await act(async () => canvas.dispatchEvent(pointer("pointerdown", 2, 200, 100)));
+    await act(async () => canvas.dispatchEvent(pointer("pointermove", 2, 260, 100)));
+    await act(async () => canvas.dispatchEvent(pointer("pointerup", 2, 260, 100)));
+    await act(async () => canvas.dispatchEvent(pointer("pointerup", 1, 100, 100)));
+    expect(container.textContent).toContain("Zoom 160%");
+    expect(Number.parseFloat(field().style.left)).toBeCloseTo(Number.parseFloat(initialLeft) * 1.6);
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it("keeps field drag and resize aligned when zoomed", async () => {
+    await render();
+    await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="Aumentar zoom"]')!.click());
+    field().focus();
+    await act(async () => key(field(), "Enter"));
+    await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    const canvas = container.querySelector<HTMLElement>('[aria-label="Vista previa del PDF"]')!;
+    const initialLeft = Number.parseFloat(field().style.left);
+    const initialWidth = Number.parseFloat(field().style.width);
+    await act(async () => field().dispatchEvent(pointer("pointerdown", 1, 100, 100)));
+    await act(async () => canvas.dispatchEvent(pointer("pointermove", 1, 125, 125)));
+    await act(async () => canvas.dispatchEvent(pointer("pointerup", 1, 125, 125)));
+    expect(Number.parseFloat(field().style.left)).toBeCloseTo(initialLeft + 25);
+    const handle = container.querySelector<HTMLButtonElement>('button[aria-label="Redimensionar campo"]')!;
+    await act(async () => handle.dispatchEvent(pointer("pointerdown", 2, 200, 200)));
+    await act(async () => canvas.dispatchEvent(pointer("pointermove", 2, 225, 225)));
+    await act(async () => canvas.dispatchEvent(pointer("pointerup", 2, 225, 225)));
+    expect(Number.parseFloat(field().style.width)).toBeCloseTo(initialWidth + 25);
   });
 });

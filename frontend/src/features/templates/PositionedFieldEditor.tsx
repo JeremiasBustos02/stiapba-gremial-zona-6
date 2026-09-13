@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Document, Page, pdfjs } from "react-pdf";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Minus, Plus, X } from "lucide-react";
 import { AdminConfirmation } from "@/features/admin/AdminOverlay";
 import { ApiError } from "@/lib/api";
 import {
@@ -66,6 +67,10 @@ const keyboardLargeStep = 10;
 const initialFieldWidthRatio = 0.25;
 const initialFieldHeightRatio = 0.06;
 const pointerMovementThreshold = 8;
+const minimumZoom = 0.75;
+const maximumZoom = 2.5;
+const zoomStep = 0.25;
+const sheetDragThreshold = 48;
 
 function useOverlayFocus(
   open: boolean,
@@ -154,6 +159,7 @@ export function PositionedFieldEditor({
   const [pageCount, setPageCount] = useState(0);
   const [pageSize, setPageSize] = useState({ width: 0, height: 0 });
   const [previewWidth, setPreviewWidth] = useState(0);
+  const [zoom, setZoom] = useState(1);
   const [fields, setFields] = useState<EditableField[]>([]);
   const [savedSnapshot, setSavedSnapshot] = useState(snapshot([]));
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -176,6 +182,9 @@ export function PositionedFieldEditor({
   const focusCreatedFieldOnSheetClose = useRef<string | null>(null);
   const pointerGesture = useRef<PointerGesture>(null);
   const suppressFieldClick = useRef(false);
+  const pinchPointers = useRef(new Map<number, { x: number; y: number }>());
+  const pinchStartDistance = useRef<number | null>(null);
+  const pinchStartZoom = useRef(1);
   const pdfQuery = useQuery({
     queryKey: ["variant-pdf", variant.id],
     queryFn: () => getVariantPdf(templateId, variant.id),
@@ -205,10 +214,16 @@ export function PositionedFieldEditor({
     mobileConfigOpen && (Boolean(selected) || Boolean(selectedDocumentField));
   const dirty = hasUnsavedChanges(snapshot(fields), savedSnapshot);
   const previewSize = previewSizeForWidth(
-    previewWidth,
+    previewWidth * zoom,
     pageSize.width,
     pageSize.height,
   );
+
+  function changeZoom(delta: number) {
+    setZoom((current) =>
+      Math.max(minimumZoom, Math.min(maximumZoom, current + delta)),
+    );
+  }
 
   useEffect(
     () => () => {
@@ -398,6 +413,77 @@ export function PositionedFieldEditor({
     };
     setInteraction({ kind, fieldId, start: point(event), rect });
   }
+  function releasePointerCapture() {
+    const gesture = pointerGesture.current;
+    if (gesture?.captureTarget.hasPointerCapture(gesture.pointerId))
+      gesture.captureTarget.releasePointerCapture(gesture.pointerId);
+    pointerGesture.current = null;
+  }
+  function cancelPointerInteraction() {
+    const hadPointerGesture = pointerGesture.current !== null;
+    releasePointerCapture();
+    setInteraction(null);
+    setDrawingRect(null);
+    if (hadPointerGesture) suppressFieldClick.current = true;
+  }
+  function handlePreviewPointerDownCapture(
+    event: React.PointerEvent<HTMLDivElement>,
+  ) {
+    const isMobileViewport =
+      typeof window === "undefined" ||
+      !window.matchMedia ||
+      window.matchMedia("(max-width: 1023px)").matches;
+    if (!isMobileViewport) return;
+    pinchPointers.current.set(event.pointerId, {
+      x: event.clientX,
+      y: event.clientY,
+    });
+    if (pinchPointers.current.size !== 2) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    cancelPointerInteraction();
+    event.preventDefault();
+    event.stopPropagation();
+    const points = [...pinchPointers.current.values()];
+    pinchStartDistance.current = Math.hypot(
+      points[1].x - points[0].x,
+      points[1].y - points[0].y,
+    );
+    pinchStartZoom.current = zoom;
+  }
+  function handlePreviewPointerMoveCapture(
+    event: React.PointerEvent<HTMLDivElement>,
+  ) {
+    if (!pinchPointers.current.has(event.pointerId)) return;
+    pinchPointers.current.set(event.pointerId, {
+      x: event.clientX,
+      y: event.clientY,
+    });
+    if (pinchPointers.current.size < 2 || !pinchStartDistance.current) return;
+    const points = [...pinchPointers.current.values()];
+    const distance = Math.hypot(
+      points[1].x - points[0].x,
+      points[1].y - points[0].y,
+    );
+    setZoom(
+      Math.max(
+        minimumZoom,
+        Math.min(
+          maximumZoom,
+          pinchStartZoom.current * (distance / pinchStartDistance.current),
+        ),
+      ),
+    );
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  function handlePreviewPointerEndCapture(
+    event: React.PointerEvent<HTMLDivElement>,
+  ) {
+    pinchPointers.current.delete(event.pointerId);
+    if (event.currentTarget.hasPointerCapture(event.pointerId))
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    if (pinchPointers.current.size < 2) pinchStartDistance.current = null;
+  }
   function startDrawing(event: React.PointerEvent<HTMLDivElement>) {
     const start = point(event);
     begin(event, "create", { x: start.x, y: start.y, width: 0, height: 0 });
@@ -464,8 +550,7 @@ export function PositionedFieldEditor({
   }
   function finishInteraction(suppressClick = false) {
     const gesture = pointerGesture.current;
-    if (gesture?.captureTarget.hasPointerCapture(gesture.pointerId))
-      gesture.captureTarget.releasePointerCapture(gesture.pointerId);
+    releasePointerCapture();
     if (suppressClick && gesture?.dragged) suppressFieldClick.current = true;
     if (interaction?.kind === "create" && drawingRect && container.current) {
       addPositionedField(drawingRect);
@@ -475,7 +560,11 @@ export function PositionedFieldEditor({
     setInteraction(null);
     pointerGesture.current = null;
   }
-  function addPositionedField(rect: PdfRect, focusField = false) {
+  function addPositionedField(
+    rect: PdfRect,
+    focusField = false,
+    openConfiguration = false,
+  ) {
     if (!canCreatePositionedField(rect, minimumSize)) return;
     const field = blankPositionedField(pageNumber);
     setFields((current) => [
@@ -493,7 +582,8 @@ export function PositionedFieldEditor({
     ]);
     setSelectedId(field.clientId);
     setSelectedDocumentField(null);
-    setMobileConfigOpen(true);
+    setMobileConfigOpen(false);
+    if (openConfiguration) setMobileConfigOpen(true);
     if (focusField) pendingFieldFocus.current = field.clientId;
     if (focusField) focusCreatedFieldOnSheetClose.current = field.clientId;
   }
@@ -521,6 +611,7 @@ export function PositionedFieldEditor({
         width,
         height,
       },
+      true,
       true,
     );
   }
@@ -768,9 +859,37 @@ export function PositionedFieldEditor({
                 No pudimos cargar el PDF de la variante.
               </p>
             )}
+            <div className="mb-3 flex items-center justify-end gap-2 lg:hidden">
+              <span className="mr-auto text-sm font-semibold text-slate-700">
+                Zoom {Math.round(zoom * 100)}%
+              </span>
+              <button
+                type="button"
+                onClick={() => changeZoom(-zoomStep)}
+                disabled={zoom <= minimumZoom}
+                className="grid h-11 w-11 place-items-center rounded-lg border border-slate-300 bg-white text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                aria-label="Reducir zoom"
+              >
+                <Minus size={19} aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                onClick={() => changeZoom(zoomStep)}
+                disabled={zoom >= maximumZoom}
+                className="grid h-11 w-11 place-items-center rounded-lg border border-slate-300 bg-white text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                aria-label="Aumentar zoom"
+              >
+                <Plus size={19} aria-hidden="true" />
+              </button>
+            </div>
             <div
               ref={previewHost}
               className="max-h-[68dvh] w-full min-w-0 overflow-auto overscroll-contain"
+              onPointerDownCapture={handlePreviewPointerDownCapture}
+              onPointerMoveCapture={handlePreviewPointerMoveCapture}
+              onPointerUpCapture={handlePreviewPointerEndCapture}
+              onPointerCancelCapture={handlePreviewPointerEndCapture}
+              style={{ touchAction: "pan-x pan-y" }}
             >
               {blobUrl && previewWidth > 0 && (
                 <div
@@ -1243,11 +1362,25 @@ function MobileConfigurationSheet({
   onRemove: (id: string) => void;
 }) {
   const content = useRef<HTMLElement>(null);
+  const sheetPointer = useRef<{
+    pointerId: number;
+    startY: number;
+    offsetY: number;
+  } | null>(null);
+  const [sheetOffset, setSheetOffset] = useState(0);
+  const [sheetExpanded, setSheetExpanded] = useState(false);
   const isMobileViewport =
     typeof window === "undefined" ||
     !window.matchMedia ||
     window.matchMedia("(max-width: 1023px)").matches;
   useOverlayFocus(open && isMobileViewport && !suspended, content, onClose);
+  useEffect(() => {
+    if (!open) {
+      sheetPointer.current = null;
+      setSheetOffset(0);
+      setSheetExpanded(false);
+    }
+  }, [open]);
   if (!open) return null;
   const selectedName =
     names.find((field) => field.acroFieldName === selectedDocumentField)
@@ -1260,9 +1393,49 @@ function MobileConfigurationSheet({
       role="dialog"
       aria-modal="true"
       aria-labelledby="field-configuration-title"
-      className="fixed inset-x-0 bottom-0 z-40 max-h-[70dvh] overflow-y-auto rounded-t-2xl bg-white p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] shadow-2xl lg:hidden"
+      className={`fixed inset-x-0 bottom-0 z-40 overflow-y-auto rounded-t-2xl bg-white p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] shadow-2xl lg:hidden ${sheetExpanded ? "max-h-[90dvh]" : "max-h-[70dvh]"}`}
+      style={{ transform: `translateY(${sheetOffset}px)` }}
     >
-      <div className="mx-auto mb-4 h-1.5 w-10 rounded-full bg-slate-300" />
+      <button
+        type="button"
+        aria-label={sheetExpanded ? "Reducir configuración" : "Expandir configuración"}
+        className="mx-auto mb-4 flex h-11 w-16 items-center justify-center rounded-lg touch-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700"
+        onPointerDown={(event) => {
+          event.preventDefault();
+          event.currentTarget.setPointerCapture(event.pointerId);
+          sheetPointer.current = {
+            pointerId: event.pointerId,
+            startY: event.clientY,
+            offsetY: 0,
+          };
+        }}
+        onPointerMove={(event) => {
+          const gesture = sheetPointer.current;
+          if (!gesture || gesture.pointerId !== event.pointerId) return;
+          const offsetY = Math.max(0, event.clientY - gesture.startY);
+          gesture.offsetY = offsetY;
+          setSheetOffset(offsetY);
+          event.preventDefault();
+        }}
+        onPointerUp={(event) => {
+          const gesture = sheetPointer.current;
+          if (!gesture || gesture.pointerId !== event.pointerId) return;
+          if (event.clientY - gesture.startY >= sheetDragThreshold) onClose();
+          else if (event.clientY - gesture.startY <= -sheetDragThreshold)
+            setSheetExpanded(true);
+          setSheetOffset(0);
+          event.currentTarget.releasePointerCapture(event.pointerId);
+          sheetPointer.current = null;
+        }}
+        onPointerCancel={(event) => {
+          if (sheetPointer.current?.pointerId !== event.pointerId) return;
+          setSheetOffset(0);
+          event.currentTarget.releasePointerCapture(event.pointerId);
+          sheetPointer.current = null;
+        }}
+      >
+        <span aria-hidden="true" className="h-1.5 w-10 rounded-full bg-slate-300" />
+      </button>
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 id="field-configuration-title" className="text-lg font-bold">
@@ -1285,10 +1458,10 @@ function MobileConfigurationSheet({
         <button
           type="button"
           onClick={onClose}
-          className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-xl text-slate-600 hover:bg-slate-100"
+          className="grid h-12 w-12 shrink-0 place-items-center rounded-lg text-slate-600 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700"
           aria-label="Cerrar configuración"
         >
-          ×
+          <X size={22} aria-hidden="true" />
         </button>
       </div>
       {selected ? (
