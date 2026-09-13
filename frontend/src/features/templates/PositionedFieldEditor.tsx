@@ -60,6 +60,7 @@ type PointerGesture = {
   dragged: boolean;
   captureTarget: HTMLElement;
 } | null;
+type GestureMode = "idle" | "drag-field" | "resize-field" | "create-field" | "pinch";
 
 const minimumSize = 8;
 const keyboardStep = 1;
@@ -182,7 +183,9 @@ export function PositionedFieldEditor({
   const focusCreatedFieldOnSheetClose = useRef<string | null>(null);
   const pointerGesture = useRef<PointerGesture>(null);
   const suppressFieldClick = useRef(false);
-  const pinchPointers = useRef(new Map<number, { x: number; y: number }>());
+  const activePointers = useRef(new Map<number, { x: number; y: number }>());
+  const gestureMode = useRef<GestureMode>("idle");
+  const pinchPointerIds = useRef<[number, number] | null>(null);
   const pinchStartDistance = useRef<number | null>(null);
   const pinchStartZoom = useRef(1);
   const pdfQuery = useQuery({
@@ -411,6 +414,12 @@ export function PositionedFieldEditor({
       dragged: false,
       captureTarget: event.currentTarget,
     };
+    gestureMode.current =
+      kind === "move"
+        ? "drag-field"
+        : kind === "resize"
+          ? "resize-field"
+          : "create-field";
     setInteraction({ kind, fieldId, start: point(event), rect });
   }
   function releasePointerCapture() {
@@ -419,11 +428,27 @@ export function PositionedFieldEditor({
       gesture.captureTarget.releasePointerCapture(gesture.pointerId);
     pointerGesture.current = null;
   }
-  function cancelPointerInteraction() {
+  function cancelOneFingerGesture() {
     const hadPointerGesture = pointerGesture.current !== null;
+    if (
+      interaction?.fieldId &&
+      (interaction.kind === "move" || interaction.kind === "resize")
+    ) {
+      updateField(
+        interaction.fieldId,
+        previewToPdf(
+          interaction.rect,
+          previewSize.width,
+          previewSize.height,
+          pageSize.width,
+          pageSize.height,
+        ),
+      );
+    }
     releasePointerCapture();
     setInteraction(null);
     setDrawingRect(null);
+    setDrawingMode(false);
     if (hadPointerGesture) suppressFieldClick.current = true;
   }
   function handlePreviewPointerDownCapture(
@@ -434,16 +459,19 @@ export function PositionedFieldEditor({
       !window.matchMedia ||
       window.matchMedia("(max-width: 1023px)").matches;
     if (!isMobileViewport) return;
-    pinchPointers.current.set(event.pointerId, {
+    activePointers.current.set(event.pointerId, {
       x: event.clientX,
       y: event.clientY,
     });
-    if (pinchPointers.current.size !== 2) return;
+    if (activePointers.current.size !== 2) return;
+    gestureMode.current = "pinch";
     event.currentTarget.setPointerCapture(event.pointerId);
-    cancelPointerInteraction();
+    cancelOneFingerGesture();
     event.preventDefault();
     event.stopPropagation();
-    const points = [...pinchPointers.current.values()];
+    const pointerIds = [...activePointers.current.keys()];
+    pinchPointerIds.current = [pointerIds[0], pointerIds[1]];
+    const points = pointerIds.map((id) => activePointers.current.get(id)!);
     pinchStartDistance.current = Math.hypot(
       points[1].x - points[0].x,
       points[1].y - points[0].y,
@@ -453,13 +481,16 @@ export function PositionedFieldEditor({
   function handlePreviewPointerMoveCapture(
     event: React.PointerEvent<HTMLDivElement>,
   ) {
-    if (!pinchPointers.current.has(event.pointerId)) return;
-    pinchPointers.current.set(event.pointerId, {
+    if (!activePointers.current.has(event.pointerId)) return;
+    activePointers.current.set(event.pointerId, {
       x: event.clientX,
       y: event.clientY,
     });
-    if (pinchPointers.current.size < 2 || !pinchStartDistance.current) return;
-    const points = [...pinchPointers.current.values()];
+    if (gestureMode.current !== "pinch") return;
+    const ids = pinchPointerIds.current;
+    if (!ids || !pinchStartDistance.current) return;
+    const points = ids.map((id) => activePointers.current.get(id));
+    if (!points[0] || !points[1]) return;
     const distance = Math.hypot(
       points[1].x - points[0].x,
       points[1].y - points[0].y,
@@ -476,13 +507,25 @@ export function PositionedFieldEditor({
     event.preventDefault();
     event.stopPropagation();
   }
-  function handlePreviewPointerEndCapture(
+  function finishPreviewPointer(
     event: React.PointerEvent<HTMLDivElement>,
+    cancelled = false,
   ) {
-    pinchPointers.current.delete(event.pointerId);
+    const mode = gestureMode.current;
+    activePointers.current.delete(event.pointerId);
     if (event.currentTarget.hasPointerCapture(event.pointerId))
       event.currentTarget.releasePointerCapture(event.pointerId);
-    if (pinchPointers.current.size < 2) pinchStartDistance.current = null;
+    if (mode === "pinch") {
+      if (activePointers.current.size < 2) {
+        gestureMode.current = "idle";
+        pinchPointerIds.current = null;
+        pinchStartDistance.current = null;
+      }
+      return;
+    }
+    if (pointerGesture.current?.pointerId === event.pointerId)
+      finishInteraction(!cancelled, cancelled);
+    gestureMode.current = "idle";
   }
   function startDrawing(event: React.PointerEvent<HTMLDivElement>) {
     const start = point(event);
@@ -548,12 +591,13 @@ export function PositionedFieldEditor({
       previewToPdf(next, width, height, pageSize.width, pageSize.height),
     );
   }
-  function finishInteraction(suppressClick = false) {
+  function finishInteraction(suppressClick = false, cancelled = false) {
     const gesture = pointerGesture.current;
     releasePointerCapture();
     if (suppressClick && gesture?.dragged) suppressFieldClick.current = true;
-    if (interaction?.kind === "create" && drawingRect && container.current) {
-      addPositionedField(drawingRect);
+    if (interaction?.kind === "create") {
+      if (!cancelled && drawingRect && container.current)
+        addPositionedField(drawingRect);
       setDrawingMode(false);
       setDrawingRect(null);
     }
@@ -887,8 +931,6 @@ export function PositionedFieldEditor({
               className="max-h-[68dvh] w-full min-w-0 overflow-auto overscroll-contain"
               onPointerDownCapture={handlePreviewPointerDownCapture}
               onPointerMoveCapture={handlePreviewPointerMoveCapture}
-              onPointerUpCapture={handlePreviewPointerEndCapture}
-              onPointerCancelCapture={handlePreviewPointerEndCapture}
               style={{ touchAction: "pan-x pan-y" }}
             >
               {blobUrl && previewWidth > 0 && (
@@ -900,8 +942,8 @@ export function PositionedFieldEditor({
                     tabIndex={-1}
                     aria-label="Vista previa del PDF"
                     onPointerMove={move}
-                    onPointerUp={() => finishInteraction(true)}
-                    onPointerCancel={() => finishInteraction()}
+                    onPointerUp={(event) => finishPreviewPointer(event)}
+                    onPointerCancel={(event) => finishPreviewPointer(event, true)}
                     style={{ width: previewSize.width }}
                     className="relative mx-auto bg-white shadow-xl"
                   >

@@ -204,6 +204,73 @@ describe("PositionedFieldEditor accessibility", () => {
     expect(field().style.top).not.toBe(initialTop);
   });
 
+  it("does not zoom during a one-pointer field drag", async () => {
+    await render();
+    field().focus();
+    await act(async () => key(field(), "Enter"));
+    await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    const canvas = container.querySelector<HTMLElement>('[aria-label="Vista previa del PDF"]')!;
+    await act(async () => field().dispatchEvent(pointer("pointerdown", 1, 100, 100)));
+    await act(async () => canvas.dispatchEvent(pointer("pointermove", 1, 140, 140)));
+    await act(async () => canvas.dispatchEvent(pointer("pointerup", 1, 140, 140)));
+    expect(container.textContent).toContain("Zoom 100%");
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it("cancels a field drag when a second pointer starts a pinch", async () => {
+    await render();
+    field().focus();
+    await act(async () => key(field(), "Enter"));
+    await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    const canvas = container.querySelector<HTMLElement>('[aria-label="Vista previa del PDF"]')!;
+    const initialLeft = field().style.left;
+    await act(async () => field().dispatchEvent(pointer("pointerdown", 1, 100, 100)));
+    await act(async () => canvas.dispatchEvent(pointer("pointermove", 1, 120, 100)));
+    await act(async () => canvas.dispatchEvent(pointer("pointerdown", 2, 200, 100)));
+    await act(async () => canvas.dispatchEvent(pointer("pointermove", 2, 260, 100)));
+    await act(async () => canvas.dispatchEvent(pointer("pointerup", 2, 260, 100)));
+    await act(async () => canvas.dispatchEvent(pointer("pointermove", 1, 180, 180)));
+    await act(async () => canvas.dispatchEvent(pointer("pointerup", 1, 180, 180)));
+    expect(container.textContent).toContain("Zoom 175%");
+    expect(Number.parseFloat(field().style.left)).toBeCloseTo(Number.parseFloat(initialLeft) * 1.75);
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it("cancels creation when a second pointer starts a pinch", async () => {
+    await render();
+    await act(async () => addField().click());
+    const canvas = container.querySelector<HTMLElement>('[aria-label="Vista previa del PDF"]')!;
+    const drawingLayer = container.querySelector<HTMLElement>('[aria-label="Área para dibujar un campo"]')!;
+    await act(async () => drawingLayer.dispatchEvent(pointer("pointerdown", 1, 20, 20)));
+    await act(async () => canvas.dispatchEvent(pointer("pointerdown", 2, 200, 20)));
+    await act(async () => canvas.dispatchEvent(pointer("pointermove", 2, 260, 20)));
+    await act(async () => canvas.dispatchEvent(pointer("pointerup", 2, 260, 20)));
+    await act(async () => canvas.dispatchEvent(pointer("pointerup", 1, 140, 80)));
+    expect(positionedFields()).toHaveLength(1);
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it("requires a new pointerdown after pinch before dragging again", async () => {
+    await render();
+    field().focus();
+    await act(async () => key(field(), "Enter"));
+    await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    const canvas = container.querySelector<HTMLElement>('[aria-label="Vista previa del PDF"]')!;
+    await act(async () => field().dispatchEvent(pointer("pointerdown", 1, 100, 100)));
+    await act(async () => canvas.dispatchEvent(pointer("pointerdown", 2, 200, 100)));
+    await act(async () => canvas.dispatchEvent(pointer("pointermove", 2, 260, 100)));
+    await act(async () => canvas.dispatchEvent(pointer("pointerup", 2, 260, 100)));
+    const afterPinch = field().style.left;
+    await act(async () => canvas.dispatchEvent(pointer("pointermove", 1, 180, 180)));
+    await act(async () => canvas.dispatchEvent(pointer("pointerup", 1, 180, 180)));
+    expect(field().style.left).toBe(afterPinch);
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+    await act(async () => field().dispatchEvent(pointer("pointerdown", 3, 100, 100)));
+    await act(async () => canvas.dispatchEvent(pointer("pointermove", 3, 140, 140)));
+    await act(async () => canvas.dispatchEvent(pointer("pointerup", 3, 140, 140)));
+    expect(field().style.left).not.toBe(afterPinch);
+  });
+
   it("closes the mobile sheet when its handle is dragged down", async () => {
     await render();
     await act(async () => field().click());
