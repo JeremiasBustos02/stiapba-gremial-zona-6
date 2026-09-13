@@ -25,7 +25,7 @@ Este documento complementa:
 * `06_ARCHITECTURE.md`
 * `07_UI_UX.md`
 
-El roadmap conserva el orden historico de implementacion. El sistema ya supero esos milestones; para el comportamiento actual prevalecen `README.md`, `DEPLOYMENT.md` y la documentacion tecnica especifica enlazada desde el README.
+El roadmap conserva el orden histórico de implementación. El sistema ya superó esos milestones; M17-M25 figuran como implementados y, para el comportamiento actual, prevalecen `README.md`, `DEPLOYMENT.md` y la documentación técnica específica enlazada desde el README.
 
 ---
 
@@ -933,9 +933,10 @@ Descarga y paginación
 
 ```text
 Regeneración PDF en memoria
-Adjunto SMTP
+Adjunto mediante Resend
 Destinatario individual
 Sin historial de emails
+Acción de envío deshabilitada en la UI
 ```
 
 ## M22 — Centro de reportes y exportaciones
@@ -947,6 +948,8 @@ Exportaciones de empresas, delegados, convenios y usuarios
 Solo ADMIN
 ```
 
+**Estado: Completado.**
+
 ## M23 — Recuperación de contraseña administrada
 
 ```text
@@ -955,6 +958,8 @@ Contraseña temporal de un solo uso
 Cambio obligatorio e invalidación de sesiones previas
 Sin recuperación autónoma por email o token
 ```
+
+**Estado: Completado.**
 
 ## M24 — Reportes mensuales persistentes
 
@@ -967,6 +972,8 @@ Consulta, detalle y descarga solo ADMIN
 Generación manual del último mes cerrado desde Reportes
 Sin @Scheduled, Render Cron ni scheduler propio
 ```
+
+**Estado: Completado.**
 
 M24 deja un único servicio de generación listo para que un cron futuro lo invoque, pero no agenda ni configura tareas automáticamente.
 
@@ -981,6 +988,10 @@ ADMIN y DELEGADO con la misma política de generación individual
 Sin entidad de lote, cola, scheduler, CSV/Excel ni progreso en tiempo real
 ```
 
+`manualValues` permite aplicar valores manuales comunes a todos los delegados del lote.
+
+**Estado: Completado.**
+
 ## Fase futura A — Google Drive
 
 ```text
@@ -990,10 +1001,10 @@ Carpetas
 Referencias
 ```
 
-## Fase futura C — Correo
+## Fase futura C — Evolución del correo
 
 ```text
-SMTP
+Extensión de la integración de correo
 Editor de correo
 Adjuntos
 Registro de envíos

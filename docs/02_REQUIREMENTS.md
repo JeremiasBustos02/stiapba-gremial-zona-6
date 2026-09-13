@@ -1,6 +1,6 @@
 # Requisitos del Sistema
 
-Los wireframes son referencia visual. El estado actual incluye historial documental y envío por correo desde el historial; no incluye borradores persistentes, auditoría de emails ni otras funcionalidades futuras. El formulario sí cuenta con recuperacion local limitada.
+Los wireframes son referencia visual. El estado actual incluye historial documental y un backend de envío por Resend; la acción de enviar permanece deshabilitada en la interfaz. No incluye borradores persistentes, auditoría de emails ni otras funcionalidades futuras. El formulario sí cuenta con recuperación local limitada.
 
 ## 1. Propósito
 
@@ -656,9 +656,9 @@ La estrategia técnica concreta para crear el administrador inicial será defini
 
 ---
 
-# 20. Funcionalidades implementadas en M17-M19
+# 20. Funcionalidades implementadas en M17-M25
 
-El sistema actualmente incluye historial documental mediante `DocumentRecord` y snapshot JSONB, numeración pública `PG-YYYY-NNNNNN`, regeneración con permisos ADMIN/DELEGADO y envío individual por email desde historial. Los PDFs se generan o regeneran en memoria y no se persisten; el envío no mantiene historial ni auditoría persistente.
+El sistema actualmente incluye historial documental mediante `DocumentRecord` y snapshot JSONB, numeración pública `PG-YYYY-NNNNNN`, regeneración con permisos ADMIN/DELEGADO, uso de un registro histórico como base, generación masiva con `manualValues` comunes, búsqueda global, filtros y exportaciones XLSX, reportes y reportes mensuales persistidos. Los PDFs se generan o regeneran en memoria y no se persisten; Resend está implementado en backend, pero el envío permanece deshabilitado en la interfaz y no mantiene auditoría persistente.
 
 ---
 
@@ -677,7 +677,6 @@ No deberán implementarse como parte del MVP:
 * Aplicaciones móviles nativas.
 * Registro público.
 * Recuperación automática de contraseña mediante correo electrónico.
-* Numeración oficial.
 
 Estas funcionalidades requieren una ampliación explícita del alcance antes de desarrollarse.
 

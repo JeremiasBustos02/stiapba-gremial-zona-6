@@ -772,7 +772,7 @@ ADMIN / DELEGADO. DELEGADO solo puede obtener plantillas activas.
 }
 ```
 
-La numeración oficial queda fuera del MVP; `prefijo` y `ultimoNumero` no forman parte del modelo persistente actual.
+La numeración de historial se expone como `PG-YYYY-NNNNNN`; `prefijo` y `ultimoNumero` no forman parte del modelo persistente actual.
 
 ---
 
@@ -1086,7 +1086,7 @@ Su única responsabilidad es generar el resultado requerido.
 
 # 44. Generación definitiva
 
-Dado que el MVP no mantiene historial ni almacenamiento persistente, no es estrictamente necesario distinguir entre:
+La generación definitiva crea historial y numeración, aunque no persiste los bytes del PDF. No es estrictamente necesario distinguir entre:
 
 ```text
 preview
@@ -1233,33 +1233,9 @@ Si el usuario vuelve y modifica información, se realiza una nueva solicitud.
 
 Cada generación definitiva recibe un número público persistente con formato `PG-YYYY-NNNNNN`. La secuencia es global y segura ante concurrencia; el año es visual y no reinicia el contador.
 
-Sin embargo, existe una consideración importante.
+La numeración no se consume durante el preview; se asigna en la generación definitiva.
 
-El MVP no persiste documentos generados.
-
-Incrementar una numeración oficial únicamente por mostrar una vista previa podría producir:
-
-```text
-PG-000001
-PG-000002
-PG-000003
-```
-
-aunque los dos primeros fueran previews descartados.
-
-Por este motivo, **la numeración definitiva no deberá implementarse hasta definir qué evento constituye formalmente la emisión del documento**.
-
-Opciones futuras:
-
-* Al descargar.
-* Al confirmar.
-* Al guardar en historial.
-* Al enviar.
-* Mediante una acción explícita "Emitir documento".
-
-Hasta cerrar esa regla de negocio, el MVP podrá generar PDFs sin numeración oficial automática.
-
-Esto evita consumir secuencias durante las vistas previas.
+La generación definitiva crea el `DocumentRecord` y conserva el snapshot de datos renderizados; los bytes PDF siguen siendo efímeros.
 
 ---
 
