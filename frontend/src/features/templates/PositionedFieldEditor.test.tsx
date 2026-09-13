@@ -217,7 +217,7 @@ describe("PositionedFieldEditor accessibility", () => {
     expect(container.querySelector('[role="dialog"]')).toBeNull();
   });
 
-  it("cancels a field drag when a second pointer starts a pinch", async () => {
+  it("cancels a field drag when a second pointer appears", async () => {
     await render();
     field().focus();
     await act(async () => key(field(), "Enter"));
@@ -231,12 +231,12 @@ describe("PositionedFieldEditor accessibility", () => {
     await act(async () => canvas.dispatchEvent(pointer("pointerup", 2, 260, 100)));
     await act(async () => canvas.dispatchEvent(pointer("pointermove", 1, 180, 180)));
     await act(async () => canvas.dispatchEvent(pointer("pointerup", 1, 180, 180)));
-    expect(container.textContent).toContain("Zoom 175%");
-    expect(Number.parseFloat(field().style.left)).toBeCloseTo(Number.parseFloat(initialLeft) * 1.75);
+    expect(container.textContent).toContain("Zoom 100%");
+    expect(field().style.left).toBe(initialLeft);
     expect(container.querySelector('[role="dialog"]')).toBeNull();
   });
 
-  it("cancels creation when a second pointer starts a pinch", async () => {
+  it("cancels creation when a second pointer appears", async () => {
     await render();
     await act(async () => addField().click());
     const canvas = container.querySelector<HTMLElement>('[aria-label="Vista previa del PDF"]')!;
@@ -247,10 +247,11 @@ describe("PositionedFieldEditor accessibility", () => {
     await act(async () => canvas.dispatchEvent(pointer("pointerup", 2, 260, 20)));
     await act(async () => canvas.dispatchEvent(pointer("pointerup", 1, 140, 80)));
     expect(positionedFields()).toHaveLength(1);
+    expect(container.textContent).toContain("Zoom 100%");
     expect(container.querySelector('[role="dialog"]')).toBeNull();
   });
 
-  it("requires a new pointerdown after pinch before dragging again", async () => {
+  it("requires a new pointerdown after multi-touch before dragging again", async () => {
     await render();
     field().focus();
     await act(async () => key(field(), "Enter"));
@@ -260,15 +261,15 @@ describe("PositionedFieldEditor accessibility", () => {
     await act(async () => canvas.dispatchEvent(pointer("pointerdown", 2, 200, 100)));
     await act(async () => canvas.dispatchEvent(pointer("pointermove", 2, 260, 100)));
     await act(async () => canvas.dispatchEvent(pointer("pointerup", 2, 260, 100)));
-    const afterPinch = field().style.left;
+    const afterMultiTouch = field().style.left;
     await act(async () => canvas.dispatchEvent(pointer("pointermove", 1, 180, 180)));
     await act(async () => canvas.dispatchEvent(pointer("pointerup", 1, 180, 180)));
-    expect(field().style.left).toBe(afterPinch);
+    expect(field().style.left).toBe(afterMultiTouch);
     expect(container.querySelector('[role="dialog"]')).toBeNull();
     await act(async () => field().dispatchEvent(pointer("pointerdown", 3, 100, 100)));
     await act(async () => canvas.dispatchEvent(pointer("pointermove", 3, 140, 140)));
     await act(async () => canvas.dispatchEvent(pointer("pointerup", 3, 140, 140)));
-    expect(field().style.left).not.toBe(afterPinch);
+    expect(field().style.left).not.toBe(afterMultiTouch);
   });
 
   it("closes the mobile sheet when its handle is dragged down", async () => {
@@ -339,23 +340,6 @@ describe("PositionedFieldEditor accessibility", () => {
     expect({ left: field().style.left, top: field().style.top, width: field().style.width, height: field().style.height }).toEqual(initial);
     const save = [...container.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent?.includes("Guardar cambios"));
     expect(save?.disabled).toBe(true);
-  });
-
-  it("pinches to zoom without moving or configuring a field", async () => {
-    await render();
-    field().focus();
-    await act(async () => key(field(), "Enter"));
-    await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
-    const canvas = container.querySelector<HTMLElement>('[aria-label="Vista previa del PDF"]')!;
-    const initialLeft = field().style.left;
-    await act(async () => field().dispatchEvent(pointer("pointerdown", 1, 100, 100)));
-    await act(async () => canvas.dispatchEvent(pointer("pointerdown", 2, 200, 100)));
-    await act(async () => canvas.dispatchEvent(pointer("pointermove", 2, 260, 100)));
-    await act(async () => canvas.dispatchEvent(pointer("pointerup", 2, 260, 100)));
-    await act(async () => canvas.dispatchEvent(pointer("pointerup", 1, 100, 100)));
-    expect(container.textContent).toContain("Zoom 160%");
-    expect(Number.parseFloat(field().style.left)).toBeCloseTo(Number.parseFloat(initialLeft) * 1.6);
-    expect(container.querySelector('[role="dialog"]')).toBeNull();
   });
 
   it("keeps field drag and resize aligned when zoomed", async () => {

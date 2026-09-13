@@ -60,7 +60,7 @@ type PointerGesture = {
   dragged: boolean;
   captureTarget: HTMLElement;
 } | null;
-type GestureMode = "idle" | "drag-field" | "resize-field" | "create-field" | "pinch";
+type GestureMode = "idle" | "drag-field" | "resize-field" | "create-field";
 
 const minimumSize = 8;
 const keyboardStep = 1;
@@ -185,9 +185,7 @@ export function PositionedFieldEditor({
   const suppressFieldClick = useRef(false);
   const activePointers = useRef(new Map<number, { x: number; y: number }>());
   const gestureMode = useRef<GestureMode>("idle");
-  const pinchPointerIds = useRef<[number, number] | null>(null);
-  const pinchStartDistance = useRef<number | null>(null);
-  const pinchStartZoom = useRef(1);
+  const multiPointerActive = useRef(false);
   const pdfQuery = useQuery({
     queryKey: ["variant-pdf", variant.id],
     queryFn: () => getVariantPdf(templateId, variant.id),
@@ -451,59 +449,24 @@ export function PositionedFieldEditor({
     setDrawingMode(false);
     if (hadPointerGesture) suppressFieldClick.current = true;
   }
-  function handlePreviewPointerDownCapture(
-    event: React.PointerEvent<HTMLDivElement>,
-  ) {
+  function handlePreviewPointerDownCapture(event: React.PointerEvent<HTMLDivElement>) {
     const isMobileViewport =
       typeof window === "undefined" ||
       !window.matchMedia ||
       window.matchMedia("(max-width: 1023px)").matches;
     if (!isMobileViewport) return;
+    if (multiPointerActive.current) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
     activePointers.current.set(event.pointerId, {
       x: event.clientX,
       y: event.clientY,
     });
     if (activePointers.current.size !== 2) return;
-    gestureMode.current = "pinch";
-    event.currentTarget.setPointerCapture(event.pointerId);
+    multiPointerActive.current = true;
     cancelOneFingerGesture();
-    event.preventDefault();
-    event.stopPropagation();
-    const pointerIds = [...activePointers.current.keys()];
-    pinchPointerIds.current = [pointerIds[0], pointerIds[1]];
-    const points = pointerIds.map((id) => activePointers.current.get(id)!);
-    pinchStartDistance.current = Math.hypot(
-      points[1].x - points[0].x,
-      points[1].y - points[0].y,
-    );
-    pinchStartZoom.current = zoom;
-  }
-  function handlePreviewPointerMoveCapture(
-    event: React.PointerEvent<HTMLDivElement>,
-  ) {
-    if (!activePointers.current.has(event.pointerId)) return;
-    activePointers.current.set(event.pointerId, {
-      x: event.clientX,
-      y: event.clientY,
-    });
-    if (gestureMode.current !== "pinch") return;
-    const ids = pinchPointerIds.current;
-    if (!ids || !pinchStartDistance.current) return;
-    const points = ids.map((id) => activePointers.current.get(id));
-    if (!points[0] || !points[1]) return;
-    const distance = Math.hypot(
-      points[1].x - points[0].x,
-      points[1].y - points[0].y,
-    );
-    setZoom(
-      Math.max(
-        minimumZoom,
-        Math.min(
-          maximumZoom,
-          pinchStartZoom.current * (distance / pinchStartDistance.current),
-        ),
-      ),
-    );
     event.preventDefault();
     event.stopPropagation();
   }
@@ -511,15 +474,13 @@ export function PositionedFieldEditor({
     event: React.PointerEvent<HTMLDivElement>,
     cancelled = false,
   ) {
-    const mode = gestureMode.current;
     activePointers.current.delete(event.pointerId);
     if (event.currentTarget.hasPointerCapture(event.pointerId))
       event.currentTarget.releasePointerCapture(event.pointerId);
-    if (mode === "pinch") {
-      if (activePointers.current.size < 2) {
+    if (multiPointerActive.current) {
+      if (activePointers.current.size === 0) {
+        multiPointerActive.current = false;
         gestureMode.current = "idle";
-        pinchPointerIds.current = null;
-        pinchStartDistance.current = null;
       }
       return;
     }
@@ -930,7 +891,6 @@ export function PositionedFieldEditor({
               ref={previewHost}
               className="max-h-[68dvh] w-full min-w-0 overflow-auto overscroll-contain"
               onPointerDownCapture={handlePreviewPointerDownCapture}
-              onPointerMoveCapture={handlePreviewPointerMoveCapture}
               style={{ touchAction: "pan-x pan-y" }}
             >
               {blobUrl && previewWidth > 0 && (
