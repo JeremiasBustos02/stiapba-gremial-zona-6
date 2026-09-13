@@ -247,25 +247,14 @@ function LoginPage({
         ? "No pudimos iniciar sesión. Intentá nuevamente."
         : "";
   return (
-    <main className="relative flex min-h-[100dvh] flex-col overflow-hidden bg-slate-50 px-5 py-10 sm:px-10">
-      <div aria-hidden="true" className="absolute -right-24 -top-24 h-72 w-72 rounded-full border-[2rem] border-blue-100 opacity-70" />
-      <section className="relative mx-auto flex w-full max-w-md flex-1 flex-col justify-center">
-        <div className="mb-10 text-left">
-          <BrandMark />
-          <p className="typo-eyebrow mt-5 text-blue-700">STIA PBA · Zona 6</p>
-          <h1 className="typo-display-xl mt-2 uppercase text-slate-950">Ingresá a tu cuenta</h1>
-          <p className="typo-body mt-3 text-slate-600">
-            Accedé a tus documentos de forma segura.
-          </p>
-        </div>
-        <form
-          onSubmit={submit}
-          className="border border-slate-200 bg-white p-6 shadow-[var(--shadow-surface)] sm:p-8"
-        >
+    <main className="flex min-h-[100dvh] bg-slate-50 p-4 sm:p-6 lg:p-8">
+      <section className="mx-auto grid w-full max-w-6xl overflow-hidden border border-slate-200 bg-white lg:grid-cols-[minmax(0,1.15fr)_minmax(24rem,.85fr)]">
+        <div className="flex flex-col justify-between border-b-4 border-blue-700 bg-blue-50/70 p-6 sm:p-8 lg:min-h-[38rem] lg:border-b-0 lg:border-r-4 lg:p-12"><div><BrandMark /><p className="typo-eyebrow mt-6 text-blue-800">STIA PBA · Zona 6</p><h1 className="typo-display-xl mt-2 max-w-md uppercase text-slate-950">Gestión documental gremial</h1><p className="typo-body mt-4 max-w-md text-slate-700">Accedé a tus documentos y tareas de gestión desde un solo lugar.</p></div><div aria-hidden="true" className="mt-10 hidden border-t border-blue-200 pt-4 lg:flex lg:items-end lg:justify-between"><span className="typo-meta text-blue-800">Zona 6</span><span className="typo-display-lg leading-none text-blue-200">06</span></div></div>
+        <div className="flex flex-col justify-center p-6 sm:p-8 lg:p-12"><div className="mb-7 border-l-4 border-blue-700 pl-4"><p className="typo-eyebrow text-blue-700">Acceso seguro</p><h2 className="typo-display-lg mt-1 uppercase text-slate-950">Ingresá a tu cuenta</h2><p className="typo-body-sm mt-3 text-slate-600">Usá tu DNI y contraseña para continuar.</p></div><form onSubmit={submit} className="border-t border-slate-200 pt-6">
           {sessionExpired && (
             <p
               role="status"
-              className="typo-body-sm mb-5 rounded-xl bg-amber-50 px-4 py-3 text-amber-800"
+              className="typo-body-sm mb-5 border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800"
             >
               Tu sesión expiró. Volvé a iniciar sesión.
             </p>
@@ -273,7 +262,7 @@ function LoginPage({
           {message && (
             <p
               role="alert"
-              className="typo-body-sm mb-5 rounded-xl bg-rose-50 px-4 py-3 text-rose-800"
+              className="typo-body-sm mb-5 border border-rose-200 bg-rose-50 px-4 py-3 text-rose-800"
             >
               {message}
             </p>
@@ -285,7 +274,7 @@ function LoginPage({
               name="dni"
               inputMode="numeric"
               placeholder="Ingresá tu DNI"
-              className="mt-2 h-12 w-full rounded-md border border-slate-300 bg-white px-4 outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100"
+              className="mt-2 h-12 w-full border border-slate-300 bg-white px-4 outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100"
             />
           </label>
           <PasswordInput
@@ -297,7 +286,7 @@ function LoginPage({
           <details className="typo-body-sm mt-4 text-slate-600"><summary className="cursor-pointer font-semibold text-blue-700">¿Olvidaste tu contraseña?</summary><p className="mt-2">Comunicate con administración para restablecer el acceso.</p></details>
           <button
             disabled={pending}
-            className="typo-control mt-8 flex min-h-12 w-full items-center justify-center gap-2 rounded-md bg-[var(--color-action)] px-4 py-3 text-white hover:bg-blue-700 disabled:cursor-wait disabled:opacity-60"
+            className="typo-control mt-8 flex min-h-12 w-full items-center justify-center gap-2 bg-[var(--color-action)] px-4 py-3 text-white hover:bg-blue-700 focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-60"
           >
             {pending ? (
               <>
@@ -310,11 +299,8 @@ function LoginPage({
               </>
             )}
           </button>
-        </form>
+        </form></div>
       </section>
-      <footer className="typo-caption pt-8 text-center text-slate-500">
-        StiaPba Gremial Zona 6
-      </footer>
     </main>
   );
 }

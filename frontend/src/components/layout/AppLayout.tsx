@@ -17,15 +17,15 @@ export function AppLayout({ children, screen, role, onNavigate, onLogout, onOpen
   return (
     <div className="min-h-[100dvh] bg-slate-50 text-slate-900">
       <a className="skip-link" href="#main-content">Saltar al contenido</a>
-      <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur-sm">
+      <header className="sticky top-0 z-20 border-b border-slate-200 bg-white">
         <div className="mx-auto flex h-[4.5rem] max-w-[90rem] items-center gap-3 px-4 sm:px-6 lg:px-8">
-          <button type="button" aria-label="Ir al inicio" onClick={() => onNavigate("home")} className="flex shrink-0 items-center gap-2 text-left">
+          <button type="button" aria-label="Ir al inicio" onClick={() => onNavigate("home")} className="flex min-h-11 shrink-0 items-center gap-2 text-left focus-visible:ring-2 focus-visible:ring-blue-600">
             <BrandMark small />
             <span className="hidden lg:block"><strong className="typo-brand block uppercase">STIA PBA</strong><span className="typo-eyebrow text-slate-500">ZONA 6</span></span>
           </button>
            <DesktopNavigation role={role} screen={screen} onNavigate={onNavigate} />
            <GlobalSearch role={role} onNavigate={onNavigate} onOpenDocument={onOpenDocument} onPrefill={onPrefill} />
-          <button type="button" aria-label="Cerrar sesión" onClick={onLogout} className="typo-control ml-auto flex min-h-11 shrink-0 items-center gap-2 rounded-md px-2 text-slate-600 transition hover:bg-slate-100 hover:text-slate-950 sm:px-3">
+           <button type="button" aria-label="Cerrar sesión" onClick={onLogout} className="typo-control ml-auto flex min-h-11 shrink-0 items-center gap-2 px-2 text-slate-600 transition hover:bg-rose-50 hover:text-rose-800 focus-visible:ring-2 focus-visible:ring-blue-600 sm:px-3">
             <span className="hidden sm:inline">Cerrar sesión</span><LogOut size={17} aria-hidden="true" />
           </button>
         </div>
@@ -56,7 +56,7 @@ function DesktopNavigation({ role, screen, onNavigate }: { role: "ADMIN" | "DELE
   return <nav aria-label="Navegación principal" className="hidden min-w-0 flex-1 items-center justify-center gap-1 sm:flex">
     {navigationItems(role).map(({ label, icon: Icon, screen: target }) => {
       const active = navigationActive(screen, target);
-      return <button key={target} type="button" aria-current={active ? "page" : undefined} onClick={() => onNavigate(target)} className={`typo-control flex min-h-11 items-center gap-2 border-b-2 px-2.5 transition-colors lg:px-3 ${active ? "border-[var(--color-action)] text-blue-800" : "border-transparent text-slate-600 hover:border-slate-300 hover:text-slate-950"}`}>
+       return <button key={target} type="button" aria-current={active ? "page" : undefined} onClick={() => onNavigate(target)} className={`typo-control flex min-h-11 items-center gap-2 border-b-2 px-2.5 transition-colors focus-visible:ring-2 focus-visible:ring-blue-600 lg:px-3 ${active ? "border-[var(--color-action)] bg-blue-50 text-blue-800" : "border-transparent text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950"}`}>
         <Icon size={18} strokeWidth={active ? 2.5 : 2} aria-hidden="true" /><span className="hidden md:inline">{label}</span>
       </button>;
     })}
@@ -64,11 +64,11 @@ function DesktopNavigation({ role, screen, onNavigate }: { role: "ADMIN" | "DELE
 }
 
 function BottomNav({ role, screen, onNavigate }: { role: "ADMIN" | "DELEGADO"; screen: Screen; onNavigate: (screen: Screen) => void }) {
-  return <nav aria-label="Navegación principal" className="app-bottom-nav fixed inset-x-0 bottom-0 z-20 border-t border-slate-200 bg-white/98 shadow-[0_-8px_20px_rgb(21_94_194_/_0.08)] sm:hidden">
+  return <nav aria-label="Navegación principal" className="app-bottom-nav fixed inset-x-0 bottom-0 z-20 border-t border-slate-200 bg-white sm:hidden">
     <div className="mx-auto flex max-w-lg justify-around px-2 py-2">
       {navigationItems(role).map(({ label, icon: Icon, screen: target }) => {
         const active = navigationActive(screen, target);
-        return <button key={target} type="button" aria-current={active ? "page" : undefined} onClick={() => onNavigate(target)} className={`typo-caption flex min-h-11 min-w-14 flex-col items-center justify-center gap-0.5 rounded-md px-1 py-1 font-semibold transition-colors ${active ? "bg-blue-50 text-blue-800" : "text-slate-600"}`}>
+        return <button key={target} type="button" aria-current={active ? "page" : undefined} onClick={() => onNavigate(target)} className={`typo-caption flex min-h-11 min-w-14 flex-col items-center justify-center gap-0.5 rounded-md px-1 py-1 font-semibold transition-colors focus-visible:ring-2 focus-visible:ring-blue-600 ${active ? "bg-blue-50 text-blue-800" : "text-slate-600 hover:bg-slate-50"}`}>
           <Icon size={20} strokeWidth={active ? 2.5 : 2} aria-hidden="true" />{target === "new-document" ? "Nuevo" : label}
         </button>;
       })}
