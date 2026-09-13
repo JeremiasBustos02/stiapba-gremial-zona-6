@@ -46,7 +46,7 @@ async function completeForm(delegates = ['Ana Paz']) { await act(async () => { c
 describe('BulkPermisoPage', () => {
   it('loads common catalogs, filters delegates by name and DNI, and maintains a unique selection count', async () => {
     await render()
-    expect(container.textContent).toContain('Generar varios'); expect(container.textContent).toContain('INFRIBA'); expect(container.textContent).toContain('Ana Paz'); expect(container.textContent).toContain('0 seleccionados')
+    expect(container.textContent).toContain('Generar varios permisos'); expect(container.textContent).toContain('Permiso Gremial para cada uno.'); expect(container.textContent).toContain('INFRIBA'); expect(container.textContent).toContain('Ana Paz'); expect(container.textContent).toContain('0 seleccionados')
     await act(async () => change(container.querySelector('#bulk-delegate-filter')!, '2988'))
     expect(container.textContent).toContain('Beto Luna'); expect(container.textContent).not.toContain('Ana Paz')
     await act(async () => change(container.querySelector('#bulk-delegate-filter')!, ''))
