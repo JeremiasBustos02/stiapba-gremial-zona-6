@@ -11,9 +11,9 @@ vi.mock("react-pdf", async () => {
       useEffect(() => onLoadSuccess({ numPages: 1 }), []);
       return createElement("div", null, children);
     },
-    Page: ({ onLoadSuccess }: { onLoadSuccess: (page: { getViewport: (options: { scale: number }) => { width: number; height: number } }) => void }) => {
-      useEffect(() => onLoadSuccess({ getViewport: () => ({ width: 400, height: 600 }) }), []);
-      return createElement("div");
+     Page: ({ width, onLoadSuccess }: { width: number; onLoadSuccess: (page: { getViewport: (options: { scale: number }) => { width: number; height: number } }) => void }) => {
+       useEffect(() => onLoadSuccess({ getViewport: () => ({ width: 400, height: 600 }) }), []);
+       return createElement("div", { "data-pdf-page-width": width });
     },
     pdfjs: { GlobalWorkerOptions: {} },
   };
@@ -238,6 +238,40 @@ describe("PositionedFieldEditor accessibility", () => {
     await act(async () => Array.from({ length: 10 }, () => decrease().click()));
     expect(container.textContent).toContain("Zoom 75%");
     expect(decrease().disabled).toBe(true);
+  });
+
+  it("scales the PDF page and field overlay with the same viewport", async () => {
+    await render();
+    const page = () => container.querySelector<HTMLElement>("[data-pdf-page-width]")!;
+    const positioned = () => positionedFields()[0];
+    expect(page().dataset.pdfPageWidth).toBe("400");
+    expect(Number.parseFloat(positioned().style.width)).toBe(100);
+    await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="Aumentar zoom"]')!.click());
+    await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="Aumentar zoom"]')!.click());
+    expect(page().dataset.pdfPageWidth).toBe("600");
+    expect(Number.parseFloat(positioned().style.width)).toBe(150);
+    await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="Aumentar zoom"]')!.click());
+    await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="Aumentar zoom"]')!.click());
+    expect(page().dataset.pdfPageWidth).toBe("800");
+    expect(Number.parseFloat(positioned().style.left)).toBe(20);
+    expect(Number.parseFloat(positioned().style.width)).toBe(200);
+  });
+
+  it("does not change field coordinates just by zooming", async () => {
+    await render();
+    const initial = {
+      left: field().style.left,
+      top: field().style.top,
+      width: field().style.width,
+      height: field().style.height,
+    };
+    const increase = () => container.querySelector<HTMLButtonElement>('button[aria-label="Aumentar zoom"]')!;
+    const decrease = () => container.querySelector<HTMLButtonElement>('button[aria-label="Reducir zoom"]')!;
+    await act(async () => Array.from({ length: 4 }, () => increase().click()));
+    await act(async () => Array.from({ length: 4 }, () => decrease().click()));
+    expect({ left: field().style.left, top: field().style.top, width: field().style.width, height: field().style.height }).toEqual(initial);
+    const save = [...container.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent?.includes("Guardar cambios"));
+    expect(save?.disabled).toBe(true);
   });
 
   it("pinches to zoom without moving or configuring a field", async () => {

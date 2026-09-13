@@ -916,7 +916,7 @@ export function PositionedFieldEditor({
                     >
                       <Page
                         pageNumber={pageNumber}
-                        width={previewWidth}
+                        width={previewSize.width}
                         renderTextLayer={false}
                         onLoadSuccess={(page) => {
                           const viewport = page.getViewport({ scale: 1 });
