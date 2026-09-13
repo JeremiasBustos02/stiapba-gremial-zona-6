@@ -53,11 +53,19 @@ type Interaction = {
   rect: PdfRect;
 } | null;
 
+type PointerGesture = {
+  pointerId: number;
+  start: { x: number; y: number };
+  dragged: boolean;
+  captureTarget: HTMLElement;
+} | null;
+
 const minimumSize = 8;
 const keyboardStep = 1;
 const keyboardLargeStep = 10;
 const initialFieldWidthRatio = 0.25;
 const initialFieldHeightRatio = 0.06;
+const pointerMovementThreshold = 8;
 
 function useOverlayFocus(
   open: boolean,
@@ -166,6 +174,8 @@ export function PositionedFieldEditor({
   const container = useRef<HTMLDivElement>(null);
   const pendingFieldFocus = useRef<string | null>(null);
   const focusCreatedFieldOnSheetClose = useRef<string | null>(null);
+  const pointerGesture = useRef<PointerGesture>(null);
+  const suppressFieldClick = useRef(false);
   const pdfQuery = useQuery({
     queryKey: ["variant-pdf", variant.id],
     queryFn: () => getVariantPdf(templateId, variant.id),
@@ -341,7 +351,6 @@ export function PositionedFieldEditor({
     const isSelected = selectedId === field.clientId;
     setSelectedId(field.clientId);
     setSelectedDocumentField(null);
-    setMobileConfigOpen(true);
     if (canStartFieldMove(isSelected, drawingMode))
       begin(event, "move", rect, field.clientId);
   }
@@ -381,6 +390,12 @@ export function PositionedFieldEditor({
     event.preventDefault();
     event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
+    pointerGesture.current = {
+      pointerId: event.pointerId,
+      start: { x: event.clientX, y: event.clientY },
+      dragged: false,
+      captureTarget: event.currentTarget,
+    };
     setInteraction({ kind, fieldId, start: point(event), rect });
   }
   function startDrawing(event: React.PointerEvent<HTMLDivElement>) {
@@ -390,6 +405,19 @@ export function PositionedFieldEditor({
   }
   function move(event: React.PointerEvent<HTMLDivElement>) {
     if (!interaction || !container.current) return;
+    const gesture = pointerGesture.current;
+    if (
+      gesture &&
+      (interaction.kind === "move" || interaction.kind === "resize") &&
+      !gesture.dragged
+    ) {
+      const distance = Math.hypot(
+        event.clientX - gesture.start.x,
+        event.clientY - gesture.start.y,
+      );
+      if (distance <= pointerMovementThreshold) return;
+      gesture.dragged = true;
+    }
     const current = point(event);
     const { rect, start } = interaction;
     const { width, height } = previewSize;
@@ -434,13 +462,18 @@ export function PositionedFieldEditor({
       previewToPdf(next, width, height, pageSize.width, pageSize.height),
     );
   }
-  function finishInteraction() {
+  function finishInteraction(suppressClick = false) {
+    const gesture = pointerGesture.current;
+    if (gesture?.captureTarget.hasPointerCapture(gesture.pointerId))
+      gesture.captureTarget.releasePointerCapture(gesture.pointerId);
+    if (suppressClick && gesture?.dragged) suppressFieldClick.current = true;
     if (interaction?.kind === "create" && drawingRect && container.current) {
       addPositionedField(drawingRect);
       setDrawingMode(false);
       setDrawingRect(null);
     }
     setInteraction(null);
+    pointerGesture.current = null;
   }
   function addPositionedField(rect: PdfRect, focusField = false) {
     if (!canCreatePositionedField(rect, minimumSize)) return;
@@ -748,8 +781,8 @@ export function PositionedFieldEditor({
                     tabIndex={-1}
                     aria-label="Vista previa del PDF"
                     onPointerMove={move}
-                    onPointerUp={finishInteraction}
-                    onPointerCancel={finishInteraction}
+                    onPointerUp={() => finishInteraction(true)}
+                    onPointerCancel={() => finishInteraction()}
                     style={{ width: previewSize.width }}
                     className="relative mx-auto bg-white shadow-xl"
                   >
@@ -846,7 +879,13 @@ export function PositionedFieldEditor({
                           onPointerDown={(event) =>
                             selectPositionedField(event, field, rect)
                           }
-                          onClick={() => selectPositionedFieldWithKeyboard(field)}
+                          onClick={() => {
+                            if (suppressFieldClick.current) {
+                              suppressFieldClick.current = false;
+                              return;
+                            }
+                            selectPositionedFieldWithKeyboard(field);
+                          }}
                           onKeyDown={(event) =>
                             handlePositionedFieldKeyDown(event, field)
                           }

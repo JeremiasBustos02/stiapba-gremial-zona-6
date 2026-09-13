@@ -42,9 +42,12 @@ beforeEach(() => {
   (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   globalThis.ResizeObserver = class { observe() {}; disconnect() {}; unobserve() {} };
   Object.defineProperty(HTMLElement.prototype, "setPointerCapture", { configurable: true, value: vi.fn() });
+  Object.defineProperty(HTMLElement.prototype, "hasPointerCapture", { configurable: true, value: vi.fn(() => false) });
+  Object.defineProperty(HTMLElement.prototype, "releasePointerCapture", { configurable: true, value: vi.fn() });
   Object.defineProperty(URL, "createObjectURL", { configurable: true, value: vi.fn(() => "blob:preview") });
   Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: vi.fn() });
   Object.defineProperty(HTMLElement.prototype, "clientWidth", { configurable: true, get: () => 400 });
+  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({ left: 0, top: 0, width: 400, height: 600 } as DOMRect);
   container = document.createElement("div"); document.body.appendChild(container); root = createRoot(container);
 });
 afterEach(() => { act(() => root.unmount()); container.remove(); vi.restoreAllMocks(); });
@@ -104,5 +107,81 @@ describe("PositionedFieldEditor accessibility", () => {
     await act(async () => addField().click()); const canvas = container.querySelector<HTMLElement>('[aria-label="Vista previa del PDF"]')!; const drawingLayer = container.querySelector<HTMLElement>('[aria-label="Área para dibujar un campo"]')!;
     await act(async () => drawingLayer.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, clientX: 20, clientY: 20 }))); await act(async () => canvas.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, clientX: 140, clientY: 80 }))); await act(async () => canvas.dispatchEvent(new MouseEvent("pointerup", { bubbles: true, clientX: 140, clientY: 80 })));
     expect(positionedFields()).toHaveLength(2);
+  });
+
+  it("opens configuration on a real tap", async () => {
+    await render();
+    await act(async () => field().click());
+    expect(container.querySelector('[role="dialog"]')).not.toBeNull();
+  });
+
+  it("moves a field after the threshold without opening configuration", async () => {
+    await render();
+    field().focus();
+    await act(async () => key(field(), "Enter"));
+    await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    const canvas = container.querySelector<HTMLElement>('[aria-label="Vista previa del PDF"]')!;
+    const initialLeft = field().style.left;
+    await act(async () => field().dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, clientX: 100, clientY: 100 })));
+    await act(async () => canvas.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, clientX: 120, clientY: 120 })));
+    await act(async () => canvas.dispatchEvent(new MouseEvent("pointerup", { bubbles: true, clientX: 120, clientY: 120 })));
+    await act(async () => field().click());
+    expect(field().style.left).not.toBe(initialLeft);
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it("keeps a movement below the threshold as a tap", async () => {
+    await render();
+    field().focus();
+    await act(async () => key(field(), "Enter"));
+    await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    const canvas = container.querySelector<HTMLElement>('[aria-label="Vista previa del PDF"]')!;
+    const initialLeft = field().style.left;
+    await act(async () => field().dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, clientX: 100, clientY: 100 })));
+    await act(async () => canvas.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, clientX: 105, clientY: 105 })));
+    await act(async () => canvas.dispatchEvent(new MouseEvent("pointerup", { bubbles: true, clientX: 105, clientY: 105 })));
+    await act(async () => field().click());
+    expect(field().style.left).toBe(initialLeft);
+    expect(container.querySelector('[role="dialog"]')).not.toBeNull();
+  });
+
+  it("does not open configuration after resizing", async () => {
+    await render();
+    field().focus();
+    await act(async () => key(field(), "Enter"));
+    await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    const handle = container.querySelector<HTMLButtonElement>('button[aria-label="Redimensionar campo"]')!;
+    const canvas = container.querySelector<HTMLElement>('[aria-label="Vista previa del PDF"]')!;
+    const initialWidth = field().style.width;
+    await act(async () => handle.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, clientX: 200, clientY: 200 })));
+    await act(async () => canvas.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, clientX: 220, clientY: 220 })));
+    await act(async () => canvas.dispatchEvent(new MouseEvent("pointerup", { bubbles: true, clientX: 220, clientY: 220 })));
+    expect(field().style.width).not.toBe(initialWidth);
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it("cleans the gesture on pointercancel", async () => {
+    await render();
+    field().focus();
+    await act(async () => key(field(), "Enter"));
+    await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    const canvas = container.querySelector<HTMLElement>('[aria-label="Vista previa del PDF"]')!;
+    await act(async () => field().dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, clientX: 100, clientY: 100 })));
+    await act(async () => canvas.dispatchEvent(new MouseEvent("pointercancel", { bubbles: true, clientX: 120, clientY: 120 })));
+    await act(async () => field().click());
+    expect(container.querySelector('[role="dialog"]')).not.toBeNull();
+  });
+
+  it("keeps mouse dragging working", async () => {
+    await render();
+    field().focus();
+    await act(async () => key(field(), "Enter"));
+    await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    const canvas = container.querySelector<HTMLElement>('[aria-label="Vista previa del PDF"]')!;
+    const initialTop = field().style.top;
+    await act(async () => field().dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, clientX: 100, clientY: 100 })));
+    await act(async () => canvas.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, clientX: 100, clientY: 140 })));
+    await act(async () => canvas.dispatchEvent(new MouseEvent("pointerup", { bubbles: true, clientX: 100, clientY: 140 })));
+    expect(field().style.top).not.toBe(initialTop);
   });
 });
