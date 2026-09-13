@@ -19,7 +19,7 @@ describe('PostGenerationActions', () => {
     await act(async () => root.render(<PostGenerationActions document={generatedDocument} />))
 
     const button = container.querySelector('button')!
-    expect(button.textContent).toContain('Enviar por mail')
+    expect(button.textContent).toContain('Enviar')
     expect(button.getAttribute('aria-disabled')).toBe('true')
     expect(container.querySelector('[role="group"]')).not.toBeNull()
     expect(window.document.querySelector('[role="dialog"]')).toBeNull()
