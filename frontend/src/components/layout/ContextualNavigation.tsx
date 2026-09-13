@@ -69,7 +69,7 @@ export function AdminModuleNavigation({
             type="button"
             onClick={() => onNavigate(module.screen)}
             aria-current={screen === module.screen ? "page" : undefined}
-            className={`typo-control min-h-11 shrink-0 border-b-2 px-3 ${screen === module.screen ? "border-blue-700 text-blue-700" : "border-transparent text-slate-600 hover:border-slate-300 hover:text-slate-950"}`}
+            className={`typo-control min-h-11 shrink-0 border-b-2 px-3 ${screen === module.screen ? "border-blue-700 bg-blue-50 text-blue-800" : "border-transparent text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950"}`}
           >
             {module.label}
           </button>

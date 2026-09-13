@@ -113,19 +113,19 @@ export function UserManagementPage({ currentUserId }: { currentUserId: string })
       {mutationError && <AdminNotice kind="error">{errorMessage(mutationError)}</AdminNotice>}
       {usersQuery.isError && <AdminNotice kind="error">{errorMessage(usersQuery.error)} <button type="button" onClick={() => void usersQuery.refetch()} className="font-semibold underline">Reintentar</button></AdminNotice>}
 
-      <section aria-labelledby="users-list-title" className="mt-5">
-        <div className="flex flex-col gap-3 border-b border-slate-200 pb-4 sm:flex-row sm:items-end sm:justify-between">
+      <section aria-labelledby="users-list-title" className="mt-8">
+        <div className="flex flex-col gap-3 border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-end sm:justify-between">
           <div><h2 id="users-list-title" className="font-semibold">Personas registradas</h2><p className="mt-1 text-sm text-slate-500">{usersQuery.data?.totalElements ?? 0} usuarios</p></div>
-          <label className="sm:w-72"><span className="sr-only">Buscar usuario</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por nombre o DNI" className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100" /></label>
+          <label className="sm:w-72"><span className="sr-only">Buscar usuario</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por nombre o DNI" className="h-11 w-full border border-slate-300 bg-white px-3 text-sm outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100" /></label>
         </div>
         {usersQuery.isLoading && <p className="py-10 text-center text-sm text-slate-500">Cargando registros...</p>}
         {!usersQuery.isLoading && usersQuery.data?.content.length === 0 && <AdminEmptyState actionLabel="Crear usuario" onAction={() => setCreating(true)}>Todavía no hay usuarios registrados.</AdminEmptyState>}
-        <div className="divide-y divide-slate-200">
+        <div className="mt-4 divide-y divide-slate-200 border border-slate-200 bg-white">
           {usersQuery.data?.content.map((user) => {
             const canResetPassword = user.active && user.id !== currentUserId
-            return <article key={user.id} className="relative flex min-h-24 items-start gap-3 py-4">
+            return <article key={user.id} className="relative flex min-h-24 items-start gap-3 px-4 py-4 transition-colors hover:bg-blue-50/70">
               <div className="min-w-0 flex-1"><h3 className="truncate font-semibold">{userName(user)}</h3><p className="mt-1 text-sm text-slate-600">DNI {user.dni}</p><div className="mt-2 flex flex-wrap gap-1.5 typo-caption font-semibold"><Badge>{user.role}</Badge><Badge active={user.active}>{user.active ? 'Activo' : 'Inactivo'}</Badge>{user.firstLogin && <Badge>Debe cambiar contraseña</Badge>}</div></div>
-              <div className="relative"><button type="button" onClick={() => setActionUser(actionUser?.id === user.id ? null : user)} className="grid h-11 w-11 place-items-center rounded-xl text-slate-600 hover:bg-slate-100" aria-label={`Acciones para ${userName(user)}`} aria-expanded={actionUser?.id === user.id}><MoreHorizontal size={20} /></button>{actionUser?.id === user.id && <div className="absolute right-0 z-10 mt-1 w-60 rounded-xl border border-slate-200 bg-white p-1 shadow-lg"><button type="button" onClick={() => openEdit(user)} className="w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-50">Editar usuario</button><button type="button" onClick={() => openConfirmation(user, 'active')} className="w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-50">{user.active ? 'Desactivar usuario' : 'Activar usuario'}</button>{canResetPassword && <button type="button" onClick={() => openConfirmation(user, 'reset')} className="w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-50">Restablecer contraseña</button>}</div>}</div>
+               <div className="relative"><button type="button" onClick={() => setActionUser(actionUser?.id === user.id ? null : user)} className="grid h-11 w-11 place-items-center text-slate-600 hover:bg-blue-50 focus-visible:ring-2 focus-visible:ring-blue-600" aria-label={`Acciones para ${userName(user)}`} aria-expanded={actionUser?.id === user.id}><MoreHorizontal size={20} /></button>{actionUser?.id === user.id && <div className="absolute right-0 z-10 mt-1 w-60 border border-slate-200 bg-white p-1 shadow-[0_1px_2px_rgb(15_23_38/0.08)]"><button type="button" onClick={() => openEdit(user)} className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50">Editar usuario</button><button type="button" onClick={() => openConfirmation(user, 'active')} className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50">{user.active ? 'Desactivar usuario' : 'Activar usuario'}</button>{canResetPassword && <button type="button" onClick={() => openConfirmation(user, 'reset')} className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50">Restablecer contraseña</button>}</div>}</div>
             </article>
           })}
         </div>

@@ -38,8 +38,8 @@ describe('ReportsPage', () => {
     vi.stubGlobal('fetch', vi.fn((input: string | URL | Request) => Promise.resolve(String(input).includes('/reports/monthly') ? json([]) : json({ ...summary, totalDocuments: 0, uniqueDelegates: 0, uniqueCompanies: 0, uniqueAgreements: 0 })))); render()
     await waitFor(() => expect(container.textContent).toContain('No hay actividad en este período.'))
     expect(container.querySelector('[aria-labelledby="summary-title"]')).toBeNull()
-    expect([...container.querySelectorAll('button')].find(button => button.textContent?.includes('Descargar Excel'))?.disabled).toBe(true)
-    const companies = [...container.querySelectorAll('button')].find(button => button.closest('div')?.textContent?.includes('Empresas') && button.textContent?.includes('Exportar'))
+    expect([...container.querySelectorAll('button')].find(button => button.textContent?.includes('Exportar reporte'))?.disabled).toBe(true)
+    const companies = container.querySelector<HTMLButtonElement>('button[aria-label="Exportar Empresas"]')
     expect(companies?.disabled).toBe(false)
   })
 
@@ -47,7 +47,7 @@ describe('ReportsPage', () => {
     let resolveExport: (value: Response) => void = () => {}; const clicks: string[] = []
     const fetchMock = vi.fn((input: string | URL | Request) => String(input).includes('/reports/export') ? new Promise<Response>(resolve => { resolveExport = resolve }) : Promise.resolve(String(input).includes('/reports/monthly') ? json([]) : json(summary)))
     vi.stubGlobal('fetch', fetchMock); Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: vi.fn(() => 'blob:report') }); Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() }); vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) { clicks.push(this.download) }); render()
-    await waitFor(() => expect(container.textContent).toContain('214')); const button = [...container.querySelectorAll('button')].find(item => item.textContent?.includes('Descargar Excel'))!
+    await waitFor(() => expect(container.textContent).toContain('214')); const button = [...container.querySelectorAll('button')].find(item => item.textContent?.includes('Exportar reporte'))!
     await act(async () => button.click()); await waitFor(() => expect(button.disabled).toBe(true)); await act(async () => button.click())
     expect(fetchMock.mock.calls.filter(([input]) => String(input).includes('/reports/export'))).toHaveLength(1)
     await act(async () => resolveExport(new Response('xlsx', { headers: { 'Content-Disposition': 'attachment; filename="reporte.xlsx"' } }))); await waitFor(() => expect(clicks).toEqual(['reporte.xlsx']))
@@ -57,7 +57,7 @@ describe('ReportsPage', () => {
   it('uses a safe filename fallback and exports companies from the quick action', async () => {
     const clicks: string[] = []; const fetchMock = vi.fn((input: string | URL | Request) => String(input).includes('/exports/companies') ? Promise.resolve(new Response('xlsx')) : Promise.resolve(String(input).includes('/reports/monthly') ? json([]) : json(summary)))
     vi.stubGlobal('fetch', fetchMock); Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: vi.fn(() => 'blob:companies') }); Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() }); vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) { clicks.push(this.download) }); render()
-    await waitFor(() => expect(container.textContent).toContain('214')); const companies = [...container.querySelectorAll('button')].find(button => button.closest('div')?.textContent?.includes('Empresas') && button.textContent?.includes('Exportar'))!
+    await waitFor(() => expect(container.textContent).toContain('214')); const companies = container.querySelector<HTMLButtonElement>('button[aria-label="Exportar Empresas"]')!
     await act(async () => companies.click()); await waitFor(() => expect(clicks).toEqual(['companies.xlsx'])); expect(fetchMock.mock.calls.some(([input]) => String(input).includes('/admin/exports/companies'))).toBe(true)
   })
 

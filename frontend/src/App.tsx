@@ -473,27 +473,27 @@ function AdminPage({ onNavigate }: { onNavigate: (screen: Screen) => void }) {
     },
   ];
   return (
-    <section className="max-w-5xl">
-      <header className="border-b border-slate-200 pb-4">
+    <section className="max-w-6xl">
+      <header className="border-l-4 border-blue-700 pl-4 sm:pl-5">
         <p className="typo-eyebrow text-blue-700">
           Administración
         </p>
-        <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">
+        <h1 className="typo-display-xl mt-1 uppercase">
           Gestioná el sistema
         </h1>
-        <p className="mt-1 text-sm text-slate-600">
+        <p className="typo-body-sm mt-3 max-w-xl text-slate-600">
           Seleccioná un módulo para administrar los datos disponibles.
         </p>
       </header>
-      <div className="mt-4 divide-y divide-slate-200 border-y border-slate-200 sm:grid sm:grid-cols-2 sm:gap-x-6 sm:divide-y-0 sm:border-y-0">
+      <div className="mt-8 divide-y divide-slate-200 border border-slate-200 bg-white sm:grid sm:grid-cols-2 sm:gap-x-0 sm:divide-y-0">
         {modules.map(({ title, description, icon: Icon, screen }) => (
           <button
             key={title}
             type="button"
             onClick={() => onNavigate(screen)}
-            className="flex min-h-20 w-full items-center gap-3 py-4 text-left hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-blue-600 sm:border-b sm:border-slate-200 sm:px-2"
+            className="flex min-h-20 w-full items-center gap-3 px-4 py-4 text-left hover:bg-blue-50/70 focus-visible:ring-2 focus-visible:ring-blue-600 sm:border-b sm:border-slate-200 sm:[&:nth-child(odd)]:border-r sm:[&:nth-last-child(-n+2)]:border-b-0"
           >
-            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-blue-50 text-blue-700">
+            <span className="grid h-11 w-11 shrink-0 place-items-center border border-blue-100 bg-blue-50 text-blue-700">
               <Icon size={20} />
             </span>
             <span className="min-w-0 flex-1">
