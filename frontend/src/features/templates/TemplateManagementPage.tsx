@@ -388,8 +388,8 @@ function TemplateList({
   onCreate: () => void;
 }) {
   return (
-    <section className="mt-5 lg:mt-0">
-      <div className="flex flex-col gap-3 border-b border-slate-200 pb-4">
+    <section className="mt-8">
+      <div className="flex flex-col gap-3 border border-slate-200 bg-slate-50 p-4">
         <div>
           <div>
             <h2 className="font-semibold">Tipos de documento</h2>
@@ -428,13 +428,13 @@ function TemplateList({
           Todavia no hay plantillas.
         </AdminEmptyState>
       )}
-      <div className="divide-y divide-slate-200">
+      <div className="mt-4 divide-y divide-slate-200 border border-slate-200 bg-white">
         {query.data?.map((template) => (
           <button
             key={template.id}
             type="button"
             onClick={() => onSelect(template)}
-            className={`flex min-h-20 w-full items-center gap-3 py-4 text-left ${selectedId === template.id ? "bg-blue-50 px-3 text-blue-950" : "hover:bg-slate-100"}`}
+            className={`flex min-h-20 w-full items-center gap-3 px-4 py-4 text-left transition-colors ${selectedId === template.id ? "bg-blue-50 text-blue-950" : "hover:bg-blue-50/70"}`}
           >
             <span className="min-w-0 flex-1">
               <strong className="block truncate">{template.nombre}</strong>
@@ -483,7 +483,7 @@ function TemplateDetail({
 }) {
   return (
     <>
-      <header className="border-b border-slate-200 pb-4">
+      <header className="border border-slate-200 bg-slate-50 p-4 sm:p-5">
         <button
           type="button"
           onClick={onBack}
@@ -572,7 +572,7 @@ function TemplateDetail({
             Todavia no hay PDFs para esta plantilla.
           </AdminEmptyState>
         )}
-        <div className="divide-y divide-slate-200">
+        <div className="mt-4 divide-y divide-slate-200 border border-slate-200 bg-white">
           {variantsQuery.data?.map((variant) => (
             <VariantRow
               key={variant.id}
@@ -625,7 +625,7 @@ function VariantRow({
       ? "Verificando configuracion..."
       : variantConfigurationStatus(variant, fieldsQuery.data?.length);
   return (
-    <article className="relative py-4">
+    <article className="relative px-4 py-4 transition-colors hover:bg-blue-50/70">
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
           <h3 className="truncate font-semibold">{variant.nombre}</h3>

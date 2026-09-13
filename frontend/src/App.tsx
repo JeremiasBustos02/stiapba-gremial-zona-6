@@ -43,7 +43,11 @@ import { ProfilePage } from "@/features/profile/ProfilePage";
 import { HistoryPage } from "@/features/history/HistoryPage";
 import { ReportsPage } from "@/features/reports/ReportsPage";
 import type { DocumentFormValues } from "@/features/documents/DocumentFlow";
-import { getDocumentVariants, type DocumentHistoryDetail, type GeneratedDocument } from "@/features/documents/documentsApi";
+import {
+  getDocumentVariants,
+  type DocumentHistoryDetail,
+  type GeneratedDocument,
+} from "@/features/documents/documentsApi";
 import { PostGenerationActions } from "@/features/documents/PostGenerationActions";
 import {
   clearDocumentDraft,
@@ -60,7 +64,12 @@ import {
   SecondaryNavigation,
 } from "@/components/layout/ContextualNavigation";
 import { ApiError, setUnauthorizedHandler } from "@/lib/api";
-import { isAdminPath, routeForScreen, screenForPath, type Screen } from "@/navigation";
+import {
+  isAdminPath,
+  routeForScreen,
+  screenForPath,
+  type Screen,
+} from "@/navigation";
 import {
   changeFirstLoginPassword,
   getCurrentUser,
@@ -68,11 +77,10 @@ import {
   logout,
 } from "@/features/auth/authApi";
 
-const PositionedFieldEditor = lazy(
-  () =>
-    import("@/features/templates/PositionedFieldEditor").then((module) => ({
-      default: module.PositionedFieldEditor,
-    })),
+const PositionedFieldEditor = lazy(() =>
+  import("@/features/templates/PositionedFieldEditor").then((module) => ({
+    default: module.PositionedFieldEditor,
+  })),
 );
 const DocumentTemplateSelection = lazy(() =>
   import("@/features/documents/DocumentFlow").then((module) => ({
@@ -94,7 +102,11 @@ const PdfPreview = lazy(() =>
     default: module.PdfPreview,
   })),
 );
-const BulkPermisoPage = lazy(() => import('@/features/documents/BulkPermisoPage').then((module) => ({ default: module.BulkPermisoPage })));
+const BulkPermisoPage = lazy(() =>
+  import("@/features/documents/BulkPermisoPage").then((module) => ({
+    default: module.BulkPermisoPage,
+  })),
+);
 
 const initialDocumentForm: DocumentFormValues = {
   provinceId: "",
@@ -112,7 +124,11 @@ const queryClient = new QueryClient({
 });
 
 function documentTemplateId(pathname: string) {
-  return pathname.match(/^\/documentos\/nuevo\/([^/]+)\/(?:variante|formulario|vista-previa)$/)?.[1] ?? null;
+  return (
+    pathname.match(
+      /^\/documentos\/nuevo\/([^/]+)\/(?:variante|formulario|vista-previa)$/,
+    )?.[1] ?? null
+  );
 }
 
 function App() {
@@ -125,31 +141,109 @@ function App() {
   const [documentForm, setDocumentForm] = useState<DocumentFormValues>(
     draft?.templateId === templateId ? draft.form : initialDocumentForm,
   );
-  const [generatedDocument, setGeneratedDocument] = useState<GeneratedDocument | null>(null);
-  const [documentPrefill, setDocumentPrefill] = useState<Partial<Pick<DocumentFormValues, 'companyId' | 'delegateId' | 'agreementId'>>>({});
-  const [searchDocument, setSearchDocument] = useState<{ id: string } | null>(null);
-  const [emailFeedback, setEmailFeedback] = useState('');
+  const [generatedDocument, setGeneratedDocument] =
+    useState<GeneratedDocument | null>(null);
+  const [documentPrefill, setDocumentPrefill] = useState<
+    Partial<
+      Pick<DocumentFormValues, "companyId" | "delegateId" | "agreementId">
+    >
+  >({});
+  const [searchDocument, setSearchDocument] = useState<{ id: string } | null>(
+    null,
+  );
+  const [emailFeedback, setEmailFeedback] = useState("");
   const [sessionExpired, setSessionExpired] = useState(false);
   const [startupComplete, setStartupComplete] = useState(false);
-  const sessionQuery = useQuery({ queryKey: ["auth", "me"], queryFn: getCurrentUser, retry: false });
-   const clearSession = (expired = false) => { queryClient.clear(); clearDocumentDraft(); setDocumentForm(initialDocumentForm); setGeneratedDocument(null); setDocumentPrefill({}); setSearchDocument(null); setSessionExpired(expired); navigate("/", { replace: true }); };
-  const loginMutation = useMutation({ mutationFn: ({ dni, password }: { dni: string; password: string }) => login(dni, password), onSuccess: ({ user }) => { queryClient.setQueryData(["auth", "me"], user); setSessionExpired(false); navigate("/"); } });
-  const logoutMutation = useMutation({ mutationFn: logout, onSuccess: () => clearSession() });
-  useEffect(() => { setUnauthorizedHandler(() => clearSession(true)); return () => setUnauthorizedHandler(); }, [queryClient]);
-  const go = (next: Screen) => navigate(routeForScreen(next, templateId ?? draft?.templateId ?? null));
+  const sessionQuery = useQuery({
+    queryKey: ["auth", "me"],
+    queryFn: getCurrentUser,
+    retry: false,
+  });
+  const clearSession = (expired = false) => {
+    queryClient.clear();
+    clearDocumentDraft();
+    setDocumentForm(initialDocumentForm);
+    setGeneratedDocument(null);
+    setDocumentPrefill({});
+    setSearchDocument(null);
+    setSessionExpired(expired);
+    navigate("/", { replace: true });
+  };
+  const loginMutation = useMutation({
+    mutationFn: ({ dni, password }: { dni: string; password: string }) =>
+      login(dni, password),
+    onSuccess: ({ user }) => {
+      queryClient.setQueryData(["auth", "me"], user);
+      setSessionExpired(false);
+      navigate("/");
+    },
+  });
+  const logoutMutation = useMutation({
+    mutationFn: logout,
+    onSuccess: () => clearSession(),
+  });
+  useEffect(() => {
+    setUnauthorizedHandler(() => clearSession(true));
+    return () => setUnauthorizedHandler();
+  }, [queryClient]);
+  const go = (next: Screen) =>
+    navigate(routeForScreen(next, templateId ?? draft?.templateId ?? null));
   const currentUser = sessionQuery.data;
   const documentVariantsQuery = useQuery({
     queryKey: ["documents", "variants", templateId],
     queryFn: () => getDocumentVariants(templateId!),
-    enabled: Boolean(currentUser && templateId && ["form", "preview"].includes(screen)),
+    enabled: Boolean(
+      currentUser && templateId && ["form", "preview"].includes(screen),
+    ),
   });
-  if (shouldShowStartupLoading({ isPending: sessionQuery.isPending, isSuccess: sessionQuery.isSuccess, startupComplete })) return <StartupLoadingScreen completed={sessionQuery.isSuccess} onComplete={() => setStartupComplete(true)} />;
-  if (!currentUser) return <LoginPage error={loginMutation.error} pending={loginMutation.isPending} sessionExpired={sessionExpired} onSubmit={(dni, password) => loginMutation.mutate({ dni, password })} />;
-  if (currentUser.firstLogin) return <FirstLoginPage onSaved={async () => { await queryClient.invalidateQueries({ queryKey: ["auth", "me"] }); navigate("/"); }} />;
-  if (currentUser.role !== "ADMIN" && isAdminPath(location.pathname)) return <Navigate to="/" replace />;
-  if ((screen === "form" || screen === "preview") && templateId && documentVariantsQuery.isSuccess && !documentVariantsQuery.data.some((variant) => variant.id === documentForm.variantId)) return <Navigate to={`/documentos/nuevo/${templateId}/variante`} replace />;
-  if (screen === "preview" && !generatedDocument) return <Navigate to={routeForScreen("form", templateId)} replace />;
-  const saveDraft = (nextTemplateId: string, form: DocumentFormValues) => { setDocumentForm(form); saveDocumentDraft({ templateId: nextTemplateId, form }); };
+  if (
+    shouldShowStartupLoading({
+      isPending: sessionQuery.isPending,
+      isSuccess: sessionQuery.isSuccess,
+      startupComplete,
+    })
+  )
+    return (
+      <StartupLoadingScreen
+        completed={sessionQuery.isSuccess}
+        onComplete={() => setStartupComplete(true)}
+      />
+    );
+  if (!currentUser)
+    return (
+      <LoginPage
+        error={loginMutation.error}
+        pending={loginMutation.isPending}
+        sessionExpired={sessionExpired}
+        onSubmit={(dni, password) => loginMutation.mutate({ dni, password })}
+      />
+    );
+  if (currentUser.firstLogin)
+    return (
+      <FirstLoginPage
+        onSaved={async () => {
+          await queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
+          navigate("/");
+        }}
+      />
+    );
+  if (currentUser.role !== "ADMIN" && isAdminPath(location.pathname))
+    return <Navigate to="/" replace />;
+  if (
+    (screen === "form" || screen === "preview") &&
+    templateId &&
+    documentVariantsQuery.isSuccess &&
+    !documentVariantsQuery.data.some(
+      (variant) => variant.id === documentForm.variantId,
+    )
+  )
+    return <Navigate to={`/documentos/nuevo/${templateId}/variante`} replace />;
+  if (screen === "preview" && !generatedDocument)
+    return <Navigate to={routeForScreen("form", templateId)} replace />;
+  const saveDraft = (nextTemplateId: string, form: DocumentFormValues) => {
+    setDocumentForm(form);
+    saveDocumentDraft({ templateId: nextTemplateId, form });
+  };
   const useHistoryAsBase = (detail: DocumentHistoryDetail) => {
     const form: DocumentFormValues = {
       provinceId: detail.provinceId ?? "",
@@ -164,47 +258,227 @@ function App() {
     saveDraft(detail.templateId, form);
     navigate(`/documentos/nuevo/${detail.templateId}/formulario`);
   };
-  const adminContent = screen === "reports" ? <ReportsPage /> : screen === "users" ? <UserManagementPage currentUserId={currentUser.id} /> : screen === "companies" ? <CatalogManagementPage<Company, CompanyForm> kind="companies" title="Empresas" description="Administrá las empresas disponibles para completar documentos." emptyForm={{ nombre: "", agreementId: "" }} getItems={getCompanies} createItem={createCompany} updateItem={updateCompany} setActive={setCompanyActive} /> : screen === "agreements" ? <CatalogManagementPage<Agreement, AgreementForm> kind="agreements" title="Convenios" description="Administrá los convenios disponibles para completar documentos." emptyForm={{ codigo: "", descripcion: "" }} getItems={getAgreements} createItem={createAgreement} updateItem={updateAgreement} setActive={setAgreementActive} /> : screen === "positioned-editor" ? <FieldEditorRoute /> : <TemplateManagementPage initialTemplateId={location.pathname.match(/^\/admin\/plantillas\/([^/]+)$/)?.[1]} onTemplateSelected={(id) => navigate(`/admin/plantillas/${id}`)} onDetailBack={() => navigate("/admin/plantillas")} onConfigureFields={(id, variant) => navigate(`/admin/plantillas/${id}/variantes/${variant.id}/campos`)} />;
-  const openSearchDocument = (document: DocumentHistoryDetail | { id: string }) => { setSearchDocument({ id: document.id }); navigate('/historial'); };
-  const prefillFromSearch = (kind: 'company' | 'delegate' | 'agreement', id: string) => {
-    const field = kind === 'company' ? 'companyId' : kind === 'delegate' ? 'delegateId' : 'agreementId';
+  const adminContent =
+    screen === "reports" ? (
+      <ReportsPage />
+    ) : screen === "users" ? (
+      <UserManagementPage currentUserId={currentUser.id} />
+    ) : screen === "companies" ? (
+      <CatalogManagementPage<Company, CompanyForm>
+        kind="companies"
+        title="Empresas"
+        description="Administrá las empresas disponibles para completar documentos."
+        emptyForm={{ nombre: "", agreementId: "" }}
+        getItems={getCompanies}
+        createItem={createCompany}
+        updateItem={updateCompany}
+        setActive={setCompanyActive}
+      />
+    ) : screen === "agreements" ? (
+      <CatalogManagementPage<Agreement, AgreementForm>
+        kind="agreements"
+        title="Convenios"
+        description="Administrá los convenios disponibles para completar documentos."
+        emptyForm={{ codigo: "", descripcion: "" }}
+        getItems={getAgreements}
+        createItem={createAgreement}
+        updateItem={updateAgreement}
+        setActive={setAgreementActive}
+      />
+    ) : screen === "positioned-editor" ? (
+      <FieldEditorRoute />
+    ) : (
+      <TemplateManagementPage
+        initialTemplateId={
+          location.pathname.match(/^\/admin\/plantillas\/([^/]+)$/)?.[1]
+        }
+        onTemplateSelected={(id) => navigate(`/admin/plantillas/${id}`)}
+        onDetailBack={() => navigate("/admin/plantillas")}
+        onConfigureFields={(id, variant) =>
+          navigate(`/admin/plantillas/${id}/variantes/${variant.id}/campos`)
+        }
+      />
+    );
+  const openSearchDocument = (
+    document: DocumentHistoryDetail | { id: string },
+  ) => {
+    setSearchDocument({ id: document.id });
+    navigate("/historial");
+  };
+  const prefillFromSearch = (
+    kind: "company" | "delegate" | "agreement",
+    id: string,
+  ) => {
+    const field =
+      kind === "company"
+        ? "companyId"
+        : kind === "delegate"
+          ? "delegateId"
+          : "agreementId";
     setDocumentPrefill({ [field]: id });
-    navigate('/documentos/nuevo');
+    navigate("/documentos/nuevo");
   };
   const finishDocument = () => {
     clearDocumentDraft();
     setDocumentForm(initialDocumentForm);
     setGeneratedDocument(null);
     setDocumentPrefill({});
-    setEmailFeedback('');
-    navigate(routeForScreen('home', null));
+    setEmailFeedback("");
+    navigate(routeForScreen("home", null));
   };
-  return <AppLayout screen={screen} role={currentUser.role} onNavigate={go} onLogout={() => logoutMutation.mutate()} onOpenDocument={openSearchDocument} onPrefill={prefillFromSearch}>
-    {screen !== "positioned-editor" && <SecondaryNavigation screen={screen} onNavigate={go} />}
-    {["admin", "users", "companies", "agreements", "templates", "reports"].includes(screen) && <AdminModuleNavigation screen={screen} onNavigate={go} />}
+  return (
+    <AppLayout
+      screen={screen}
+      role={currentUser.role}
+      onNavigate={go}
+      onLogout={() => logoutMutation.mutate()}
+      onOpenDocument={openSearchDocument}
+      onPrefill={prefillFromSearch}
+    >
+      {screen !== "positioned-editor" && (
+        <SecondaryNavigation screen={screen} onNavigate={go} />
+      )}
+      {[
+        "admin",
+        "users",
+        "companies",
+        "agreements",
+        "templates",
+        "reports",
+      ].includes(screen) && (
+        <AdminModuleNavigation screen={screen} onNavigate={go} />
+      )}
       {screen === "home" && <HomePage user={currentUser} onNavigate={go} />}
-        {screen === "new-document" && <Suspense fallback={<LazyLoadingState />}><DocumentTemplateSelection onBack={() => navigate(routeForScreen('home', null))} onSelect={(id) => { const form = { ...documentForm, ...documentPrefill, variantId: "", manualValues: {} }; setDocumentPrefill({}); saveDraft(id, form); navigate(`/documentos/nuevo/${id}/variante`); }} /></Suspense>}
-        {screen === "bulk-document" && <Suspense fallback={<LazyLoadingState />}><BulkPermisoPage onBack={finishDocument} /></Suspense>}
-     {screen === "variants" && <Suspense fallback={<LazyLoadingState />}><DocumentVariantSelection templateId={templateId} onBack={() => navigate("/documentos/nuevo")} onSelect={(variantId) => { if (!templateId) return; const form = { ...documentForm, variantId, manualValues: {} }; saveDraft(templateId, form); navigate(`/documentos/nuevo/${templateId}/formulario`); }} /></Suspense>}
-       {screen === "form" && templateId && <Suspense fallback={<LazyLoadingState />}><PermisoGremialForm value={documentForm} onChange={(form) => saveDraft(templateId, form)} onBack={() => navigate(`/documentos/nuevo/${templateId}/variante`)} onGenerated={(document) => { setEmailFeedback(''); setGeneratedDocument(document); navigate(`/documentos/nuevo/${templateId}/vista-previa`); }} /></Suspense>}
-           {screen === "preview" && generatedDocument && <Suspense fallback={<LazyLoadingState />}><div className="preview-action-flow"><p className="typo-display-lg max-w-3xl tabular-nums text-blue-900">{generatedDocument.publicNumber}</p><PdfPreview pdf={generatedDocument.blob} filename={generatedDocument.filename} onEdit={() => { setGeneratedDocument(null); navigate(routeForScreen("form", templateId)); }} onHome={finishDocument} postGenerationAction={<PostGenerationActions document={generatedDocument} inline />} />{emailFeedback && <p role="status" className="mt-3 max-w-3xl rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-800">{emailFeedback}</p>}</div></Suspense>}
-     {screen === "profile" && <ProfilePage user={currentUser} onLogout={() => logoutMutation.mutate()} />}
-       {screen === "history" && <HistoryPage role={currentUser.role} onUseAsBase={useHistoryAsBase} openDocumentId={searchDocument?.id} onDocumentOpened={() => setSearchDocument(null)} />}
-    {screen === "admin" && <AdminPage onNavigate={go} />}
-     {["users", "companies", "agreements", "templates", "reports", "positioned-editor"].includes(screen) && adminContent}
-  </AppLayout>;
+      {screen === "new-document" && (
+        <Suspense fallback={<LazyLoadingState />}>
+          <DocumentTemplateSelection
+            onBack={() => navigate(routeForScreen("home", null))}
+            onSelect={(id) => {
+              const form = {
+                ...documentForm,
+                ...documentPrefill,
+                variantId: "",
+                manualValues: {},
+              };
+              setDocumentPrefill({});
+              saveDraft(id, form);
+              navigate(`/documentos/nuevo/${id}/variante`);
+            }}
+          />
+        </Suspense>
+      )}
+      {screen === "bulk-document" && (
+        <Suspense fallback={<LazyLoadingState />}>
+          <BulkPermisoPage onBack={finishDocument} />
+        </Suspense>
+      )}
+      {screen === "variants" && (
+        <Suspense fallback={<LazyLoadingState />}>
+          <DocumentVariantSelection
+            templateId={templateId}
+            onBack={() => navigate("/documentos/nuevo")}
+            onSelect={(variantId) => {
+              if (!templateId) return;
+              const form = { ...documentForm, variantId, manualValues: {} };
+              saveDraft(templateId, form);
+              navigate(`/documentos/nuevo/${templateId}/formulario`);
+            }}
+          />
+        </Suspense>
+      )}
+      {screen === "form" && templateId && (
+        <Suspense fallback={<LazyLoadingState />}>
+          <PermisoGremialForm
+            value={documentForm}
+            onChange={(form) => saveDraft(templateId, form)}
+            onBack={() => navigate(`/documentos/nuevo/${templateId}/variante`)}
+            onGenerated={(document) => {
+              setEmailFeedback("");
+              setGeneratedDocument(document);
+              navigate(`/documentos/nuevo/${templateId}/vista-previa`);
+            }}
+          />
+        </Suspense>
+      )}
+      {screen === "preview" && generatedDocument && (
+        <Suspense fallback={<LazyLoadingState />}>
+          <div className="preview-action-flow">
+            <p className="typo-display-lg max-w-3xl tabular-nums text-blue-900">
+              {generatedDocument.publicNumber}
+            </p>
+            <PdfPreview
+              pdf={generatedDocument.blob}
+              filename={generatedDocument.filename}
+              onEdit={() => {
+                setGeneratedDocument(null);
+                navigate(routeForScreen("form", templateId));
+              }}
+              onHome={finishDocument}
+              postGenerationAction={
+                <PostGenerationActions document={generatedDocument} inline />
+              }
+            />
+            {emailFeedback && (
+              <p
+                role="status"
+                className="mt-3 max-w-3xl rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-800"
+              >
+                {emailFeedback}
+              </p>
+            )}
+          </div>
+        </Suspense>
+      )}
+      {screen === "profile" && (
+        <ProfilePage
+          user={currentUser}
+          onLogout={() => logoutMutation.mutate()}
+        />
+      )}
+      {screen === "history" && (
+        <HistoryPage
+          role={currentUser.role}
+          onUseAsBase={useHistoryAsBase}
+          openDocumentId={searchDocument?.id}
+          onDocumentOpened={() => setSearchDocument(null)}
+        />
+      )}
+      {screen === "admin" && <AdminPage onNavigate={go} />}
+      {[
+        "users",
+        "companies",
+        "agreements",
+        "templates",
+        "reports",
+        "positioned-editor",
+      ].includes(screen) && adminContent}
+    </AppLayout>
+  );
 }
 
 function FieldEditorRoute() {
-  const match = useMatch("/admin/plantillas/:templateId/variantes/:variantId/campos");
+  const match = useMatch(
+    "/admin/plantillas/:templateId/variantes/:variantId/campos",
+  );
   const templateId = match?.params.templateId;
   const variantId = match?.params.variantId;
   const navigate = useNavigate();
-  const variantsQuery = useQuery({ queryKey: ["template-variants", templateId], queryFn: () => getVariants(templateId!), enabled: Boolean(templateId) });
-  if (!templateId || !variantId) return <Navigate to="/admin/plantillas" replace />;
-  if (variantsQuery.isPending) return <p className="typo-body-sm py-10 text-center text-slate-500">Cargando variante...</p>;
+  const variantsQuery = useQuery({
+    queryKey: ["template-variants", templateId],
+    queryFn: () => getVariants(templateId!),
+    enabled: Boolean(templateId),
+  });
+  if (!templateId || !variantId)
+    return <Navigate to="/admin/plantillas" replace />;
+  if (variantsQuery.isPending)
+    return (
+      <p className="typo-body-sm py-10 text-center text-slate-500">
+        Cargando variante...
+      </p>
+    );
   const variant = variantsQuery.data?.find((item) => item.id === variantId);
-  if (!variant) return <Navigate to={`/admin/plantillas/${templateId}`} replace />;
+  if (!variant)
+    return <Navigate to={`/admin/plantillas/${templateId}`} replace />;
   return (
     <Suspense fallback={<LazyLoadingState />}>
       <PositionedFieldEditor
@@ -248,60 +522,142 @@ function LoginPage({
         : "";
   return (
     <main className="flex min-h-[100dvh] bg-slate-50 p-4 sm:p-6 lg:p-8">
-      <section className="mx-auto grid w-full max-w-6xl overflow-hidden border border-slate-200 bg-white lg:grid-cols-[minmax(0,1.15fr)_minmax(24rem,.85fr)]">
-        <div className="flex flex-col justify-between border-b-4 border-blue-700 bg-blue-50/70 p-6 sm:p-8 lg:min-h-[38rem] lg:border-b-0 lg:border-r-4 lg:p-12"><div><BrandMark /><p className="typo-eyebrow mt-6 text-blue-800">STIA PBA · Zona 6</p><h1 className="typo-display-xl mt-2 max-w-md uppercase text-slate-950">Gestión documental gremial</h1><p className="typo-body mt-4 max-w-md text-slate-700">Accedé a tus documentos y tareas de gestión desde un solo lugar.</p></div><div aria-hidden="true" className="mt-10 hidden border-t border-blue-200 pt-4 lg:flex lg:items-end lg:justify-between"><span className="typo-meta text-blue-800">Zona 6</span><span className="typo-display-lg leading-none text-blue-200">06</span></div></div>
-        <div className="flex flex-col justify-center p-6 sm:p-8 lg:p-12"><div className="mb-7 border-l-4 border-blue-700 pl-4"><p className="typo-eyebrow text-blue-700">Acceso seguro</p><h2 className="typo-display-lg mt-1 uppercase text-slate-950">Ingresá a tu cuenta</h2><p className="typo-body-sm mt-3 text-slate-600">Usá tu DNI y contraseña para continuar.</p></div><form onSubmit={submit} className="border-t border-slate-200 pt-6">
-          {sessionExpired && (
-            <p
-              role="status"
-              className="typo-body-sm mb-5 border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800"
-            >
-              Tu sesión expiró. Volvé a iniciar sesión.
-            </p>
-          )}
-          {message && (
-            <p
-              role="alert"
-              className="typo-body-sm mb-5 border border-rose-200 bg-rose-50 px-4 py-3 text-rose-800"
-            >
-              {message}
-            </p>
-          )}
-          <label className="typo-label block text-slate-900">
-            DNI
-            <input
-              required
-              name="dni"
-              inputMode="numeric"
-              placeholder="Ingresá tu DNI"
-              className="mt-2 h-12 w-full border border-slate-300 bg-white px-4 outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100"
-            />
-          </label>
-          <PasswordInput
-            name="password"
-            label="Contraseña"
-            placeholder="Ingresá tu contraseña"
-            className="mt-5"
+      <section className="mx-auto flex w-full max-w-md items-center sm:hidden">
+        <div className="w-full border border-slate-200 border-t-4 border-t-blue-700 bg-white px-5 py-8">
+          <div className="flex flex-col items-center text-center">
+            <BrandMark compactOnMobile />
+            <p className="typo-eyebrow mt-4 text-blue-800">STIA PBA · Zona 6</p>
+            <h1 className="typo-display-lg mt-5 uppercase text-slate-950">
+              Ingresar
+            </h1>
+          </div>
+          <LoginFormContent
+            onSubmit={submit}
+            error={message}
+            pending={pending}
+            sessionExpired={sessionExpired}
+            compact
           />
-          <details className="typo-body-sm mt-4 text-slate-600"><summary className="cursor-pointer font-semibold text-blue-700">¿Olvidaste tu contraseña?</summary><p className="mt-2">Comunicate con administración para restablecer el acceso.</p></details>
-          <button
-            disabled={pending}
-            className="typo-control mt-8 flex min-h-12 w-full items-center justify-center gap-2 bg-[var(--color-action)] px-4 py-3 text-white hover:bg-blue-700 focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-60"
+        </div>
+      </section>
+      <section className="mx-auto hidden w-full max-w-6xl overflow-hidden border border-slate-200 bg-white sm:grid lg:grid-cols-[minmax(0,1.15fr)_minmax(24rem,.85fr)]">
+        <div className="flex flex-col justify-between border-b-4 border-blue-700 bg-blue-50/70 p-8 lg:min-h-[38rem] lg:border-b-0 lg:border-r-4 lg:p-12">
+          <div>
+            <BrandMark />
+            <p className="typo-eyebrow mt-6 text-blue-800">STIA PBA · Zona 6</p>
+            <h1 className="typo-display-xl mt-2 max-w-md uppercase text-slate-950">
+              Gestión documental gremial
+            </h1>
+            <p className="typo-body mt-4 max-w-md text-slate-700">
+              Accedé a tus documentos y tareas de gestión desde un solo lugar.
+            </p>
+          </div>
+          <div
+            aria-hidden="true"
+            className="mt-10 hidden border-t border-blue-200 pt-4 lg:flex lg:items-end lg:justify-between"
           >
-            {pending ? (
-              <>
-                <LoaderCircle className="animate-spin" size={20} /> Iniciando
-                sesión...
-              </>
-            ) : (
-              <>
-                Iniciar sesión <ChevronRight size={20} />
-              </>
-            )}
-          </button>
-        </form></div>
+            <span className="typo-meta text-blue-800">Zona 6</span>
+            <span className="typo-display-lg leading-none text-blue-200">
+              06
+            </span>
+          </div>
+        </div>
+        <div className="flex flex-col justify-center p-8 lg:p-12">
+          <div className="mb-7 border-l-4 border-blue-700 pl-4">
+            <p className="typo-eyebrow text-blue-700">Acceso seguro</p>
+            <h2 className="typo-display-lg mt-1 uppercase text-slate-950">
+              Ingresá a tu cuenta
+            </h2>
+            <p className="typo-body-sm mt-3 text-slate-600">
+              Usá tu DNI y contraseña para continuar.
+            </p>
+          </div>
+          <LoginFormContent
+            onSubmit={submit}
+            error={message}
+            pending={pending}
+            sessionExpired={sessionExpired}
+          />
+        </div>
       </section>
     </main>
+  );
+}
+
+function LoginFormContent({
+  onSubmit,
+  error,
+  pending,
+  sessionExpired,
+  compact = false,
+}: {
+  onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
+  error: string;
+  pending: boolean;
+  sessionExpired: boolean;
+  compact?: boolean;
+}) {
+  return (
+    <form
+      onSubmit={onSubmit}
+      className={`border-t border-slate-200 ${compact ? "mt-7 pt-6" : "pt-6"}`}
+    >
+      {sessionExpired && (
+        <p
+          role="status"
+          className="typo-body-sm mb-5 border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800"
+        >
+          Tu sesión expiró. Volvé a iniciar sesión.
+        </p>
+      )}
+      {error && (
+        <p
+          role="alert"
+          className="typo-body-sm mb-5 border border-rose-200 bg-rose-50 px-4 py-3 text-rose-800"
+        >
+          {error}
+        </p>
+      )}
+      <label className="typo-label block text-slate-900">
+        DNI
+        <input
+          required
+          name="dni"
+          inputMode="numeric"
+          placeholder="Ingresá tu DNI"
+          className="mt-2 h-12 w-full border border-slate-300 bg-white px-4 outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100"
+        />
+      </label>
+      <PasswordInput
+        name="password"
+        label="Contraseña"
+        placeholder="Ingresá tu contraseña"
+        className="mt-5"
+      />
+      <details className="typo-body-sm mt-5 text-slate-600">
+        <summary className="cursor-pointer font-semibold text-blue-700">
+          ¿Olvidaste tu contraseña?
+        </summary>
+        <p className="mt-2">
+          Comunicate con administración para restablecer el acceso.
+        </p>
+      </details>
+      <button
+        disabled={pending}
+        className="typo-control mt-7 flex min-h-12 w-full items-center justify-center gap-2 bg-[var(--color-action)] px-4 py-3 text-white hover:bg-blue-700 focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-60"
+      >
+        {pending ? (
+          <>
+            <LoaderCircle className="animate-spin" size={20} /> Iniciando
+            sesión...
+          </>
+        ) : (
+          <>
+            Iniciar sesión <ChevronRight size={20} />
+          </>
+        )}
+      </button>
+    </form>
   );
 }
 
@@ -335,10 +691,10 @@ function FirstLoginPage({ onSaved }: { onSaved: () => void | Promise<void> }) {
         className="mx-auto w-full max-w-md border border-slate-200 bg-white p-6 shadow-[var(--shadow-surface)] sm:p-8"
       >
         <BrandMark />
-        <p className="typo-eyebrow mt-6 text-blue-700">
-          Primer ingreso
-        </p>
-        <h1 className="typo-display-xl mt-2 uppercase">Creá una nueva contraseña</h1>
+        <p className="typo-eyebrow mt-6 text-blue-700">Primer ingreso</p>
+        <h1 className="typo-display-xl mt-2 uppercase">
+          Creá una nueva contraseña
+        </h1>
         <p className="typo-body-sm mt-3 text-slate-600">
           Por seguridad, antes de continuar necesitás crear una nueva
           contraseña.
@@ -346,7 +702,7 @@ function FirstLoginPage({ onSaved }: { onSaved: () => void | Promise<void> }) {
         {error && (
           <p
             role="alert"
-              className="typo-body-sm mt-5 rounded-xl bg-rose-50 p-3 text-rose-800"
+            className="typo-body-sm mt-5 rounded-xl bg-rose-50 p-3 text-rose-800"
           >
             {error}
           </p>
@@ -390,9 +746,7 @@ function PasswordInput({
 }) {
   const [visible, setVisible] = useState(false);
   return (
-    <label
-      className={`typo-label block text-slate-900 ${className}`}
-    >
+    <label className={`typo-label block text-slate-900 ${className}`}>
       {label}
       <div className="relative mt-2">
         <input
@@ -461,12 +815,8 @@ function AdminPage({ onNavigate }: { onNavigate: (screen: Screen) => void }) {
   return (
     <section className="max-w-6xl">
       <header className="border-l-4 border-blue-700 pl-4 sm:pl-5">
-        <p className="typo-eyebrow text-blue-700">
-          Administración
-        </p>
-        <h1 className="typo-display-xl mt-1 uppercase">
-          Gestioná el sistema
-        </h1>
+        <p className="typo-eyebrow text-blue-700">Administración</p>
+        <h1 className="typo-display-xl mt-1 uppercase">Gestioná el sistema</h1>
         <p className="typo-body-sm mt-3 max-w-xl text-slate-600">
           Seleccioná un módulo para administrar los datos disponibles.
         </p>

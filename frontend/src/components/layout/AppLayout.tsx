@@ -76,6 +76,6 @@ function BottomNav({ role, screen, onNavigate }: { role: "ADMIN" | "DELEGADO"; s
   </nav>;
 }
 
-export function BrandMark({ small = false }: { small?: boolean }) {
-  return <span aria-hidden="true" className={`relative inline-flex shrink-0 items-center justify-center bg-blue-800 text-white after:absolute after:inset-1 after:border after:border-white/35 ${small ? "h-9 w-9" : "h-16 w-16"}`}><FileText size={small ? 19 : 32} /></span>;
+export function BrandMark({ small = false, compactOnMobile = false }: { small?: boolean; compactOnMobile?: boolean }) {
+  return <span aria-hidden="true" className={`relative inline-flex shrink-0 items-center justify-center bg-blue-800 text-white after:absolute after:inset-1 after:border after:border-white/35 ${small ? "h-9 w-9" : compactOnMobile ? "h-12 w-12 sm:h-16 sm:w-16" : "h-16 w-16"}`}><FileText size={small ? 19 : 32} className={compactOnMobile && !small ? "h-[26px] w-[26px] sm:h-8 sm:w-8" : undefined} /></span>;
 }
