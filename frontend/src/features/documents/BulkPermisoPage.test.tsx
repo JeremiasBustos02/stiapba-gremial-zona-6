@@ -24,13 +24,14 @@ vi.mock('./documentsApi', () => ({
   getDocumentCompanies: () => Promise.resolve([{ id: 'company', nombre: 'INFRIBA', agreementId: 'agreement' }]),
   getDocumentAgreements: () => Promise.resolve([{ id: 'agreement', codigo: '771/10', descripcion: 'Convenio' }]),
   getDelegates: () => Promise.resolve([{ id: 'ana', nombre: 'Ana', apellido: 'Paz', dni: '31111111' }, { id: 'beto', nombre: 'Beto', apellido: 'Luna', dni: '29888888' }]),
-  generatePermisoGremialBatch: (...args: unknown[]) => generate(...args),
+  generateDocumentBatch: (...args: unknown[]) => generate(...args),
   regenerateDocument: (...args: unknown[]) => regenerate(...args),
   downloadPermisoGremialBatch: (...args: unknown[]) => downloadBatch(...args),
   filenameFromHeaders: (headers: Headers) => headers.get('Content-Disposition')?.match(/filename="?([^";]+)"?/i)?.[1] ?? '',
 }))
 
 import { BulkPermisoPage } from './BulkPermisoPage'
+import { documentTypeDefinitions } from './documentTypeDefinition'
 
 let root: Root
 let container: HTMLDivElement
@@ -44,12 +45,12 @@ beforeEach(() => { ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMEN
 afterEach(() => { act(() => root.unmount()); container.remove(); vi.restoreAllMocks() })
 
 async function render(onBack = vi.fn()) { await act(async () => root.render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><BulkPermisoPage onBack={onBack} /></QueryClientProvider>)); await act(async () => wait()); return onBack }
-async function completeForm(delegates = ['Ana Paz']) { await act(async () => { const selects = container.querySelectorAll('select'); change(selects[0], 'template') }); await act(async () => wait()); await act(async () => { const selects = container.querySelectorAll('select'); change(selects[1], 'variant'); change(selects[2], 'company'); change(selects[4], 'province'); change(container.querySelector('input[type="number"]')!, '18'); delegates.forEach(name => delegateInput(name)?.click()) }); await act(async () => wait()) }
+async function completeForm(delegates = ['Ana Paz']) { await act(async () => { change(container.querySelector('#bulk-plantilla')!, 'template') }); await act(async () => wait()); await act(async () => { change(container.querySelector('#bulk-variante')!, 'variant'); change(container.querySelector('#bulk-provincia')!, 'province'); change(container.querySelector('#bulk-empresa')!, 'company'); change(container.querySelector('input[type="number"]')!, '18'); delegates.forEach(name => delegateInput(name)?.click()) }); await act(async () => wait()) }
 
 describe('BulkPermisoPage', () => {
   it('loads common catalogs, filters delegates by name and DNI, and maintains a unique selection count', async () => {
     await render()
-    expect(container.textContent).toContain('Generar varios permisos'); expect(container.textContent).toContain('Permiso Gremial para cada uno.'); expect(container.textContent).toContain('INFRIBA'); expect(container.textContent).toContain('Ana Paz'); expect(container.textContent).toContain('0 seleccionados')
+    expect(container.textContent).toContain('Generar varios permisos'); expect(container.textContent).toContain('Permiso Gremial para cada uno.'); expect(container.textContent).toContain('Ana Paz'); expect(container.textContent).toContain('0 seleccionados')
     await act(async () => change(container.querySelector('#bulk-delegate-filter')!, '2988'))
     expect(container.textContent).toContain('Beto Luna'); expect(container.textContent).not.toContain('Ana Paz')
     await act(async () => change(container.querySelector('#bulk-delegate-filter')!, ''))
@@ -65,7 +66,7 @@ describe('BulkPermisoPage', () => {
     await act(async () => button('Continuar').click())
     expect(container.textContent).toContain('Generar 2 permisos'); expect(generate).not.toHaveBeenCalled()
     await act(async () => button('Generar 2 permisos').click())
-    expect(generate).toHaveBeenCalledWith(expect.objectContaining({ variantId: 'variant', provinceId: 'province', companyId: 'company', agreementId: 'agreement', permitDay: 18, manualValues: {}, delegateIds: ['ana', 'beto'] }))
+    expect(generate).toHaveBeenCalledWith(expect.objectContaining({ documentType: 'PERMISO_GREMIAL', variantId: 'variant', baseValues: expect.objectContaining({ provinceId: 'province', companyId: 'company', agreementId: 'agreement', permitDay: '18' }), manualValues: {}, delegateIds: ['ana', 'beto'] }))
     await act(async () => wait())
     expect(container.textContent).toContain('2 permisos procesados'); expect(container.textContent).toContain('PG-2026-000231')
   })
@@ -80,8 +81,23 @@ describe('BulkPermisoPage', () => {
   })
 
   it('clears manual values when the selected variant changes', async () => {
-    manualFields.mockImplementation((variantId: string) => Promise.resolve(variantId === 'variant' ? [{ id: 'reason', label: 'Motivo', type: 'TEXT', required: true }] : [{ id: 'place', label: 'Lugar', type: 'TEXT', required: true }])); await render(); await completeForm(); await act(async () => change(container.querySelector('#manual-reason')!, 'Asamblea')); await act(async () => { change(container.querySelectorAll('select')[1], 'variant-b'); await wait(); await wait() })
+    manualFields.mockImplementation((_documentType: string, variantId: string) => Promise.resolve(variantId === 'variant' ? [{ id: 'reason', label: 'Motivo', type: 'TEXT', required: true }] : [{ id: 'place', label: 'Lugar', type: 'TEXT', required: true }])); await render(); await completeForm(); await act(async () => change(container.querySelector('#manual-reason')!, 'Asamblea')); await act(async () => { change(container.querySelectorAll('select')[1], 'variant-b'); await wait(); await wait() })
     expect(container.querySelector('#manual-reason')).toBeNull(); expect(container.querySelector('#manual-place')).not.toBeNull(); expect(button('Continuar').disabled).toBe(true)
+  })
+
+  it('renders only shared fields from the same document type definition', async () => {
+    const definition = documentTypeDefinitions.PERMISO_GREMIAL
+    documentTypeDefinitions.PERMISO_GREMIAL = { ...definition, fields: [{ ...definition.fields[0], label: 'Provincia común de prueba' }] }
+    try {
+      await render()
+      await act(async () => change(container.querySelector('#bulk-plantilla')!, 'template'))
+      await act(async () => wait())
+      expect(container.textContent).toContain('Provincia común de prueba')
+      expect(container.textContent).not.toContain('Empresa')
+      expect(container.textContent).not.toContain('Día de permiso gremial')
+    } finally {
+      documentTypeDefinitions.PERMISO_GREMIAL = definition
+    }
   })
 
   it('keeps partial successes visible, downloads one PDF, and archives only successful records', async () => {

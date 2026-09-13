@@ -5,30 +5,32 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const generate = vi.fn()
+const getManualFields = vi.fn()
 vi.mock('react-pdf', async () => {
   const { createElement } = await import('react')
   return { Document: ({ children }: { children: React.ReactNode }) => createElement('div', null, children), Page: () => createElement('div'), pdfjs: { GlobalWorkerOptions: {} } }
 })
 vi.mock('./documentsApi', () => ({
-  generatePermisoGremial: (...args: unknown[]) => generate(...args),
+  generateDocument: (...args: unknown[]) => generate(...args),
   getProvinces: () => Promise.resolve([{ id: 'province', name: 'Buenos Aires' }]),
   getDocumentCompanies: () => Promise.resolve([{ id: 'company', nombre: 'Empresa' }]),
   getDelegates: () => Promise.resolve([{ id: 'delegate', nombre: 'Ana', apellido: 'Paz', dni: '123' }]),
   getDocumentAgreements: () => Promise.resolve([{ id: 'agreement', codigo: '771/10', descripcion: 'Convenio' }]),
   getDocumentSuggestions: () => Promise.resolve({ companies: { recent: [], frequent: [] }, delegates: { recent: [], frequent: [] }, agreements: { recent: [], frequent: [] } }),
-  getManualFields: () => Promise.resolve([]),
+  getManualFields: (...args: unknown[]) => getManualFields(...args),
   getDocumentTemplates: () => Promise.resolve([]),
   getDocumentVariants: () => Promise.resolve([]),
 }))
 
 import { PermisoGremialForm, type DocumentFormValues } from './DocumentFlow'
+import { documentTypeDefinitions } from './documentTypeDefinition'
 
 let root: Root
 let container: HTMLDivElement
 const value: DocumentFormValues = { provinceId: 'province', issueDate: '2026-09-11', companyId: 'company', delegateId: 'delegate', permitDay: '15', agreementId: 'agreement', variantId: 'variant', manualValues: {} }
 const wait = () => new Promise((resolve) => window.setTimeout(resolve, 0))
 
-beforeEach(() => { ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true; container = document.createElement('div'); document.body.appendChild(container); root = createRoot(container); generate.mockReset() })
+beforeEach(() => { ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true; container = document.createElement('div'); document.body.appendChild(container); root = createRoot(container); generate.mockReset(); getManualFields.mockReset(); getManualFields.mockResolvedValue([]) })
 afterEach(() => { act(() => root.unmount()); container.remove(); vi.useRealTimers() })
 
 describe('PermisoGremialForm generation experience', () => {
@@ -42,6 +44,7 @@ describe('PermisoGremialForm generation experience', () => {
     const form = container.querySelector('form')!
     await act(async () => { form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })) })
     expect(generate).toHaveBeenCalledOnce()
+    expect(generate).toHaveBeenCalledWith(expect.objectContaining({ documentType: 'PERMISO_GREMIAL', variantId: 'variant', baseValues: expect.objectContaining({ provinceId: 'province', delegateId: 'delegate', permitDay: '15' }), manualValues: {} }), expect.anything())
     expect(container.textContent).toContain('Generando documento')
     expect(container.querySelector('[aria-busy="true"]')).not.toBeNull()
     const blob = new Blob(['pdf'], { type: 'application/pdf' })
@@ -60,5 +63,29 @@ describe('PermisoGremialForm generation experience', () => {
     await act(async () => { await wait() })
     expect(container.textContent).toContain('No pudimos generar el documento.')
     expect(container.querySelector<HTMLSelectElement>('#document-empresa')?.value).toBe('company')
+  })
+
+  it('renders and validates configured manual fields with the base descriptor', async () => {
+    getManualFields.mockResolvedValue([{ id: 'reason', label: 'Motivo', type: 'TEXT', required: true }])
+    await act(async () => root.render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><PermisoGremialForm value={value} onChange={vi.fn()} onBack={vi.fn()} onGenerated={vi.fn()} /></QueryClientProvider>))
+    await act(async () => { await wait() })
+    expect(container.textContent).toContain('Motivo')
+    await act(async () => { container.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })) })
+    expect(generate).not.toHaveBeenCalled()
+    expect(container.textContent).toContain('Motivo es obligatorio.')
+  })
+
+  it('renders only the fields supplied by the document type definition', async () => {
+    const definition = documentTypeDefinitions.PERMISO_GREMIAL
+    documentTypeDefinitions.PERMISO_GREMIAL = { ...definition, fields: [{ ...definition.fields[0], label: 'Provincia de prueba' }] }
+    try {
+      await act(async () => root.render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><PermisoGremialForm value={value} onChange={vi.fn()} onBack={vi.fn()} onGenerated={vi.fn()} /></QueryClientProvider>))
+      await act(async () => { await wait() })
+      expect(container.textContent).toContain('Provincia de prueba')
+      expect(container.textContent).not.toContain('Empresa')
+      expect(container.textContent).not.toContain('Día de permiso gremial')
+    } finally {
+      documentTypeDefinitions.PERMISO_GREMIAL = definition
+    }
   })
 })

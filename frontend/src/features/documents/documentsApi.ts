@@ -1,6 +1,7 @@
 import { apiRequest, apiRequestBlobWithHeaders } from '@/lib/api'
 import type { Agreement, Company } from '@/features/catalog/types'
 import type { Template, TemplateVariant } from '@/features/templates/types'
+import type { DocumentType } from '@/features/templates/types'
 
 export type Province = { id: string; name: string }
 export type Delegate = { id: string; nombre: string; apellido: string; dni: string }
@@ -21,6 +22,13 @@ export type PermisoGremialRequest = {
 export type ManualField = { id: string; label: string; type: 'TEXT' | 'DATE' | 'NUMBER'; required: boolean }
 export type GeneratedDocument = { blob: Blob; documentId: string; publicNumber: string; filename: string }
 export type PermisoGremialBatchRequest = Omit<PermisoGremialRequest, 'delegateId'> & { delegateIds: string[] }
+export type DocumentGenerationRequest = {
+  documentType: DocumentType
+  variantId: string
+  baseValues: Record<string, string>
+  manualValues: Record<string, string>
+}
+export type DocumentBulkRequest = DocumentGenerationRequest & { delegateIds: string[] }
 export type BatchDocumentItem = { delegateId: string; delegateName: string; status: 'SUCCESS' | 'FAILED'; documentId: string | null; publicNumber: string | null; filename: string | null; errorCode: string | null; message: string | null }
 export type BatchDocumentResult = { requested: number; successful: number; failed: number; items: BatchDocumentItem[] }
 
@@ -31,7 +39,7 @@ export const getDocumentAgreements = () => apiRequest<Agreement[]>('/agreements?
 export const getDocumentSuggestions = () => apiRequest<DocumentSuggestions>('/documents/suggestions')
 export const getDocumentTemplates = () => apiRequest<Template[]>('/templates?active=true')
 export const getDocumentVariants = (templateId: string) => apiRequest<TemplateVariant[]>(`/templates/${templateId}/variants?active=true`)
-export const getManualFields = (variantId: string) => apiRequest<ManualField[]>(`/documents/permiso-gremial/variants/${variantId}/manual-fields`)
+export const getManualFields = (documentType: DocumentType, variantId: string) => apiRequest<ManualField[]>(`/documents/${documentType}/variants/${variantId}/manual-fields`)
 
 export type DocumentHistoryRecord = {
   id: string
@@ -129,7 +137,21 @@ export async function generatePermisoGremial(data: PermisoGremialRequest): Promi
   }
 }
 
+export async function generateDocument(data: DocumentGenerationRequest): Promise<GeneratedDocument> {
+  const result = await apiRequestBlobWithHeaders('/documents/generate', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+  return {
+    blob: result.blob,
+    documentId: result.headers.get('X-Document-Id') ?? '',
+    publicNumber: result.headers.get('X-Public-Number') ?? '',
+    filename: filenameFromHeaders(result.headers),
+  }
+}
+
 export const generatePermisoGremialBatch = (data: PermisoGremialBatchRequest) => apiRequest<BatchDocumentResult>('/documents/bulk', { method: 'POST', body: JSON.stringify(data) })
+export const generateDocumentBatch = (data: DocumentBulkRequest) => apiRequest<BatchDocumentResult>('/documents/bulk/generate', { method: 'POST', body: JSON.stringify(data) })
 export const downloadPermisoGremialBatch = (documentIds: string[]) => apiRequestBlobWithHeaders('/documents/bulk/zip', { method: 'POST', body: JSON.stringify({ documentIds }) })
 
 export function filenameFromHeaders(headers: Headers) {

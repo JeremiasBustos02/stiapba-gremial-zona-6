@@ -32,6 +32,7 @@ import java.io.IOException;
 import java.time.LocalDate;
 import java.util.Optional;
 import java.util.Map;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -63,8 +64,9 @@ class DocumentGenerationServiceTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        service = new DocumentGenerationService(provinceRepository, companyRepository, userRepository, agreementRepository,
-                variantRepository, fileStorage, generator, pdfTemplateRenderer, documentRecordRepository, documentNumberService);
+        service = new DocumentGenerationService(documentRecordRepository, List.of(new PermisoGremialDocumentTypeHandler(provinceRepository,
+                companyRepository, userRepository, agreementRepository, variantRepository, fileStorage, generator, pdfTemplateRenderer,
+                documentRecordRepository, documentNumberService)));
         request = new PermisoGremialRequest(UUID.randomUUID(), LocalDate.of(2026, 8, 18), UUID.randomUUID(),
                 UUID.randomUUID(), 21, UUID.randomUUID(), UUID.randomUUID());
         principal = new UserPrincipal(UUID.randomUUID(), Role.ADMIN, false);
@@ -80,6 +82,25 @@ class DocumentGenerationServiceTest {
         verify(documentRecordRepository).save(argThat(record -> record.getSnapshot().get("company").equals("Empresa Ejemplo")
                 && record.getSnapshot().get("delegateDni").equals("40123456")
                 && record.getPublicNumber().equals("PG-2026-000001")));
+    }
+
+    @Test
+    void generatesGenericRequestThroughPermisoHandler() throws Exception {
+        stubValidData();
+        Map<String, String> values = Map.of("provinceId", request.provinceId().toString(), "issueDate", request.issueDate().toString(),
+                "companyId", request.companyId().toString(), "delegateId", request.delegateId().toString(),
+                "permitDay", request.permitDay().toString(), "agreementId", request.agreementId().toString());
+
+        assertThat(service.generate(new DocumentGenerationRequest(DocumentType.PERMISO_GREMIAL, request.variantId(), values, Map.of()), principal).content())
+                .containsExactly(2);
+    }
+
+    @Test
+    void rejectsAnUnregisteredDocumentTypeWithControlledError() {
+        DocumentGenerationService emptyRegistry = new DocumentGenerationService(documentRecordRepository, List.of());
+        assertThatThrownBy(() -> emptyRegistry.generate(new DocumentGenerationRequest(DocumentType.PERMISO_GREMIAL,
+                UUID.randomUUID(), Map.of(), Map.of()), principal))
+                .isInstanceOfSatisfying(DocumentException.class, exception -> assertThat(exception.getCode()).isEqualTo("DOCUMENT_TYPE_UNSUPPORTED"));
     }
 
     @Test

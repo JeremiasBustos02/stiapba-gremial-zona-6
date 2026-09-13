@@ -1,8 +1,10 @@
+export type DocumentType = 'PERMISO_GREMIAL'
+
 export type Template = {
   id: string
   nombre: string
   descripcion: string
-  documentType: 'PERMISO_GREMIAL'
+  documentType: DocumentType
   active: boolean
   createdAt: string
   updatedAt: string
@@ -18,7 +20,7 @@ export type TemplateVariant = {
   updatedAt: string
 }
 
-export type TemplateForm = { nombre: string; descripcion: string; documentType: 'PERMISO_GREMIAL' }
+export type TemplateForm = { nombre: string; descripcion: string; documentType: DocumentType }
 export type VariantForm = { nombre: string; archivoPdf: File | null }
 export type FieldType = 'TEXT' | 'DATE' | 'NUMBER'
 export type FieldSourceType = 'MANUAL' | 'COMPANY' | 'DELEGATE' | 'PROVINCE' | 'AGREEMENT' | 'DERIVED'

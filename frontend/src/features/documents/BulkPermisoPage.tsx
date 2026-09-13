@@ -15,7 +15,7 @@ import { downloadDocument } from "./documentActions";
 import { agreementForCompany } from "./companyAgreement";
 import {
   downloadPermisoGremialBatch,
-  generatePermisoGremialBatch,
+  generateDocumentBatch,
   getDelegates,
   getDocumentAgreements,
   getDocumentCompanies,
@@ -27,6 +27,10 @@ import {
   type BatchDocumentResult,
   type ManualField,
 } from "./documentsApi";
+import { documentTypeDefinition } from "./documentTypeDefinition";
+import { DocumentBaseFields } from "./DocumentBaseFields";
+import type { DocumentBaseField } from "./documentTypeDefinition";
+import type { DocumentType } from "@/features/templates/types";
 import { filenameFromHeaders } from "./documentsApi";
 import {
   ManualFieldInput,
@@ -34,8 +38,9 @@ import {
   requiredManualFieldErrors,
 } from "./DocumentFlow";
 
-export function BulkPermisoPage({ onBack }: { onBack: () => void }) {
+export function BulkDocumentPage({ onBack }: { onBack: () => void }) {
   const [templateId, setTemplateId] = useState("");
+  const [documentType, setDocumentType] = useState<DocumentType | null>(null);
   const [variantId, setVariantId] = useState("");
   const [provinceId, setProvinceId] = useState("");
   const [companyId, setCompanyId] = useState("");
@@ -70,9 +75,9 @@ export function BulkPermisoPage({ onBack }: { onBack: () => void }) {
     enabled: Boolean(templateId),
   });
   const manualFields = useQuery({
-    queryKey: ["documents", "bulk-manual-fields", variantId],
-    queryFn: () => getManualFields(variantId),
-    enabled: Boolean(variantId),
+    queryKey: ["documents", "bulk-manual-fields", documentType, variantId],
+    queryFn: () => getManualFields(documentType!, variantId),
+    enabled: Boolean(documentType && variantId),
   });
   const provinces = useQuery({
     queryKey: ["documents", "provinces"],
@@ -107,13 +112,13 @@ export function BulkPermisoPage({ onBack }: { onBack: () => void }) {
     ...(templateId ? [variants] : []),
     ...(variantId ? [manualFields] : []),
   ].some((query) => query.isError);
+  const definition = documentType ? documentTypeDefinition(documentType) : null;
+  const commonValues: Record<string, string> = { provinceId, companyId, agreementId, issueDate, permitDay };
+  const baseFieldsComplete = definition?.fields.filter((field) => field.sharedInBulk).every((field) => Boolean(commonValues[field.key]?.trim()));
   const valid = Boolean(
+    definition &&
     variantId &&
-    provinceId &&
-    companyId &&
-    agreementId &&
-    issueDate &&
-    permitDay &&
+    baseFieldsComplete &&
     delegateIds.length > 0 &&
     !manualFields.isPending &&
     !manualFields.isError &&
@@ -121,6 +126,28 @@ export function BulkPermisoPage({ onBack }: { onBack: () => void }) {
       requiredManualFieldErrors(manualFields.data ?? [], manualValues),
     ).length === 0,
   );
+  const setCommonValue = (key: DocumentBaseField["key"], next: string) => {
+    if (key === "companyId") {
+      setCompanyId(next);
+      setAgreementId(agreementForCompany(companies.data ?? [], next, agreementId));
+      return;
+    }
+    if (key === "provinceId") setProvinceId(next);
+    if (key === "agreementId") setAgreementId(next);
+    if (key === "issueDate") setIssueDate(next);
+    if (key === "permitDay") setPermitDay(next);
+  };
+  const renderCommonField = (field: DocumentBaseField) => {
+    const fieldValue = commonValues[field.key] ?? "";
+    if (field.input === "select") {
+      const options = field.catalog === "provinces" ? (provinces.data ?? []).map((item) => [item.id, item.name])
+        : field.catalog === "companies" ? (companies.data ?? []).map((item) => [item.id, item.nombre])
+        : (agreements.data ?? []).map((item) => [item.id, `${item.codigo} - ${item.descripcion}`]);
+      const placeholder = field.catalog === "provinces" ? "Seleccioná una provincia" : field.catalog === "companies" ? "Seleccioná una empresa" : "Seleccioná un convenio";
+      return <Field label={field.label}><select value={fieldValue} onChange={(event) => setCommonValue(field.key, event.target.value)}><option value="">{placeholder}</option>{options.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></Field>;
+    }
+    return <Field label={field.label}><Input type={field.input} min={field.key === "permitDay" ? "1" : undefined} max={field.key === "permitDay" ? "31" : undefined} value={fieldValue} onChange={(event) => setCommonValue(field.key, event.target.value)} /></Field>;
+  };
   const toggle = (id: string) =>
     setDelegateIds((ids) =>
       ids.includes(id) ? ids.filter((value) => value !== id) : [...ids, id],
@@ -141,13 +168,10 @@ export function BulkPermisoPage({ onBack }: { onBack: () => void }) {
     setError("");
     try {
       setResult(
-        await generatePermisoGremialBatch({
+        await generateDocumentBatch({
+          documentType: documentType!,
           variantId,
-          provinceId,
-          companyId,
-          agreementId,
-          issueDate,
-          permitDay: Number(permitDay),
+          baseValues: Object.fromEntries((definition?.fields ?? []).filter((field) => field.sharedInBulk).map((field) => [field.key, commonValues[field.key] ?? ""])),
           manualValues,
           delegateIds,
         }),
@@ -285,17 +309,14 @@ export function BulkPermisoPage({ onBack }: { onBack: () => void }) {
                   value={templateId}
                   onChange={(event) => {
                     setTemplateId(event.target.value);
+                    setDocumentType(templates.data?.find((template) => template.id === event.target.value)?.documentType ?? null);
                     setVariantId("");
                     setManualValues({});
                     setManualErrors({});
                   }}
                 >
                   <option value="">Seleccioná una plantilla</option>
-                  {templates.data
-                    ?.filter(
-                      (template) => template.documentType === "PERMISO_GREMIAL",
-                    )
-                    .map((template) => (
+                  {templates.data?.map((template) => (
                       <option key={template.id} value={template.id}>
                         {template.nombre}
                       </option>
@@ -320,71 +341,7 @@ export function BulkPermisoPage({ onBack }: { onBack: () => void }) {
                   ))}
                 </select>
               </Field>
-              <Field label="Empresa">
-                <select
-                  value={companyId}
-                  onChange={(event) => {
-                    const next = event.target.value;
-                    setCompanyId(next);
-                    setAgreementId(
-                      agreementForCompany(
-                        companies.data ?? [],
-                        next,
-                        agreementId,
-                      ),
-                    );
-                  }}
-                >
-                  <option value="">Seleccioná una empresa</option>
-                  {companies.data?.map((company) => (
-                    <option key={company.id} value={company.id}>
-                      {company.nombre}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Convenio">
-                <select
-                  value={agreementId}
-                  onChange={(event) => setAgreementId(event.target.value)}
-                >
-                  <option value="">Seleccioná un convenio</option>
-                  {agreements.data?.map((agreement) => (
-                    <option key={agreement.id} value={agreement.id}>
-                      {agreement.codigo} - {agreement.descripcion}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Provincia">
-                <select
-                  value={provinceId}
-                  onChange={(event) => setProvinceId(event.target.value)}
-                >
-                  <option value="">Seleccioná una provincia</option>
-                  {provinces.data?.map((province) => (
-                    <option key={province.id} value={province.id}>
-                      {province.name}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Fecha de emisión">
-                <Input
-                  type="date"
-                  value={issueDate}
-                  onChange={(event) => setIssueDate(event.target.value)}
-                />
-              </Field>
-              <Field label="Día del permiso">
-                <Input
-                  type="number"
-                  min="1"
-                  max="31"
-                  value={permitDay}
-                  onChange={(event) => setPermitDay(event.target.value)}
-                />
-              </Field>
+              <DocumentBaseFields fields={(definition?.fields ?? []).filter((field) => field.sharedInBulk)} renderField={renderCommonField} />
               {(manualFields.data ?? []).map((field: ManualField) => (
                 <ManualFieldInput
                   key={field.id}
@@ -500,6 +457,8 @@ export function BulkPermisoPage({ onBack }: { onBack: () => void }) {
     </section>
   );
 }
+// Compatibility export while navigation still uses the existing route/component name.
+export const BulkPermisoPage = BulkDocumentPage;
 function Field({ label, children }: { label: string; children: ReactNode }) {
   const id = `bulk-${label.toLowerCase().replaceAll(" ", "-")}`;
   return (

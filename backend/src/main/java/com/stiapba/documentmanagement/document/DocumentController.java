@@ -67,9 +67,26 @@ public class DocumentController {
                 .body(document.content());
     }
 
+    @PostMapping(value = "/generate", produces = MediaType.APPLICATION_PDF_VALUE)
+    public ResponseEntity<byte[]> generate(@Valid @RequestBody DocumentGenerationRequest request,
+                                           @AuthenticationPrincipal UserPrincipal principal) {
+        DocumentGenerationService.GeneratedDocument document = documentGenerationService.generate(request, principal);
+        return ResponseEntity.ok().contentType(MediaType.APPLICATION_PDF)
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.inline().filename(document.filename()).build().toString())
+                .header("X-Document-Id", document.recordId().toString())
+                .header("X-Public-Number", document.publicNumber())
+                .body(document.content());
+    }
+
     @PostMapping("/bulk")
-    public DocumentBulkDtos.BatchResponse generateBulk(@Valid @RequestBody PermisoGremialBatchRequest request,
-                                                        @AuthenticationPrincipal UserPrincipal principal) {
+    public DocumentBulkDtos.BatchResponse generatePermisoGremialBulk(@Valid @RequestBody PermisoGremialBatchRequest request,
+                                                                       @AuthenticationPrincipal UserPrincipal principal) {
+        return documentBulkService.generatePermisoGremial(request, principal);
+    }
+
+    @PostMapping("/bulk/generate")
+    public DocumentBulkDtos.BatchResponse generateBulk(@Valid @RequestBody DocumentBulkRequest request,
+                                                         @AuthenticationPrincipal UserPrincipal principal) {
         return documentBulkService.generate(request, principal);
     }
 
@@ -85,6 +102,12 @@ public class DocumentController {
     @GetMapping("/permiso-gremial/variants/{variantId}/manual-fields")
     public List<DocumentGenerationService.ManualFieldResponse> manualFields(@PathVariable UUID variantId) {
         return documentGenerationService.manualFields(variantId);
+    }
+
+    @GetMapping("/{documentType}/variants/{variantId}/manual-fields")
+    public List<DocumentGenerationService.ManualFieldResponse> manualFields(@PathVariable DocumentType documentType,
+                                                                              @PathVariable UUID variantId) {
+        return documentGenerationService.manualFields(documentType, variantId);
     }
 
     @GetMapping("/history")

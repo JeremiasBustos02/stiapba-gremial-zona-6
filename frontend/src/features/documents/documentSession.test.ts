@@ -35,7 +35,7 @@ describe('new document session', () => {
       getDocumentCompanies(),
       getDelegates(),
       getDocumentAgreements(),
-      getManualFields('variant-id'),
+      getManualFields('PERMISO_GREMIAL', 'variant-id'),
     ])
 
     expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
@@ -45,7 +45,7 @@ describe('new document session', () => {
       '/api/v1/companies?active=true',
       '/api/v1/delegates',
       '/api/v1/agreements?active=true',
-      '/api/v1/documents/permiso-gremial/variants/variant-id/manual-fields',
+      '/api/v1/documents/PERMISO_GREMIAL/variants/variant-id/manual-fields',
     ])
     expect(fetchMock.mock.calls.every(([, options]) => options.credentials === 'include')).toBe(true)
     expect(sessionInvalid).not.toHaveBeenCalled()

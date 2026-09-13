@@ -1,6 +1,7 @@
 package com.stiapba.documentmanagement.document;
 
 import com.stiapba.documentmanagement.security.UserPrincipal;
+import com.stiapba.documentmanagement.template.entity.DocumentType;
 import com.stiapba.documentmanagement.user.entity.User;
 import com.stiapba.documentmanagement.user.repository.UserRepository;
 import org.springframework.stereotype.Service;
@@ -25,15 +26,16 @@ public class DocumentBulkService {
         this.userRepository = userRepository;
     }
 
-    public DocumentBulkDtos.BatchResponse generate(PermisoGremialBatchRequest request, UserPrincipal principal) {
+    public DocumentBulkDtos.BatchResponse generate(DocumentBulkRequest request, UserPrincipal principal) {
         validateDistinct(request.delegateIds());
         List<DocumentBulkDtos.BatchItemResponse> items = new ArrayList<>();
         for (UUID delegateId : request.delegateIds()) {
             String delegateName = delegateName(delegateId);
             try {
-                DocumentGenerationService.GeneratedDocument document = documentGenerationService.generatePermisoGremial(
-                        new PermisoGremialRequest(request.provinceId(), request.issueDate(), request.companyId(), delegateId,
-                                request.permitDay(), request.agreementId(), request.variantId(), request.manualValues()), principal);
+                var baseValues = new java.util.LinkedHashMap<>(request.baseValues() == null ? java.util.Map.<String, String>of() : request.baseValues());
+                baseValues.put("delegateId", delegateId.toString());
+                DocumentGenerationService.GeneratedDocument document = documentGenerationService.generate(
+                        new DocumentGenerationRequest(request.documentType(), request.variantId(), baseValues, request.manualValues()), principal);
                 items.add(DocumentBulkDtos.BatchItemResponse.success(delegateId, delegateName, document));
             } catch (DocumentException exception) {
                 items.add(DocumentBulkDtos.BatchItemResponse.failure(delegateId, delegateName, exception.getCode(), exception.getMessage()));
@@ -43,6 +45,17 @@ public class DocumentBulkService {
         }
         int successful = (int) items.stream().filter(item -> item.status().equals("SUCCESS")).count();
         return new DocumentBulkDtos.BatchResponse(items.size(), successful, items.size() - successful, List.copyOf(items));
+    }
+
+    public DocumentBulkDtos.BatchResponse generatePermisoGremial(PermisoGremialBatchRequest request, UserPrincipal principal) {
+        var baseValues = new java.util.LinkedHashMap<String, String>();
+        baseValues.put("provinceId", request.provinceId().toString());
+        baseValues.put("issueDate", request.issueDate().toString());
+        baseValues.put("companyId", request.companyId().toString());
+        baseValues.put("permitDay", request.permitDay().toString());
+        baseValues.put("agreementId", request.agreementId().toString());
+        return generate(new DocumentBulkRequest(DocumentType.PERMISO_GREMIAL, request.variantId(), baseValues,
+                request.manualValues(), request.delegateIds()), principal);
     }
 
     public DocumentBulkDtos.ZipArchive zip(DocumentBulkDtos.ZipRequest request, UserPrincipal principal) {

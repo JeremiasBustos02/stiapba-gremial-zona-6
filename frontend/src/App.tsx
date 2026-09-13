@@ -92,9 +92,9 @@ const DocumentVariantSelection = lazy(() =>
     default: module.DocumentVariantSelection,
   })),
 );
-const PermisoGremialForm = lazy(() =>
+const DocumentForm = lazy(() =>
   import("@/features/documents/DocumentFlow").then((module) => ({
-    default: module.PermisoGremialForm,
+    default: module.DocumentForm,
   })),
 );
 const PdfPreview = lazy(() =>
@@ -353,12 +353,13 @@ function App() {
         <Suspense fallback={<LazyLoadingState />}>
           <DocumentTemplateSelection
             onBack={() => navigate(routeForScreen("home", null))}
-            onSelect={(id) => {
+            onSelect={(id, documentType) => {
               const form = {
                 ...documentForm,
                 ...documentPrefill,
                 variantId: "",
                 manualValues: {},
+                documentType,
               };
               setDocumentPrefill({});
               saveDraft(id, form);
@@ -388,7 +389,7 @@ function App() {
       )}
       {screen === "form" && templateId && (
         <Suspense fallback={<LazyLoadingState />}>
-          <PermisoGremialForm
+          <DocumentForm
             value={documentForm}
             onChange={(form) => saveDraft(templateId, form)}
             onBack={() => navigate(`/documentos/nuevo/${templateId}/variante`)}
